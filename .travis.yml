@@ -1,0 +1,22 @@
+env:
+  global:
+    - secure: 
+
+install:
+  # rustc
+  - wget http://static.rust-lang.org/dist/rust-nightly-x86_64-unknown-linux-gnu.tar.gz
+  - tar xzf rust-nightly-x86_64-unknown-linux-gnu.tar.gz
+  - export PATH=$PATH:$(pwd)/rust-nightly-x86_64-unknown-linux-gnu/bin
+  - export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$(pwd)/rust-nightly-x86_64-unknown-linux-gnu/lib
+  # liblua
+  - sudo apt-get install liblua5.2-dev
+  # cargo
+  - curl -O http://static.rust-lang.org/cargo-dist/cargo-nightly-linux.tar.gz
+  - tar xf cargo-nightly-linux.tar.gz
+  - export PATH=$PATH:$(pwd)/cargo-nightly/bin
+
+script:
+  - cargo test
+
+after_script:
+  - curl http://www.rust-ci.org/artifacts/put?t=$RUSTCI_TOKEN | sh

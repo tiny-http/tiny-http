@@ -1,6 +1,6 @@
 env:
   global:
-    - secure: 
+    - secure: V+q4PfXMjLYlYowARj1IN+pHrbBEPO7v20Xhu/8VMhMEwQIh8PgB5bfHFT7UNJa5eWf2bi5e0dM1SpblTT67lfWUpg4Gn3yf2pg/6BgM75NrZl3tK5Uh435fXO/4ne+iOHPRl7wIDKf/WRxCNor5hI8gOAziCuv7T1IE1qZzIF8=
 
 install:
   # rustc

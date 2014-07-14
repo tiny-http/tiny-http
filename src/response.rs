@@ -16,9 +16,9 @@ impl<R: Reader> Response<R> {
                data: R, data_length: uint) -> Response<R>
     {
         // add Content-Length if not in the headers
-        if headers.iter().find(|h| h.field.as_slice() == "Content-Length").is_none() {
+        if headers.iter().find(|h| h.field.equiv(&"Content-Length")).is_none() {
             headers.unshift(
-                Header{field: "Content-Length".to_string(), value: format!("{}", data_length)}
+                Header{field: from_str("Content-Length").unwrap(), value: format!("{}", data_length)}
             );
         }
 
@@ -44,12 +44,12 @@ impl<R: Reader> Response<R> {
     /// cleans-up the headers so that they can be returned
     fn purify_headers(&mut self) {
         // removing some unwanted headers, like Connection
-        self.headers.retain(|h| h.field.as_slice() != "Connection");
+        self.headers.retain(|h| !h.field.equiv(&"Connection"));
 
         // add Server if not in the headers
-        if self.headers.iter().find(|h| h.field.as_slice() == "Server").is_none() {
+        if self.headers.iter().find(|h| h.field.equiv(&"Server")).is_none() {
             self.headers.unshift(
-                Header{field: "Server".to_string(), value: "tiny-http (Rust)".to_string()}
+                Header{field: from_str("Server").unwrap(), value: "tiny-http (Rust)".to_string()}
             );
         }
 

@@ -97,8 +97,13 @@ impl ClientConnection {
                 "Wrong header format (missing space after ':')"))
         }
 
+        let field = match from_str(elems.get(0).as_slice()) {
+            None => return Err(ClientConnection::gen_invalid_input("Could not parse header")),
+            Some(f) => f
+        };
+
         Ok(Header {
-            field: elems.get(0).to_string(),
+            field: field,
             value: elems.get(1).as_slice().slice_from(1).to_string()
         })
     }

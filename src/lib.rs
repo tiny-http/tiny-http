@@ -143,7 +143,7 @@ impl Request {
 
     pub fn get_header<'a>(&'a self, name: &str) -> Option<&'a str> {
         for header in self.headers.iter() {
-            if header.field.as_slice() == name {
+            if header.field.equiv(&name) {
                 return Some(header.value.as_slice());
             }
         }

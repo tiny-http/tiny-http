@@ -101,7 +101,7 @@ impl Server {
             let mut locked_receivers = self.requests_receiver.lock();
             for rx in locked_receivers.iter() {
                 let attempt = rx.try_recv();
-                if attempt.is_ok() {
+                if attempt.is_ok() {       // TODO: remove the channel if it is closed
                     return Some(attempt.unwrap());
                 }
             }
@@ -114,6 +114,7 @@ impl Server {
     fn process_new_clients(&self) {
         let mut new_clients = Vec::new();
 
+        // we add all the elements available on connections_receiver to new_clients
         loop {
             match self.connections_receiver.try_recv() {
                 Ok(client) => new_clients.push(client),
@@ -121,10 +122,13 @@ impl Server {
             }
         }
 
+        // for each new client, spawning a task that will
+        // continuously try to read a Request
         for client in new_clients.move_iter().filter_map(|c| c.ok()) {
             let (tx, rx) = channel();
             spawn(proc() {
                 let mut client = client;
+                // TODO: when the channel is being closed, immediatly notify the task
                 client.advance(|rq| tx.send_opt(rq).is_ok());
             });
             self.requests_receiver.lock().push(rx);
@@ -133,29 +137,23 @@ impl Server {
 }
 
 impl Request {
+    /// Returns the method requested by the client (eg. GET, POST, etc.)
     pub fn get_method<'a>(&'a self) -> &'a Method {
         &self.method
     }
 
+    /// Returns the resource requested by the client.
     pub fn get_url<'a>(&'a self) -> &'a url::Path {
         &self.path
     }
 
-    pub fn get_header<'a>(&'a self, name: &str) -> Option<&'a str> {
-        for header in self.headers.iter() {
-            if header.field.equiv(&name) {
-                return Some(header.value.as_slice());
-            }
-        }
-
-        None
-    }
-
+    /// Returns a list of all headers sent by the client.
     pub fn get_headers<'a>(&'a self) -> &'a [Header] {
         self.headers.as_slice()
     }
 
-    pub fn as_raw_writer<'a>(&'a mut self) -> RefWriter<'a, tcp::TcpStream> {
+    // TODO: turn this into a function that consumes the Request
+    fn as_raw_writer<'a>(&'a mut self) -> RefWriter<'a, tcp::TcpStream> {
         Request::as_raw_writer_impl(&mut self.write_socket)
     }
 
@@ -163,6 +161,7 @@ impl Request {
         elem.by_ref()
     }
 
+    /// Sends a response to this request.
     pub fn respond<R: Reader>(self, response: Response<R>) {
         match response.raw_print(self.write_socket) {
             Ok(_) => (),
@@ -175,7 +174,7 @@ impl std::fmt::Show for Request {
     fn fmt(&self, formatter: &mut std::fmt::Formatter)
         -> Result<(), std::fmt::FormatError>
     {
-        (format!("Request {{ method: {}, path: {}, http_version: {}, headers: {} }}",
-            self.method, self.path, self.http_version, self.headers)).fmt(formatter)
+        (format!("Request({} {})",
+            self.method, self.path)).fmt(formatter)
     }
 }

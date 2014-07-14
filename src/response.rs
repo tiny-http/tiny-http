@@ -41,7 +41,7 @@ impl<R: Reader> Response<R> {
         self
     }
 
-    /// cleans-up the headers so that they can be returned
+    /// Cleans-up the headers so that they can be returned.
     fn purify_headers(&mut self) {
         // removing some unwanted headers, like Connection
         self.headers.retain(|h| !h.field.equiv(&"Connection"));

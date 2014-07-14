@@ -6,7 +6,7 @@ fn main() {
     loop {
         let mut rq = server.recv();
 
-        println!("Request: {} {}", rq.get_method(), rq.get_url());
+        println!("{}", rq);
 
         let response = httpd::Response::from_string(
             format!("Method: {}\nURL: {}\nHeaders: {}", rq.get_method(),

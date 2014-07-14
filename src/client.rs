@@ -7,6 +7,8 @@ use Request;
 use url::Path;
 use semver::Version;
 
+/// A ClientConnection is an object that will store a socket to a client
+/// and return Request objects.
 pub struct ClientConnection {
     initial_socket: tcp::TcpStream,         // copy of the socket to be passed to request objects
 	socket: BufferedReader<tcp::TcpStream>,
@@ -20,6 +22,8 @@ impl ClientConnection {
         }
     }
 
+    /// Generates an IoError with invalid input.
+    /// This function is here because it is incredibly annoying to create this error.
     fn gen_invalid_input(desc: &'static str) -> io::IoError {
         io::IoError {
             kind: io::InvalidInput,
@@ -153,6 +157,8 @@ impl ClientConnection {
 }
 
 impl Iterator<Request> for ClientConnection {
+    /// Blocks until the next Request is available.
+    /// Returns None when the connection to the client has been closed.
     fn next(&mut self) -> Option<Request> {
         // TODO: send back message to client
         loop {

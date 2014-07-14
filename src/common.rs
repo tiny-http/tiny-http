@@ -9,6 +9,33 @@ impl StatusCode {
     pub fn as_uint(&self) -> uint {
         match *self { StatusCode(n) => n }
     }
+
+    pub fn get_default_message(&self) -> &'static str {
+        match self.as_uint() {
+            100 => "Continue",
+            101 => "Switching Protocols",
+            102 => "Processing",
+            118 => "Connection timed out",
+            200 => "OK",
+            201 => "Created",
+            202 => "Accepted",
+            203 => "Non-Authoritative Information",
+            204 => "No Content",
+            205 => "Reset Content",
+            206 => "Partial Content",
+            207 => "Multi-Status",
+            210 => "Content Different",
+            400 => "Bad Request",
+            401 => "Unauthorized",
+            402 => "Payment Required",
+            403 => "Forbidden",
+            404 => "Not Found",
+            405 => "Method Not Allowed",
+            406 => "Not Acceptable",
+            // TODO: finish
+            _ => "Unknown"
+        }
+    }
 }
 
 #[deriving(Clone)]

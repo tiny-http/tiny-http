@@ -64,7 +64,10 @@ impl<R: Reader> Response<R> {
         self.purify_headers();
 
         // writing status line
-        try!(write!(writer, "HTTP/1.1 {} OK\r\n", self.status_code));
+        try!(write!(writer, "HTTP/1.1 {} {}\r\n",
+            self.status_code.as_uint(),
+            self.status_code.get_default_message()
+        ));
 
         // writing headers
         for header in self.headers.iter() {

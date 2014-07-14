@@ -40,7 +40,12 @@ pub struct Request {
 impl Server {
     /// Builds a new server on port 80 that listens to all inputs.
     pub fn new() -> IoResult<Server> {
-        Server::new_with_addr(&ip::SocketAddr{ip: ip::Ipv4Addr(0, 0, 0, 0), port: 80})
+        Server::new_with_port(80)
+    }
+
+    /// Builds a new server on a given port and that listens to all inputs.
+    pub fn new_with_port(port: ip::Port) -> IoResult<Server> {
+        Server::new_with_addr(&ip::SocketAddr{ip: ip::Ipv4Addr(0, 0, 0, 0), port: port})
     }
 
     /// Builds a new server that listens on the specified address.

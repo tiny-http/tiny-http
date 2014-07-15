@@ -20,6 +20,7 @@ mod chunks;
 mod client;
 mod common;
 mod response;
+mod sequential;
 
 /// The main class of this library.
 /// Create a new server using `Server::new()`.

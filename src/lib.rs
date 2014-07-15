@@ -26,6 +26,7 @@ mod sequential;
 pub struct Server {
     connections_receiver: Receiver<IoResult<ClientConnection>>,
     requests_receiver: sync::Mutex<Vec<Receiver<Request>>>,
+    listening_addr: ip::SocketAddr,
 }
 
 /// Represents an HTTP request made by a client.
@@ -58,11 +59,22 @@ impl Server {
         Server::new_with_addr(&ip::SocketAddr{ip: ip::Ipv4Addr(0, 0, 0, 0), port: port})
     }
 
+    /// Builds a new server on a rand port and that listens to all inputs.
+    /// Returns the server and the port it was created on.
+    /// This function is guaranteed not to fail because of a port already in use,
+    ///  and is useful for testing purposes.
+    pub fn new_with_random_port() -> IoResult<(Server, ip::Port)> {
+        Server::new_with_addr(&ip::SocketAddr{ip: ip::Ipv4Addr(0, 0, 0, 0), port: 0})
+            .map(|s| { let port = s.get_port(); (s, port) })
+    }
+
     /// Builds a new server that listens on the specified address.
     pub fn new_with_addr(addr: &ip::SocketAddr) -> IoResult<Server> {
         // building the TcpAcceptor
-        let server = try!(tcp::TcpListener::bind(
-            format!("{}", addr.ip).as_slice(), addr.port).listen());
+        let mut listener = try!(tcp::TcpListener::bind(
+            format!("{}", addr.ip).as_slice(), addr.port));
+        let local_addr = try!(listener.socket_name());
+        let server = try!(listener.listen());
 
         // creating a task where server.accept() is continuously called
         // and ClientConnection objects are returned in the receiver
@@ -84,7 +96,13 @@ impl Server {
         Ok(Server {
             connections_receiver: rx,
             requests_receiver: sync::Mutex::new(Vec::new()),
+            listening_addr: local_addr,
         })
+    }
+
+    /// Returns the port where the server is currently running on.
+    pub fn get_port(&self) -> ip::Port {
+        self.listening_addr.port
     }
 
     /// Returns the number of clients currently connected to the server.

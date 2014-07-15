@@ -1,7 +1,8 @@
 extern crate httpd = "tiny-http";
 
 fn main() {
-    let server = httpd::Server::new().unwrap();
+    let (server, port) = httpd::Server::new_with_random_port().unwrap();
+    println!("Now listening on port {}", port);
 
     loop {
         let rq = match server.recv() {

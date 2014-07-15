@@ -30,22 +30,24 @@ fn main() {
 
         println!("{}", rq);
 
-        let response = match httpd::Response::from_file(&Path::new(rq.get_url().path.clone())) {
-            Ok(res) => res,
-            Err(err) => {
-                let rep = httpd::Response::empty().with_status_code(httpd::StatusCode(404));
-                rq.respond(rep);
-                continue
-            }
-        };
+        let path = Path::new(rq.get_url().path.clone());
+        let file = std::io::File::open(&path);
 
-        let response = response.with_header(
-            httpd::Header{
-                field: from_str("Content-Type").unwrap(),
-                value: get_content_type(&Path::new(rq.get_url().path.clone())).to_string()
-            }
-        );
+        if file.is_ok() {
+            let response = httpd::Response::from_file(file.unwrap());
 
-        rq.respond(response);
+            let response = response.with_header(
+                httpd::Header{
+                    field: from_str("Content-Type").unwrap(),
+                    value: get_content_type(&path).to_string()
+                }
+            );
+
+            rq.respond(response);
+
+        } else {
+            let rep = httpd::Response::empty().with_status_code(httpd::StatusCode(404));
+            rq.respond(rep);
+        }
     }
 }

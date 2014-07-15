@@ -148,16 +148,15 @@ impl<R: Reader> Response<R> {
 
 impl Response<File> {
     #[experimental]
-    pub fn from_file(file: &Path) -> IoResult<Response<File>> {
-        let mut file = try!(File::open(file));
-        let stats = try!(file.stat());
+    pub fn from_file(mut file: File) -> Response<File> {
+        let file_size = file.stat().ok().map(|v| v.size as uint);
 
-        Ok(Response::new(
+        Response::new(
             StatusCode(200),
             Vec::new(),
             file,
-            Some(stats.size as uint)
-        ))
+            file_size
+        )
     }
 }
 

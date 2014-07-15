@@ -6,6 +6,7 @@ use std::io::util::NullReader;
 use chunks::ChunksEncoder;
 
 /// Object representing an HTTP response.
+#[experimental]
 pub struct Response<R> {
     reader: R,
     status_code: StatusCode,
@@ -14,6 +15,7 @@ pub struct Response<R> {
 }
 
 impl<R: Reader> Response<R> {
+    #[experimental]
     pub fn new(status_code: StatusCode, mut headers: Vec<Header>,
                data: R, data_length: uint) -> Response<R>
     {
@@ -33,24 +35,28 @@ impl<R: Reader> Response<R> {
     }
 
     /// Returns the same request, but with an additional header.
+    #[experimental]
     pub fn with_header(mut self, header: Header) -> Response<R> {
         self.headers.push(header);
         self
     }
 
     /// Returns the same request, but with a different status code.
+    #[experimental]
     pub fn with_status_code(mut self, code: StatusCode) -> Response<R> {
         self.status_code = code;
         self
     }
 
     /// Forces an HTTP version.
+    #[experimental]
     pub fn with_http_version(mut self, version: HTTPVersion) -> Response<R> {
         self.http_version = version;
         self
     }
 
     /// Cleans-up the headers so that they can be returned.
+    #[experimental]
     fn purify_headers(&mut self) {
         // removing some unwanted headers, like Connection
         self.headers.retain(|h| !h.field.equiv(&"Connection"));
@@ -69,6 +75,7 @@ impl<R: Reader> Response<R> {
     }
 
     /// Prints the HTTP response to a writer.
+    #[experimental]
     pub fn raw_print<W: Writer>(mut self, mut writer: W) -> IoResult<()> {
         self.purify_headers();
 
@@ -92,7 +99,7 @@ impl<R: Reader> Response<R> {
         try!(write!(writer, "HTTP/{} {} {}\r\n",
             self.http_version,
             self.status_code.as_uint(),
-            self.status_code.get_default_message()
+            self.status_code.get_default_reason_phrase()
         ));
 
         // writing headers
@@ -116,6 +123,7 @@ impl<R: Reader> Response<R> {
 }
 
 impl Response<File> {
+    #[experimental]
     pub fn from_file(file: &Path) -> IoResult<Response<File>> {
         let mut file = try!(File::open(file));
         let stats = try!(file.stat());
@@ -130,6 +138,7 @@ impl Response<File> {
 }
 
 impl Response<MemReader> {
+    #[experimental]
     pub fn from_data(data: Vec<u8>) -> Response<MemReader> {
         let data_len = data.len();
 
@@ -141,6 +150,7 @@ impl Response<MemReader> {
         )
     }
 
+    #[experimental]
     pub fn from_string(data: String) -> Response<MemReader> {
         let data_len = data.len();
 
@@ -156,6 +166,7 @@ impl Response<MemReader> {
 }
 
 impl Response<NullReader> {
+    #[experimental]
     pub fn empty() -> Response<NullReader> {
         Response::new(
             StatusCode(204),
@@ -165,6 +176,7 @@ impl Response<NullReader> {
         )
     }
 
+    #[experimental]
     pub fn not_modified() -> Response<NullReader> {
         Response::new(
             StatusCode(304),

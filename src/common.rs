@@ -2,15 +2,21 @@ use std::ascii::{AsciiCast, StrAsciiExt};
 use std::fmt::{Formatter, FormatError, Show};
 
 /// Status code of a request or response.
-#[deriving(Eq, PartialEq, Clone, Show)]
+#[deriving(Eq, PartialEq, Clone, Show, Ord, PartialOrd)]
+#[stable]
 pub struct StatusCode(pub uint);
 
 impl StatusCode {
+    #[stable]
+    /// Returns the status code as a number.
     pub fn as_uint(&self) -> uint {
         match *self { StatusCode(n) => n }
     }
 
-    pub fn get_default_message(&self) -> &'static str {
+    #[stable]
+    /// Returns the default reason phrase for this status code.
+    /// For example the status code 404 corresponds to "Not Found".
+    pub fn get_default_reason_phrase(&self) -> &'static str {
         match self.as_uint() {
             100 => "Continue",
             101 => "Switching Protocols",
@@ -25,6 +31,13 @@ impl StatusCode {
             206 => "Partial Content",
             207 => "Multi-Status",
             210 => "Content Different",
+            300 => "Multiple Choices",
+            301 => "Moved Permanently",
+            302 => "Found",
+            303 => "See Other",
+            304 => "Not Modified",
+            305 => "Use Proxy",
+            307 => "Temporary Redirect",
             400 => "Bad Request",
             401 => "Unauthorized",
             402 => "Payment Required",
@@ -32,13 +45,43 @@ impl StatusCode {
             404 => "Not Found",
             405 => "Method Not Allowed",
             406 => "Not Acceptable",
-            // TODO: finish
+            407 => "Proxy Authentication Required",
+            408 => "Request Time-out",
+            409 => "Conflict",
+            410 => "Gone",
+            411 => "Length Required",
+            412 => "Precondition Failed",
+            413 => "Request Entity Too Large",
+            414 => "Reques-URI Too Large",
+            415 => "Unsupported Media Type",
+            416 => "Request range not satisfiable",
+            417 => "Expectation Failed",
+            500 => "Internal Server Error",
+            501 => "Not Implemented",
+            502 => "Bad Gateway",
+            503 => "Service Unavailable",
+            504 => "Gateway Time-out",
+            505 => "HTTP Version not supported",
             _ => "Unknown"
         }
     }
 }
 
+impl Equiv<uint> for StatusCode {
+    fn equiv(&self, other: &uint) -> bool {
+        self.as_uint() == *other
+    }
+}
+
+/// Represents a HTTP header.
+/// 
+/// The easiest way to create a `Header` object is to call `from_str`.
+/// 
+/// ```
+/// let header: Header = from_str("Content-Type: text/plain").unwrap();
+/// ```
 #[deriving(Clone)]
+#[unstable]
 pub struct Header {
     pub field: HeaderField,
     pub value: String,
@@ -73,9 +116,10 @@ impl Show for Header {
     }
 }
 
-/// Field of a header.
-/// eg. Content-Type, Content-Length, etc.
-/// Comparaison between two HeaderFields ignores case.
+/// Field of a header (eg. `Content-Type`, `Content-Length`, etc.)
+/// 
+/// Comparaison between two `HeaderField`s ignores case.
+#[unstable]
 #[deriving(Clone)]
 pub struct HeaderField(Vec<Ascii>);
 
@@ -119,9 +163,12 @@ impl<S: Str> Equiv<S> for HeaderField {
 }
 
 
-/// HTTP method (eg. GET, POST, etc.)
+/// HTTP method (eg. `GET`, `POST`, etc.)
+/// 
 /// The user chooses the method he wants.
-/// Comparaison between two HeaderFields ignores case.
+/// 
+/// Comparaison between two `Method`s ignores case.
+#[unstable]
 #[deriving(Clone)]
 pub struct Method(Vec<Ascii>);
 
@@ -165,6 +212,7 @@ impl<S: Str> Equiv<S> for Method {
 }
 
 /// HTTP version (usually 1.0 or 1.1).
+#[unstable]
 #[deriving(Clone, PartialEq, Eq, Ord)]
 pub struct HTTPVersion(pub uint, pub uint);
 

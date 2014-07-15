@@ -22,7 +22,28 @@ mod response;
 mod sequential;
 
 /// The main class of this library.
-/// Create a new server using `Server::new()`.
+/// 
+/// Usually your code will look like this:
+/// 
+/// ```
+/// let server = httpd::Server::new();
+/// 
+/// let pool = std::sync::TaskPool<()>::new(
+///     std::cmp::min(1, std::os::num_cpus() - 1), || {}
+/// );
+///
+/// loop {
+///     let rq = match server.recv() {
+///         Ok(rq) => rq,
+///         Err(_) => break
+///     };
+///
+///     pool.execute(proc(_) {
+///         handle_request(rq)
+///     });
+/// }
+/// ```
+#[unstable]
 pub struct Server {
     connections_receiver: Receiver<IoResult<ClientConnection>>,
     connections_close: Sender<()>,
@@ -31,6 +52,16 @@ pub struct Server {
 }
 
 /// Represents an HTTP request made by a client.
+///
+/// A `Request` object is what is produced by the server, and is your what
+///  your code must analyse and answer.
+///
+/// This object implements the `Send` trait, therefore you can spawn several threads to
+///  handle multiple requests at once.
+///
+/// It is possible that multiple requests objects are linked to the same client, but
+///  don't worry: the library automatically handles synchronization of the answers.
+#[unstable]
 pub struct Request {
     data_reader: Box<Reader + Send>,
     response_writer: Box<Writer + Send>,
@@ -51,11 +82,13 @@ enum ServerRecvEvent {
 
 impl Server {
     /// Builds a new server on port 80 that listens to all inputs.
+    #[unstable]
     pub fn new() -> IoResult<Server> {
         Server::new_with_port(80)
     }
 
     /// Builds a new server on a given port and that listens to all inputs.
+    #[unstable]
     pub fn new_with_port(port: ip::Port) -> IoResult<Server> {
         Server::new_with_addr(&ip::SocketAddr{ip: ip::Ipv4Addr(0, 0, 0, 0), port: port})
     }
@@ -64,12 +97,14 @@ impl Server {
     /// Returns the server and the port it was created on.
     /// This function is guaranteed not to fail because of a port already in use,
     ///  and is useful for testing purposes.
+    #[unstable]
     pub fn new_with_random_port() -> IoResult<(Server, ip::Port)> {
         Server::new_with_addr(&ip::SocketAddr{ip: ip::Ipv4Addr(0, 0, 0, 0), port: 0})
             .map(|s| { let port = s.get_port(); (s, port) })
     }
 
     /// Builds a new server that listens on the specified address.
+    #[unstable]
     pub fn new_with_addr(addr: &ip::SocketAddr) -> IoResult<Server> {
         // building the TcpAcceptor
         let mut listener = try!(tcp::TcpListener::bind(
@@ -114,16 +149,19 @@ impl Server {
     }
 
     /// Returns the port where the server is currently running on.
+    #[experimental]
     pub fn get_port(&self) -> ip::Port {
         self.listening_addr.port
     }
 
     /// Returns the number of clients currently connected to the server.
+    #[stable]
     pub fn get_num_connections(&self) -> uint {
         self.requests_receiver.lock().len()
     }
 
     /// Blocks until an HTTP request has been submitted and returns it.
+    #[stable]
     pub fn recv(&self) -> IoResult<Request> {
         loop {
             match self.recv_impl() {
@@ -198,6 +236,7 @@ impl Server {
     }
 
     /// Same as `recv()` but doesn't block.
+    #[stable]
     pub fn try_recv(&self) -> IoResult<Option<Request>> {
         self.process_new_clients();
 
@@ -246,45 +285,70 @@ impl Server {
 }
 
 impl Request {
-    /// Returns the method requested by the client (eg. GET, POST, etc.)
+    /// Returns the method requested by the client (eg. `GET`, `POST`, etc.).
+    #[stable]
     pub fn get_method<'a>(&'a self) -> &'a Method {
         &self.method
     }
 
     /// Returns the resource requested by the client.
+    #[unstable]
     pub fn get_url<'a>(&'a self) -> &'a url::Path {
         &self.path
     }
 
     /// Returns a list of all headers sent by the client.
+    #[stable]
     pub fn get_headers<'a>(&'a self) -> &'a [Header] {
         self.headers.as_slice()
     }
 
     /// Returns the length of the body in bytes.
+    #[unstable]
     pub fn get_body_length(&self) -> uint {
         self.body_length
     }
 
     /// Returns the length of the body in bytes.
+    #[stable]
     pub fn get_remote_addr<'a>(&'a self) -> &'a ip::SocketAddr {
         &self.remote_addr
     }
 
     /// Allows to read the body of the request.
+    /// 
+    /// # Example
+    /// 
+    /// ```
+    /// let request = server.recv();
+    /// 
+    /// if get_content_type(&request) == "application/json" {
+    ///     let json: Json = from_str(request.as_reader().read_to_string()).unwrap();
+    /// }
+    /// ```
+    #[unstable]
     pub fn as_reader<'a>(&'a mut self) -> &'a mut Reader {
         fn passthrough<'a>(r: &'a mut Reader) -> &'a mut Reader { r }
         passthrough(self.data_reader)
     }
 
-    /// Turns the Request into a writer.
+    /// Turns the `Request` into a writer.
+    /// 
     /// The writer has a raw access to the stream to the user.
     /// This function is useful for things like CGI.
-    pub fn into_writer(self) -> Box<Writer> {
+    ///
+    /// Note that the destruction of the `Writer` object may trigger
+    ///  some events. For exemple if a client has sent multiple requests and the requests
+    ///  have been processed in parallel, the destruction of a writer will trigger
+    ///  the writing of the next response.
+    /// Therefore you should always destroy the `Writer` as soon as possible.
+    #[stable]
+    pub fn into_writer(self) -> Box<Writer + Send> {
         self.response_writer
     }
 
     /// Sends a response to this request.
+    #[unstable]
     pub fn respond<R: Reader>(mut self, response: Response<R>) {
         fn passthrough<'a>(w: &'a mut Writer) -> &'a mut Writer { w }
 

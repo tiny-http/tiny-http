@@ -142,7 +142,16 @@ impl Response<MemReader> {
     }
 
     pub fn from_string(data: String) -> Response<MemReader> {
-        Response::from_data(data.into_bytes())
+        let data_len = data.len();
+
+        Response::new(
+            StatusCode(200),
+            vec!(
+                from_str("Content-Type: text/plain; charset=UTF-8").unwrap()
+            ),
+            MemReader::new(data.into_bytes()),
+            data_len
+        )        
     }
 }
 

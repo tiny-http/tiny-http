@@ -2,7 +2,7 @@
 
 [![Build Status](https://travis-ci.org/tomaka/tiny-http.svg?branch=master)](https://travis-ci.org/tomaka/tiny-http)
 
-Tiny HTTP server in Rust.
+Tiny but strong HTTP server in Rust.
 
 What does **tiny-http** handle?
  - Accepting and managing connections to the clients
@@ -11,7 +11,8 @@ What does **tiny-http** handle?
  - Turning user input (eg. POST input) into UTF-8 (**not implemented yet**)
  - HTTPS (**not implemented yet**)
 
-Everything else (routing, ETags, Cache-Control, HTML templates, etc.) is not handled.
+Everything else (routing, ETags, Cache-Control, HTML templates, etc.) must be handled by your code.
+If you want to create a website in Rust, I strongly recommend using a framework instead of this library.
 
 [**Link to the documentation**](http://www.rust-ci.org/tomaka/tiny-http/doc/tiny-http/)
 

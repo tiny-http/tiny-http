@@ -39,11 +39,17 @@ A newly-created `Server` will immediatly start listening for incoming connection
 Calling `server.recv()` will block until the next request is available. This is usually what you should do
 if you write a website in Rust.
 
+This function returns an `IoResult<Request>`, so you need to handle the possible errors.
+
 ```rust
 loop {
 	// blocks until the next request is received
-    let request = server.recv();
+    let request = match server.recv() {
+    	Ok(rq) => rq,
+    	Err(e) => { println!("error: {}", e); break }
+	};
 
+	// user-defined function to handle the request
     handle_request(request)
 }
 ```

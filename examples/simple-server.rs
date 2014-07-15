@@ -4,7 +4,10 @@ fn main() {
     let server = httpd::Server::new().unwrap();
 
     loop {
-        let rq = server.recv();
+        let rq = match server.recv() {
+            Ok(rq) => rq,
+            Err(_) => break
+        };
 
         println!("{}", rq);
 

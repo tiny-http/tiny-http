@@ -5,7 +5,7 @@
 extern crate semver;
 extern crate url;
 
-use std::io::{Acceptor, BufferedReader, IoResult, Listener, RefReader};
+use std::io::{Acceptor, BufferedReader, IoError, IoResult, Listener, RefReader};
 use std::io::net::ip;
 use std::io::net::tcp;
 use std::io::util::LimitReader;
@@ -48,7 +48,7 @@ enum ServerRecvEvent {
     NewRequest(Request),
     NewClient(ClientConnection),
     ReceiverErrord(uint),
-    ServerSocketCrashed
+    ServerSocketCrashed(IoError),
 }
 
 impl Server {
@@ -97,13 +97,13 @@ impl Server {
     }
 
     /// Blocks until an HTTP request has been submitted and returns it.
-    pub fn recv(&self) -> Request {
+    pub fn recv(&self) -> IoResult<Request> {
         loop {
             match self.recv_impl() {
                 NewClient(client) => self.add_client(client),
-                NewRequest(rq) => return rq,
+                NewRequest(rq) => return Ok(rq),
                 ReceiverErrord(id) => { self.requests_receiver.lock().remove(id); },
-                _ => println!("The server socket crashed")
+                ServerSocketCrashed(err) => return Err(err)
             }
         }
     }
@@ -138,11 +138,12 @@ impl Server {
                         unsafe { connections_handle.remove() };
                         return NewClient(connec);
                     },
-                    _ => {
+                    Ok(Err(err)) => {
                         for h in rq_handles.mut_iter() { unsafe { h.remove() } };
                         unsafe { connections_handle.remove() };
-                        return ServerSocketCrashed
-                    }
+                        return ServerSocketCrashed(err)
+                    },
+                    _ => ()
                 }
             }
 
@@ -170,7 +171,7 @@ impl Server {
     }
 
     /// Same as `recv()` but doesn't block.
-    pub fn try_recv(&self) -> Option<Request> {
+    pub fn try_recv(&self) -> IoResult<Option<Request>> {
         self.process_new_clients();
 
         {
@@ -178,12 +179,12 @@ impl Server {
             for rx in locked_receivers.iter() {
                 let attempt = rx.try_recv();
                 if attempt.is_ok() {       // TODO: remove the channel if it is closed
-                    return Some(attempt.unwrap());
+                    return Ok(Some(attempt.unwrap()));
                 }
             }
         }
 
-        None
+        Ok(None)
     }
 
     /// Does not block.

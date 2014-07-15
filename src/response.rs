@@ -133,4 +133,13 @@ impl Response<NullReader> {
             0
         )
     }
+
+    pub fn not_modified() -> Response<NullReader> {
+        Response::new(
+            StatusCode(304),
+            Vec::new(),
+            NullReader,
+            0
+        )
+    }
 }

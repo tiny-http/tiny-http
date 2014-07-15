@@ -17,13 +17,18 @@ pub struct Response<R> {
 impl<R: Reader> Response<R> {
     #[experimental]
     pub fn new(status_code: StatusCode, mut headers: Vec<Header>,
-               data: R, data_length: uint) -> Response<R>
+               data: R, data_length: Option<uint>) -> Response<R>
     {
         // add Content-Length if not in the headers
-        if headers.iter().find(|h| h.field.equiv(&"Content-Length")).is_none() {
-            headers.unshift(
-                Header{field: from_str("Content-Length").unwrap(), value: format!("{}", data_length)}
-            );
+        if data_length.is_some() {
+            if headers.iter().find(|h| h.field.equiv(&"Content-Length")).is_none() {
+                headers.unshift(
+                    Header{
+                        field: from_str("Content-Length").unwrap(),
+                        value: format!("{}", data_length.unwrap())
+                    }
+                );
+            }
         }
 
         Response {
@@ -132,7 +137,7 @@ impl Response<File> {
             StatusCode(200),
             Vec::new(),
             file,
-            stats.size as uint
+            Some(stats.size as uint)
         ))
     }
 }
@@ -146,7 +151,7 @@ impl Response<MemReader> {
             StatusCode(200),
             Vec::new(),
             MemReader::new(data),
-            data_len
+            Some(data_len)
         )
     }
 
@@ -160,7 +165,7 @@ impl Response<MemReader> {
                 from_str("Content-Type: text/plain; charset=UTF-8").unwrap()
             ),
             MemReader::new(data.into_bytes()),
-            data_len
+            Some(data_len)
         )        
     }
 }
@@ -172,7 +177,7 @@ impl Response<NullReader> {
             StatusCode(204),
             Vec::new(),
             NullReader,
-            0
+            Some(0)
         )
     }
 
@@ -182,7 +187,7 @@ impl Response<NullReader> {
             StatusCode(304),
             Vec::new(),
             NullReader,
-            0
+            Some(0)
         )
     }
 }

@@ -9,8 +9,14 @@ use url::Path;
 /// A ClientConnection is an object that will store a socket to a client
 /// and return Request objects.
 pub struct ClientConnection {
-    initial_socket: tcp::TcpStream,         // copy of the socket to be passed to request objects
+    // copy of the socket to be passed to request objects
+    initial_socket: tcp::TcpStream,
+
+    //
 	socket: BufferedReader<tcp::TcpStream>,
+
+    // set to true if the client sent a "Connection: close" in the previous request
+    connection_must_close: bool,
 }
 
 impl ClientConnection {
@@ -18,6 +24,7 @@ impl ClientConnection {
         ClientConnection {
             initial_socket: socket.clone(),
             socket: BufferedReader::new(socket),
+            connection_must_close: false,
         }
     }
 
@@ -161,14 +168,37 @@ impl ClientConnection {
 
 impl Iterator<Request> for ClientConnection {
     /// Blocks until the next Request is available.
-    /// Returns None when the connection to the client has been closed.
+    /// Returns None when no new Requests will come from the client.
     fn next(&mut self) -> Option<Request> {
-        // TODO: send back message to client
+        // the client sent a "connection: close" header in this previous request
+        //  or is using HTTP 1.0, meaning that no new request will come
+        if self.connection_must_close {
+            return None
+        }
+
+        // TODO: send back message to client in case of parsing error
         loop {
-            return match self.read() {
-                Err(_) => None,
-                Ok(rq) => Some(rq)
+            let rq = match self.read() {
+                Err(_) => return None,
+                Ok(rq) => rq
+            };
+
+            // updating the status of the connection
+            {
+                let connection_header = rq.headers.iter()
+                    .find(|h| h.field.equiv(&"Connection")).map(|h| h.value.as_slice());
+
+                if connection_header == Some("close") {
+                    self.connection_must_close = true;
+                } else if rq.http_version == HTTPVersion(1, 0) &&
+                        connection_header != Some("keep-alive")
+                {
+                    self.connection_must_close = true;
+                }
             }
+
+            // returning the request
+            return Some(rq);
         }
     }
 }

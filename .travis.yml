@@ -19,4 +19,5 @@ script:
   - cargo test
 
 after_script:
+  - rustdoc src/lib.rs
   - curl http://www.rust-ci.org/artifacts/put?t=$RUSTCI_TOKEN | sh

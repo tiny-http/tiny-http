@@ -172,3 +172,31 @@ impl Iterator<Request> for ClientConnection {
         }
     }
 }
+
+#[cfg(test)]
+mod test {
+    use super::ClientConnection;
+
+    #[test]
+    fn test_parse_request_line() {
+        let (method, path, ver) =
+            ClientConnection::parse_request_line("GET /hello HTTP/1.1").unwrap();
+
+        assert!(method.equiv(&"get"));
+        assert!(path == from_str("/hello").unwrap());
+        assert!(ver == ::common::HTTPVersion(1, 1));
+
+        assert!(ClientConnection::parse_request_line("GET /hello").is_err());
+        assert!(ClientConnection::parse_request_line("qsd qsd qsd").is_err());
+    }
+
+    #[test]
+    fn test_parse_header() {
+        let header = ClientConnection::parse_header("Content-Type: text/html").unwrap();
+
+        assert!(header.field.equiv(&"content-type"));
+        assert!(header.value.as_slice() == "text/html");
+
+        assert!(ClientConnection::parse_header("hello world").is_err());
+    }
+}

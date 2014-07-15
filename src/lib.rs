@@ -5,7 +5,7 @@
 
 extern crate url;
 
-use std::io::{Acceptor, IoError, IoResult, Listener};
+use std::io::{Acceptor, IoError, IoResult, Listener, TimedOut};
 use std::io::net::ip;
 use std::io::net::tcp;
 use std::sync;
@@ -25,6 +25,7 @@ mod sequential;
 /// Create a new server using `Server::new()`.
 pub struct Server {
     connections_receiver: Receiver<IoResult<ClientConnection>>,
+    connections_close: Sender<()>,
     requests_receiver: sync::Mutex<Vec<Receiver<Request>>>,
     listening_addr: ip::SocketAddr,
 }
@@ -78,14 +79,25 @@ impl Server {
 
         // creating a task where server.accept() is continuously called
         // and ClientConnection objects are returned in the receiver
-        let (tx, rx) = channel();
+        let (tx_incoming, rx_incoming) = channel();
+        let (tx_close, rx_close) = channel();
         spawn(proc() {
             let mut server = server;
+            server.set_timeout(Some(2000));
 
             loop {
-                let val = server.accept().map(|sock| ClientConnection::new(sock));
+                match rx_close.try_recv() {
+                    Ok(_) => break,
+                    _ => ()
+                };
 
-                match tx.send_opt(val) {
+                let val = match server.accept().map(|sock| ClientConnection::new(sock)) {
+                    Err(ref err) if err.kind == TimedOut =>
+                        continue,
+                    a => a
+                };
+
+                match tx_incoming.send_opt(val) {
                     Err(_) => break,
                     _ => ()
                 }
@@ -94,7 +106,8 @@ impl Server {
 
         // result
         Ok(Server {
-            connections_receiver: rx,
+            connections_receiver: rx_incoming,
+            connections_close: tx_close,
             requests_receiver: sync::Mutex::new(Vec::new()),
             listening_addr: local_addr,
         })
@@ -290,5 +303,11 @@ impl std::fmt::Show for Request {
     {
         (format!("Request({} {} from {})",
             self.method, self.path, self.remote_addr.ip)).fmt(formatter)
+    }
+}
+
+impl Drop for Server {
+    fn drop(&mut self) {
+        self.connections_close.send_opt(()).ok();
     }
 }

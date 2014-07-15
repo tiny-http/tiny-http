@@ -3,7 +3,6 @@ extern crate httpd = "tiny-http";
 use std::io::net::tcp::TcpStream;
 
 #[test]
-#[ignore]
 fn basic_handling() {
     let (server, port) = httpd::Server::new_with_random_port().unwrap();
 

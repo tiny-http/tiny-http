@@ -31,15 +31,8 @@ pub struct Server {
 
 /// Represents an HTTP request made by a client.
 pub struct Request {
-    read_socket: LimitReader<BufferedReader<tcp::TcpStream>>,
-    write_socket: tcp::TcpStream,
-
-    // the request must wait until the value on this future is available
-    wait_until_send: sync::Future<()>,
-
-    // this sender must be notified when the response has been sent
-    send_complete_notifier: Sender<()>,
-
+    data_reader: Box<Reader + Send>,
+    response_writer: Box<Writer + Send>,
     remote_addr: ip::SocketAddr,
     method: Method,
     path: url::Path,
@@ -256,205 +249,31 @@ impl Request {
     }
 
     /// Allows to read the body of the request.
-    pub fn as_reader<'a>(&'a mut self)
-        -> RefReader<'a, LimitReader<BufferedReader<tcp::TcpStream>>>
+    /*pub fn as_reader<'a>(&'a mut self)
+        -> RefReader<'a, Box<Reader + 'static>>
     {
         fn as_reader_impl<'a, R: Reader>(elem: &'a mut R) -> RefReader<'a, R> {
             elem.by_ref()
         }
-        as_reader_impl(&mut self.read_socket)
-    }
+        as_reader_impl(&mut self.data_reader)
+    }*/
 
     /// Turns the Request into a writer.
     /// The writer has a raw access to the stream to the user.
     /// This function is useful for things like CGI.
-    pub fn into_writer(self) -> ResponseWriter {
-        Request::finish_reading(self.read_socket);
-        self.wait_until_send.unwrap();
-
-        ResponseWriter {
-            writer: self.write_socket,
-            send_complete_notifier: self.send_complete_notifier,
-        }
+    pub fn into_writer(self) -> Box<Writer> {
+        self.response_writer
     }
 
     /// Sends a response to this request.
     pub fn respond<R: Reader>(self, response: Response<R>) {
         let response = response.with_http_version(self.http_version);
 
-        Request::finish_reading(self.read_socket);
-        self.wait_until_send.unwrap();
-
-        match response.raw_print(self.write_socket) {
+        let w: Box<Writer> = unsafe { ::std::mem::transmute(self.response_writer) };        // TODO: 
+        match response.raw_print(w) {
             Ok(_) => (),
             Err(err) => println!("error while sending answer: {}", err)     // TODO: handle better?
         }
-
-        self.send_complete_notifier.send_opt(()).ok();      // ignoring the outcome
-    }
-
-    /// Consumes the rest of the request's body in the TcpStream.
-    fn finish_reading(reader: LimitReader<BufferedReader<tcp::TcpStream>>) {
-        let remaining_to_read = reader.limit();
-        reader.unwrap().consume(remaining_to_read)
-    }
-}
-
-impl Writer for ResponseWriter {
-    #[inline]
-    fn write(&mut self, buf: &[u8]) -> IoResult<()> {
-        self.writer.write(buf)
-    }
-
-    #[inline]
-    fn flush(&mut self) -> IoResult<()> {
-        self.writer.flush()
-    }
-
-    #[inline]
-    fn write_fmt(&mut self, fmt: &::std::fmt::Arguments) -> IoResult<()> {
-        self.writer.write_fmt(fmt)
-    }
-
-    #[inline]
-    fn write_str(&mut self, s: &str) -> IoResult<()> {
-        self.writer.write_str(s)
-    }
-
-    #[inline]
-    fn write_line(&mut self, s: &str) -> IoResult<()> {
-        self.writer.write_line(s)
-    }
-
-    #[inline]
-    fn write_char(&mut self, c: char) -> IoResult<()> {
-        self.writer.write_char(c)
-    }
-
-    #[inline]
-    fn write_int(&mut self, n: int) -> IoResult<()> {
-        self.writer.write_int(n)
-    }
-
-    #[inline]
-    fn write_uint(&mut self, n: uint) -> IoResult<()> {
-        self.writer.write_uint(n)
-    }
-
-    #[inline]
-    fn write_le_uint(&mut self, n: uint) -> IoResult<()> {
-        self.writer.write_le_uint(n)
-    }
-
-    #[inline]
-    fn write_le_int(&mut self, n: int) -> IoResult<()> {
-        self.writer.write_le_int(n)
-    }
-
-    #[inline]
-    fn write_be_uint(&mut self, n: uint) -> IoResult<()> {
-        self.writer.write_be_uint(n)
-    }
-
-    #[inline]
-    fn write_be_int(&mut self, n: int) -> IoResult<()> {
-        self.writer.write_be_int(n)
-    }
-
-    #[inline]
-    fn write_be_u64(&mut self, n: u64) -> IoResult<()> {
-        self.writer.write_be_u64(n)
-    }
-
-    #[inline]
-    fn write_be_u32(&mut self, n: u32) -> IoResult<()> {
-        self.writer.write_be_u32(n)
-    }
-
-    #[inline]
-    fn write_be_u16(&mut self, n: u16) -> IoResult<()> {
-        self.writer.write_be_u16(n)
-    }
-
-    #[inline]
-    fn write_be_i64(&mut self, n: i64) -> IoResult<()> {
-        self.writer.write_be_i64(n)
-    }
-
-    #[inline]
-    fn write_be_i32(&mut self, n: i32) -> IoResult<()> {
-        self.writer.write_be_i32(n)
-    }
-
-    #[inline]
-    fn write_be_i16(&mut self, n: i16) -> IoResult<()> {
-        self.writer.write_be_i16(n)
-    }
-
-    #[inline]
-    fn write_be_f64(&mut self, f: f64) -> IoResult<()> {
-        self.writer.write_be_f64(f)
-    }
-
-    #[inline]
-    fn write_be_f32(&mut self, f: f32) -> IoResult<()> {
-        self.writer.write_be_f32(f)
-    }
-
-    #[inline]
-    fn write_le_u64(&mut self, n: u64) -> IoResult<()> {
-        self.writer.write_le_u64(n)
-    }
-
-    #[inline]
-    fn write_le_u32(&mut self, n: u32) -> IoResult<()> {
-        self.writer.write_le_u32(n)
-    }
-
-    #[inline]
-    fn write_le_u16(&mut self, n: u16) -> IoResult<()> {
-        self.writer.write_le_u16(n)
-    }
-
-    #[inline]
-    fn write_le_i64(&mut self, n: i64) -> IoResult<()> {
-        self.writer.write_le_i64(n)
-    }
-
-    #[inline]
-    fn write_le_i32(&mut self, n: i32) -> IoResult<()> {
-        self.writer.write_le_i32(n)
-    }
-
-    #[inline]
-    fn write_le_i16(&mut self, n: i16) -> IoResult<()> {
-        self.writer.write_le_i16(n)
-    }
-
-    #[inline]
-    fn write_le_f64(&mut self, f: f64) -> IoResult<()> {
-        self.writer.write_le_f64(f)
-    }
-
-    #[inline]
-    fn write_le_f32(&mut self, f: f32) -> IoResult<()> {
-        self.writer.write_le_f32(f)
-    }
-
-    #[inline]
-    fn write_u8(&mut self, n: u8) -> IoResult<()> {
-        self.writer.write_u8(n)
-    }
-
-    #[inline]
-    fn write_i8(&mut self, n: i8) -> IoResult<()> {
-        self.writer.write_i8(n)
-    }
-}
-
-impl Drop for ResponseWriter {
-    fn drop(&mut self) {
-        self.send_complete_notifier.send_opt(()).ok();  // ignoring the result
     }
 }
 

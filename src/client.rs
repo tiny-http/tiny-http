@@ -1,31 +1,41 @@
 use std::io;
 use std::io::net::tcp;
+use std::io::net::ip::SocketAddr;
 use std::io::BufferedReader;
 use std::io::util::LimitReader;
 use common::{Header, HTTPVersion, Method};
 use Request;
 use url::Path;
 use std::sync;
+use sequential::{SequentialReader, SequentialReaderBuilder, SequentialWriterBuilder};
 
 /// A ClientConnection is an object that will store a socket to a client
 /// and return Request objects.
 pub struct ClientConnection {
-    //
-	socket: BufferedReader<tcp::TcpStream>,
+    remote_addr: io::IoResult<SocketAddr>,
 
-    // when a request is outputted, this receiver will be triggered when it has finished
-    //  sending the response
-    previous_request: Option<Receiver<()>>,
+    source: SequentialReaderBuilder<tcp::TcpStream>,
+    sink: SequentialWriterBuilder<tcp::TcpStream>,
+
+    // where to read the next header
+	next_header_source: BufferedReader<SequentialReader<tcp::TcpStream>>,
 
     // set to true if the client sent a "Connection: close" in the previous request
     connection_must_close: bool,
 }
 
 impl ClientConnection {
-    pub fn new(socket: tcp::TcpStream) -> ClientConnection {
+    pub fn new(mut socket: tcp::TcpStream) -> ClientConnection {
+        let remote_addr = socket.peer_name();
+
+        let mut source = SequentialReaderBuilder::new(socket.clone());
+        let first_header = source.next().unwrap();
+
         ClientConnection {
-            socket: BufferedReader::new(socket),
-            previous_request: None,
+            source: source,
+            sink: SequentialWriterBuilder::new(socket),
+            remote_addr: remote_addr,
+            next_header_source: BufferedReader::new(first_header),
             connection_must_close: false,
         }
     }
@@ -118,8 +128,7 @@ impl ClientConnection {
     /// Blocks until the header has been read.
     fn read(&mut self) -> io::IoResult<Request> {
         let (method, path, version, headers) = {
-
-            let mut lines = self.socket.lines();
+            let mut lines = self.next_header_source.lines();
 
             // reading the request line
             let (method, path, version) =
@@ -158,28 +167,15 @@ impl ClientConnection {
             .and_then(|h| from_str::<uint>(h.value.as_slice()))
             .unwrap_or(0u);
 
-        // this is the socket that we will give to the Request
-        let mut initial_socket = self.socket.get_ref().clone();
-        let remote_addr = try!(initial_socket.peer_name());
-
-        // building the writing sync
-        let (tx, rx) = channel();
-        let mut rx = Some(rx);
-        ::std::mem::swap(&mut self.previous_request, &mut rx);
-        let future = match rx {
-            Some(rx) => sync::Future::from_receiver(rx),
-            None => sync::Future::from_value(())
-        };
+        // building the next reader
+        let data_reader = self.source.next().unwrap();
+        self.next_header_source = BufferedReader::new(self.source.next().unwrap());
 
         // building the request
         Ok(Request {
-            read_socket: LimitReader::new(
-                        BufferedReader::new(initial_socket.clone()), body_length
-                    ),
-            write_socket: initial_socket,
-            send_complete_notifier: tx,
-            wait_until_send: future,
-            remote_addr: remote_addr,
+            data_reader: box data_reader,
+            response_writer: box self.sink.next().unwrap(),
+            remote_addr: self.remote_addr.clone().unwrap(),     // TODO: could fail
             method: method,
             path: path,
             http_version: version,

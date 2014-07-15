@@ -9,9 +9,6 @@ use url::Path;
 /// A ClientConnection is an object that will store a socket to a client
 /// and return Request objects.
 pub struct ClientConnection {
-    // copy of the socket to be passed to request objects
-    initial_socket: tcp::TcpStream,
-
     //
 	socket: BufferedReader<tcp::TcpStream>,
 
@@ -22,7 +19,6 @@ pub struct ClientConnection {
 impl ClientConnection {
     pub fn new(socket: tcp::TcpStream) -> ClientConnection {
         ClientConnection {
-            initial_socket: socket.clone(),
             socket: BufferedReader::new(socket),
             connection_must_close: false,
         }
@@ -115,34 +111,39 @@ impl ClientConnection {
     /// Reads a request from the stream.
     /// Blocks until the header has been read.
     fn read(&mut self) -> io::IoResult<Request> {
-        let mut lines = self.socket.lines();
+        let (method, path, version, headers) = {
 
-        // reading the request line
-        let (method, path, version) =
-            try!(ClientConnection::parse_request_line(
-                match lines.next() {
-                    Some(line) => try!(line),
-                    None => return Err(ClientConnection::gen_invalid_input(
-                                "Missing request line"))
-                }.as_slice().trim()
-            ));
+            let mut lines = self.socket.lines();
 
-        // getting all headers
-        let headers = {
-            let mut headers = Vec::new();
-            loop {
-                match lines.next() {
-                    Some(line) => {
-                        let line = try!(line);
-                        if line.as_slice().trim().len() == 0 { break };
-                        headers.push(
-                            try!(ClientConnection::parse_header(line.as_slice().trim()))
-                        )
-                    },
-                    None => break
+            // reading the request line
+            let (method, path, version) =
+                try!(ClientConnection::parse_request_line(
+                    match lines.next() {
+                        Some(line) => try!(line),
+                        None => return Err(ClientConnection::gen_invalid_input(
+                                    "Missing request line"))
+                    }.as_slice().trim()
+                ));
+
+            // getting all headers
+            let headers = {
+                let mut headers = Vec::new();
+                loop {
+                    match lines.next() {
+                        Some(line) => {
+                            let line = try!(line);
+                            if line.as_slice().trim().len() == 0 { break };
+                            headers.push(
+                                try!(ClientConnection::parse_header(line.as_slice().trim()))
+                            )
+                        },
+                        None => break
+                    }
                 }
-            }
-            headers
+                headers
+            };
+
+            (method, path, version, headers)
         };
 
         // finding length of body
@@ -151,12 +152,15 @@ impl ClientConnection {
             .and_then(|h| from_str::<uint>(h.value.as_slice()))
             .unwrap_or(0u);
 
+        // this is the socket that we will give to the Request
+        let initial_socket = self.socket.get_ref().clone();
+
         // building the request
         Ok(Request {
             read_socket: LimitReader::new(
-                        BufferedReader::new(self.initial_socket.clone()), body_length
+                        BufferedReader::new(initial_socket.clone()), body_length
                     ),
-            write_socket: self.initial_socket.clone(),
+            write_socket: initial_socket,
             method: method,
             path: path,
             http_version: version,

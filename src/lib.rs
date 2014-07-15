@@ -179,10 +179,18 @@ impl Request {
 
     /// Sends a response to this request.
     pub fn respond<R: Reader>(self, response: Response<R>) {
+        Request::finish_reading(self.read_socket);
+
         match response.raw_print(self.write_socket) {
             Ok(_) => (),
             Err(err) => println!("error while sending answer: {}", err)     // TODO: handle better?
         }
+    }
+
+    /// Consumes the rest of the request's body in the TcpStream.
+    fn finish_reading(reader: LimitReader<BufferedReader<tcp::TcpStream>>) {
+        let remaining_to_read = reader.limit();
+        let underlying = reader.unwrap().consume(remaining_to_read);
     }
 }
 

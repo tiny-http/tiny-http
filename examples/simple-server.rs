@@ -1,10 +1,10 @@
 extern crate httpd = "tiny-http";
 
 fn main() {
-    let mut server = httpd::Server::new().unwrap();
+    let server = httpd::Server::new().unwrap();
 
     loop {
-        let mut rq = server.recv();
+        let rq = server.recv();
 
         println!("{}", rq);
 

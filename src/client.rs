@@ -173,7 +173,7 @@ impl Iterator<Request> for ClientConnection {
         // TODO: send back message to client
         loop {
             return match self.read() {
-                Err(error) => None,
+                Err(_) => None,
                 Ok(rq) => Some(rq)
             }
         }

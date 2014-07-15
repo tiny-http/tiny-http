@@ -5,12 +5,12 @@
 extern crate semver;
 extern crate url;
 
-use std::io::{Acceptor, BufferedReader, IoResult, Listener, RefReader, RefWriter};
+use std::io::{Acceptor, BufferedReader, IoResult, Listener, RefReader};
 use std::io::net::ip;
 use std::io::net::tcp;
 use std::io::util::LimitReader;
 use std::sync;
-use std::comm::{Handle, Select};
+use std::comm::Select;
 use client::ClientConnection;
 
 pub use common::Header;
@@ -270,7 +270,7 @@ impl Request {
     /// Consumes the rest of the request's body in the TcpStream.
     fn finish_reading(reader: LimitReader<BufferedReader<tcp::TcpStream>>) {
         let remaining_to_read = reader.limit();
-        let underlying = reader.unwrap().consume(remaining_to_read);
+        reader.unwrap().consume(remaining_to_read)
     }
 }
 

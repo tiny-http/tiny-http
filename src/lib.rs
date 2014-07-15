@@ -147,7 +147,10 @@ impl Server {
                         unsafe { connections_handle.remove() };
                         return (Some(connec), None, Vec::new());
                     },
-                    _ => continue
+                    _ => {
+                        println!("The server socket crashed");
+                        continue
+                    }
                 }
             }
 
@@ -169,6 +172,12 @@ impl Server {
                 unsafe { connections_handle.remove() };
 
                 return (None, result, errord)
+
+            } else if errord.len() >= 1 {
+                for h in rq_handles.mut_iter() { unsafe { h.remove() } };
+                unsafe { connections_handle.remove() };
+                
+                return (None, None, errord)
             }
         }
     }

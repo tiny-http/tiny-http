@@ -10,12 +10,18 @@ use sequential::{SequentialReader, SequentialReaderBuilder, SequentialWriterBuil
 /// A ClientConnection is an object that will store a socket to a client
 /// and return Request objects.
 pub struct ClientConnection {
+    // address of the client
     remote_addr: io::IoResult<SocketAddr>,
 
+    // sequence of Readers to the stream, so that the data is not read in
+    //  the wrong order
     source: SequentialReaderBuilder<tcp::TcpStream>,
+
+    // sequence of Writers to the stream, to avoid writing response #2 before
+    //  response #1
     sink: SequentialWriterBuilder<tcp::TcpStream>,
 
-    // where to read the next header
+    // Reader to read the next header from
 	next_header_source: BufferedReader<SequentialReader<tcp::TcpStream>>,
 
     // set to true if the client sent a "Connection: close" in the previous request
@@ -23,6 +29,7 @@ pub struct ClientConnection {
 }
 
 impl ClientConnection {
+    /// Creates a new ClientConnection that takes ownership of the TcpStream.
     pub fn new(mut socket: tcp::TcpStream) -> ClientConnection {
         socket.set_timeout(Some(10000));
 
@@ -87,10 +94,13 @@ impl ClientConnection {
         let data_reader = self.source.next().unwrap();
         self.next_header_source = BufferedReader::new(self.source.next().unwrap());
 
+        // building the writer
+        let writer = self.sink.next().unwrap();
+
         // building the request
         Ok(Request {
             data_reader: box data_reader,
-            response_writer: box self.sink.next().unwrap(),
+            response_writer: box writer,
             remote_addr: self.remote_addr.clone().unwrap(),     // TODO: could fail
             method: method,
             path: path,
@@ -224,8 +234,6 @@ fn parse_header(line: &str) -> io::IoResult<Header> {
 
 #[cfg(test)]
 mod test {
-    use super::ClientConnection;
-
     #[test]
     fn test_parse_request_line() {
         let (method, path, ver) =

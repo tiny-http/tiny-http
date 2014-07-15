@@ -38,6 +38,10 @@ pub struct Request {
     body_length: uint,
 }
 
+pub struct ResponseWriter {
+    writer: tcp::TcpStream
+}
+
 impl Server {
     /// Builds a new server on port 80 that listens to all inputs.
     pub fn new() -> IoResult<Server> {
@@ -168,13 +172,13 @@ impl Request {
         as_reader_impl(&mut self.read_socket)
     }
 
-    // TODO: turn this into a function that consumes the Request
-    fn as_raw_writer<'a>(&'a mut self) -> RefWriter<'a, tcp::TcpStream> {
-        Request::as_raw_writer_impl(&mut self.write_socket)
-    }
+    /// Turns the Request into a writer.
+    /// The writer has a raw access to the stream to the user.
+    /// This function is useful for things like CGI.
+    pub fn into_writer(self) -> ResponseWriter {
+        Request::finish_reading(self.read_socket);
 
-    fn as_raw_writer_impl<'a, W: Writer>(elem: &'a mut W) -> RefWriter<'a, W> {
-        elem.by_ref()
+        ResponseWriter { writer: self.write_socket }
     }
 
     /// Sends a response to this request.
@@ -191,6 +195,158 @@ impl Request {
     fn finish_reading(reader: LimitReader<BufferedReader<tcp::TcpStream>>) {
         let remaining_to_read = reader.limit();
         let underlying = reader.unwrap().consume(remaining_to_read);
+    }
+}
+
+impl Writer for ResponseWriter {
+    #[inline]
+    fn write(&mut self, buf: &[u8]) -> IoResult<()> {
+        self.writer.write(buf)
+    }
+
+    #[inline]
+    fn flush(&mut self) -> IoResult<()> {
+        self.writer.flush()
+    }
+
+    #[inline]
+    fn write_fmt(&mut self, fmt: &::std::fmt::Arguments) -> IoResult<()> {
+        self.writer.write_fmt(fmt)
+    }
+
+    #[inline]
+    fn write_str(&mut self, s: &str) -> IoResult<()> {
+        self.writer.write_str(s)
+    }
+
+    #[inline]
+    fn write_line(&mut self, s: &str) -> IoResult<()> {
+        self.writer.write_line(s)
+    }
+
+    #[inline]
+    fn write_char(&mut self, c: char) -> IoResult<()> {
+        self.writer.write_char(c)
+    }
+
+    #[inline]
+    fn write_int(&mut self, n: int) -> IoResult<()> {
+        self.writer.write_int(n)
+    }
+
+    #[inline]
+    fn write_uint(&mut self, n: uint) -> IoResult<()> {
+        self.writer.write_uint(n)
+    }
+
+    #[inline]
+    fn write_le_uint(&mut self, n: uint) -> IoResult<()> {
+        self.writer.write_le_uint(n)
+    }
+
+    #[inline]
+    fn write_le_int(&mut self, n: int) -> IoResult<()> {
+        self.writer.write_le_int(n)
+    }
+
+    #[inline]
+    fn write_be_uint(&mut self, n: uint) -> IoResult<()> {
+        self.writer.write_be_uint(n)
+    }
+
+    #[inline]
+    fn write_be_int(&mut self, n: int) -> IoResult<()> {
+        self.writer.write_be_int(n)
+    }
+
+    #[inline]
+    fn write_be_u64(&mut self, n: u64) -> IoResult<()> {
+        self.writer.write_be_u64(n)
+    }
+
+    #[inline]
+    fn write_be_u32(&mut self, n: u32) -> IoResult<()> {
+        self.writer.write_be_u32(n)
+    }
+
+    #[inline]
+    fn write_be_u16(&mut self, n: u16) -> IoResult<()> {
+        self.writer.write_be_u16(n)
+    }
+
+    #[inline]
+    fn write_be_i64(&mut self, n: i64) -> IoResult<()> {
+        self.writer.write_be_i64(n)
+    }
+
+    #[inline]
+    fn write_be_i32(&mut self, n: i32) -> IoResult<()> {
+        self.writer.write_be_i32(n)
+    }
+
+    #[inline]
+    fn write_be_i16(&mut self, n: i16) -> IoResult<()> {
+        self.writer.write_be_i16(n)
+    }
+
+    #[inline]
+    fn write_be_f64(&mut self, f: f64) -> IoResult<()> {
+        self.writer.write_be_f64(f)
+    }
+
+    #[inline]
+    fn write_be_f32(&mut self, f: f32) -> IoResult<()> {
+        self.writer.write_be_f32(f)
+    }
+
+    #[inline]
+    fn write_le_u64(&mut self, n: u64) -> IoResult<()> {
+        self.writer.write_le_u64(n)
+    }
+
+    #[inline]
+    fn write_le_u32(&mut self, n: u32) -> IoResult<()> {
+        self.writer.write_le_u32(n)
+    }
+
+    #[inline]
+    fn write_le_u16(&mut self, n: u16) -> IoResult<()> {
+        self.writer.write_le_u16(n)
+    }
+
+    #[inline]
+    fn write_le_i64(&mut self, n: i64) -> IoResult<()> {
+        self.writer.write_le_i64(n)
+    }
+
+    #[inline]
+    fn write_le_i32(&mut self, n: i32) -> IoResult<()> {
+        self.writer.write_le_i32(n)
+    }
+
+    #[inline]
+    fn write_le_i16(&mut self, n: i16) -> IoResult<()> {
+        self.writer.write_le_i16(n)
+    }
+
+    #[inline]
+    fn write_le_f64(&mut self, f: f64) -> IoResult<()> {
+        self.writer.write_le_f64(f)
+    }
+
+    #[inline]
+    fn write_le_f32(&mut self, f: f32) -> IoResult<()> {
+        self.writer.write_le_f32(f)
+    }
+
+    #[inline]
+    fn write_u8(&mut self, n: u8) -> IoResult<()> {
+        self.writer.write_u8(n)
+    }
+
+    #[inline]
+    fn write_i8(&mut self, n: i8) -> IoResult<()> {
+        self.writer.write_i8(n)
     }
 }
 

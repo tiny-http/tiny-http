@@ -5,12 +5,17 @@ use std::io::util::LimitReader;
 use common::{Header, HTTPVersion, Method};
 use Request;
 use url::Path;
+use std::sync;
 
 /// A ClientConnection is an object that will store a socket to a client
 /// and return Request objects.
 pub struct ClientConnection {
     //
 	socket: BufferedReader<tcp::TcpStream>,
+
+    // when a request is outputted, this receiver will be triggered when it has finished
+    //  sending the response
+    previous_request: Option<Receiver<()>>,
 
     // set to true if the client sent a "Connection: close" in the previous request
     connection_must_close: bool,
@@ -20,6 +25,7 @@ impl ClientConnection {
     pub fn new(socket: tcp::TcpStream) -> ClientConnection {
         ClientConnection {
             socket: BufferedReader::new(socket),
+            previous_request: None,
             connection_must_close: false,
         }
     }
@@ -156,12 +162,23 @@ impl ClientConnection {
         let mut initial_socket = self.socket.get_ref().clone();
         let remote_addr = try!(initial_socket.peer_name());
 
+        // building the writing sync
+        let (tx, rx) = channel();
+        let mut rx = Some(rx);
+        ::std::mem::swap(&mut self.previous_request, &mut rx);
+        let future = match rx {
+            Some(rx) => sync::Future::from_receiver(rx),
+            None => sync::Future::from_value(())
+        };
+
         // building the request
         Ok(Request {
             read_socket: LimitReader::new(
                         BufferedReader::new(initial_socket.clone()), body_length
                     ),
             write_socket: initial_socket,
+            send_complete_notifier: tx,
+            wait_until_send: future,
             remote_addr: remote_addr,
             method: method,
             path: path,

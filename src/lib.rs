@@ -30,6 +30,13 @@ pub struct Server {
 pub struct Request {
     read_socket: LimitReader<BufferedReader<tcp::TcpStream>>,
     write_socket: tcp::TcpStream,
+
+    // the request must wait until the value on this future is available
+    wait_until_send: sync::Future<()>,
+
+    // this sender must be notified when the response has been sent
+    send_complete_notifier: Sender<()>,
+
     remote_addr: ip::SocketAddr,
     method: Method,
     path: url::Path,
@@ -39,7 +46,10 @@ pub struct Request {
 }
 
 pub struct ResponseWriter {
-    writer: tcp::TcpStream
+    writer: tcp::TcpStream,
+
+    // this sender must be notified when the response has been sent
+    send_complete_notifier: Sender<()>,
 }
 
 enum ServerRecvEvent {
@@ -257,8 +267,12 @@ impl Request {
     /// This function is useful for things like CGI.
     pub fn into_writer(self) -> ResponseWriter {
         Request::finish_reading(self.read_socket);
+        self.wait_until_send.unwrap();
 
-        ResponseWriter { writer: self.write_socket }
+        ResponseWriter {
+            writer: self.write_socket,
+            send_complete_notifier: self.send_complete_notifier,
+        }
     }
 
     /// Sends a response to this request.
@@ -266,11 +280,14 @@ impl Request {
         let response = response.with_http_version(self.http_version);
 
         Request::finish_reading(self.read_socket);
+        self.wait_until_send.unwrap();
 
         match response.raw_print(self.write_socket) {
             Ok(_) => (),
             Err(err) => println!("error while sending answer: {}", err)     // TODO: handle better?
         }
+
+        self.send_complete_notifier.send_opt(()).ok();      // ignoring the outcome
     }
 
     /// Consumes the rest of the request's body in the TcpStream.
@@ -429,6 +446,12 @@ impl Writer for ResponseWriter {
     #[inline]
     fn write_i8(&mut self, n: i8) -> IoResult<()> {
         self.writer.write_i8(n)
+    }
+}
+
+impl Drop for ResponseWriter {
+    fn drop(&mut self) {
+        self.send_complete_notifier.send_opt(()).ok();  // ignoring the result
     }
 }
 

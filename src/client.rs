@@ -58,9 +58,9 @@ impl ClientConnection {
         }
     }
 
-    /// Parses the first line of the request.
+    /// Parses the request line of the request.
     /// eg. GET / HTTP/1.1
-    fn parse_first_line(line: &str) -> io::IoResult<(Method, Path, Version)> {
+    fn parse_request_line(line: &str) -> io::IoResult<(Method, Path, Version)> {
         let mut words = line.words();
 
         let method = words.next();
@@ -69,7 +69,7 @@ impl ClientConnection {
 
         let (method, path, version) = match (method, path, version) {
             (Some(m), Some(p), Some(v)) => (m, p, v),
-            _ => return Err(ClientConnection::gen_invalid_input("Missing element in first line"))
+            _ => return Err(ClientConnection::gen_invalid_input("Missing element in request line"))
         };
 
         let method = match from_str(method) {
@@ -119,11 +119,11 @@ impl ClientConnection {
 
         // reading the request line
         let (method, path, version) =
-            try!(ClientConnection::parse_first_line(
+            try!(ClientConnection::parse_request_line(
                 match lines.next() {
                     Some(line) => try!(line),
                     None => return Err(ClientConnection::gen_invalid_input(
-                                "Missing first line of request"))
+                                "Missing request line"))
                 }.as_slice().trim()
             ));
 

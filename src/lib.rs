@@ -10,6 +10,7 @@ use std::io::net::ip;
 use std::io::net::tcp;
 use std::io::util::LimitReader;
 use std::sync;
+use std::comm::{Handle, Select};
 
 pub use common::Header;
 pub use common::Method;
@@ -90,10 +91,85 @@ impl Server {
     /// Blocks until an HTTP request has been submitted and returns it.
     pub fn recv(&self) -> Request {
         loop {
-            match self.try_recv() {
+            let (connec, rq, errord) = self.recv_impl();
+
+            // removing closed connections
+            {
+                let mut errord = errord;
+                errord.sort_by(|a, b| b.cmp(a));
+                let mut locked_receivers = self.requests_receiver.lock();
+                for id in errord.move_iter() {
+                    locked_receivers.remove(id);
+                }
+            }
+
+            // adding the connection, if any
+            match connec {
+                None => (),
+                Some(c) => self.add_client(c)
+            };
+
+            // returning the request, if any
+            match rq {
                 Some(rq) => return rq,
                 None => ()
             };
+        }
+    }
+
+    /// Returns either a new client or a request, plus a list of connections that are
+    ///   no longer valid
+    fn recv_impl(&self) -> (Option<client::ClientConnection>, Option<Request>, Vec<uint>) {
+        let mut locked_receivers = self.requests_receiver.lock();
+
+        let select = Select::new();
+
+        // add the handle for a new connection to the select
+        let mut connections_handle = select.handle(&self.connections_receiver);
+        unsafe { connections_handle.add() };
+
+        // add all the existing connections
+        let mut rq_handles = Vec::new();
+        for rc in locked_receivers.iter() {
+            rq_handles.push(select.handle(rc));
+        }
+        for h in rq_handles.mut_iter() { unsafe { h.add() } }
+
+        // getting the result
+        loop {
+            let handle_id = select.wait();
+
+            // checking for connections_handle
+            if handle_id == connections_handle.id() {
+                match connections_handle.recv_opt() {
+                    Ok(Ok(connec)) => {
+                        for h in rq_handles.mut_iter() { unsafe { h.remove() } };
+                        unsafe { connections_handle.remove() };
+                        return (Some(connec), None, Vec::new());
+                    },
+                    _ => continue
+                }
+            }
+
+            // checking the clients
+            let mut result = None;
+            let mut errord = Vec::new();
+
+            for (id, h) in rq_handles.mut_iter().enumerate() {
+                if handle_id == h.id() {
+                    match h.recv_opt() {
+                        Ok(rq) => { result = Some(rq); break },
+                        Err(_) => { errord.push(id); }
+                    }
+                }
+            }
+
+            if result.is_some() {
+                for h in rq_handles.mut_iter() { unsafe { h.remove() } };
+                unsafe { connections_handle.remove() };
+
+                return (None, result, errord)
+            }
         }
     }
 
@@ -101,7 +177,6 @@ impl Server {
     pub fn try_recv(&self) -> Option<Request> {
         self.process_new_clients();
 
-        // TODO: rewrite this
         {
             let mut locked_receivers = self.requests_receiver.lock();
             for rx in locked_receivers.iter() {
@@ -130,14 +205,19 @@ impl Server {
         // for each new client, spawning a task that will
         // continuously try to read a Request
         for client in new_clients.move_iter().filter_map(|c| c.ok()) {
-            let (tx, rx) = channel();
-            spawn(proc() {
-                let mut client = client;
-                // TODO: when the channel is being closed, immediatly notify the task
-                client.advance(|rq| tx.send_opt(rq).is_ok());
-            });
-            self.requests_receiver.lock().push(rx);
+            self.add_client(client)
         }
+    }
+
+    /// Adds a new client to the list.
+    fn add_client(&self, client: client::ClientConnection) {
+        let (tx, rx) = channel();
+        spawn(proc() {
+            let mut client = client;
+            // TODO: when the channel is being closed, immediatly notify the task
+            client.advance(|rq| tx.send_opt(rq).is_ok());
+        });
+        self.requests_receiver.lock().push(rx);
     }
 }
 

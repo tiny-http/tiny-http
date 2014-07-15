@@ -3,6 +3,7 @@ use std::io::{IoResult, MemReader};
 use std::io::fs::File;
 use std::io::util;
 use std::io::util::NullReader;
+use chunks::ChunksEncoder;
 
 /// Object representing an HTTP response.
 pub struct Response<R> {
@@ -68,9 +69,28 @@ impl<R: Reader> Response<R> {
     }
 
     /// Prints the HTTP response to a writer.
-    pub fn raw_print<W: Writer>(mut self, mut writer: W) -> IoResult<()> {
+    pub fn raw_print<W: Writer>(mut self, writer: W) -> IoResult<()> {
         self.purify_headers();
 
+        // if we don't have a Content-Length, or if the Content-Length is too big, using chunks writer
+        let chunks_threshold = 32768;
+        let use_chunks = 
+            self.http_version >= HTTPVersion(1, 1) &&
+            self.headers.iter().find(|h| h.field.equiv(&"Content-Length"))
+                .and_then(|h| from_str::<uint>(h.value.as_slice()))
+                .filtered(|val| *val < chunks_threshold)
+                .is_none();
+
+        if use_chunks {
+            self.raw_print2(ChunksEncoder::new(writer))
+        } else {
+            self.raw_print2(writer)
+        }
+    }
+
+    // continuation of the function above
+    // TODO: is there a better way to do that?
+    fn raw_print2<W: Writer>(mut self, mut writer: W) -> IoResult<()> {
         // writing status line
         try!(write!(writer, "HTTP/{} {} {}\r\n",
             self.http_version,

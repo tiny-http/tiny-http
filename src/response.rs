@@ -69,7 +69,7 @@ impl<R: Reader> Response<R> {
     }
 
     /// Prints the HTTP response to a writer.
-    pub fn raw_print<W: Writer>(mut self, writer: W) -> IoResult<()> {
+    pub fn raw_print<W: Writer>(mut self, mut writer: W) -> IoResult<()> {
         self.purify_headers();
 
         // if we don't have a Content-Length, or if the Content-Length is too big, using chunks writer
@@ -81,16 +81,13 @@ impl<R: Reader> Response<R> {
                 .filtered(|val| *val < chunks_threshold)
                 .is_none();
 
+        // add transfer-encoding header
         if use_chunks {
-            self.raw_print2(ChunksEncoder::new(writer))
-        } else {
-            self.raw_print2(writer)
+            self.headers.push(
+                Header{field: from_str("Transfer-Encoding").unwrap(), value: "chunked".to_string()}
+            )
         }
-    }
 
-    // continuation of the function above
-    // TODO: is there a better way to do that?
-    fn raw_print2<W: Writer>(mut self, mut writer: W) -> IoResult<()> {
         // writing status line
         try!(write!(writer, "HTTP/{} {} {}\r\n",
             self.http_version,
@@ -107,7 +104,12 @@ impl<R: Reader> Response<R> {
         try!(write!(writer, "\r\n"));
 
         // writing data
-        try!(util::copy(&mut self.reader, &mut writer));
+        if use_chunks {
+            let mut writer = ChunksEncoder::new(writer);
+            try!(util::copy(&mut self.reader, &mut writer));
+        } else {
+            try!(util::copy(&mut self.reader, &mut writer));
+        }
 
         Ok(())
     }

@@ -5,10 +5,9 @@
 
 extern crate url;
 
-use std::io::{Acceptor, BufferedReader, IoError, IoResult, Listener, RefReader};
+use std::io::{Acceptor, IoError, IoResult, Listener};
 use std::io::net::ip;
 use std::io::net::tcp;
-use std::io::util::LimitReader;
 use std::sync;
 use std::comm::Select;
 use client::ClientConnection;
@@ -39,13 +38,6 @@ pub struct Request {
     http_version: HTTPVersion,
     headers: Vec<Header>,
     body_length: uint,
-}
-
-pub struct ResponseWriter {
-    writer: tcp::TcpStream,
-
-    // this sender must be notified when the response has been sent
-    send_complete_notifier: Sender<()>,
 }
 
 enum ServerRecvEvent {
@@ -249,14 +241,9 @@ impl Request {
     }
 
     /// Allows to read the body of the request.
-    /*pub fn as_reader<'a>(&'a mut self)
-        -> RefReader<'a, Box<Reader + 'static>>
-    {
-        fn as_reader_impl<'a, R: Reader>(elem: &'a mut R) -> RefReader<'a, R> {
-            elem.by_ref()
-        }
-        as_reader_impl(&mut self.data_reader)
-    }*/
+    pub fn as_reader<'a>(&'a mut self) -> &'a mut Box<Reader+Send> {
+        &mut self.data_reader
+    }
 
     /// Turns the Request into a writer.
     /// The writer has a raw access to the stream to the user.
@@ -265,12 +252,15 @@ impl Request {
         self.response_writer
     }
 
+    fn passthrough<R: Reader>(w: &mut Writer, response: Response<R>) -> IoResult<()> {
+        response.raw_print(w)
+    }
+
     /// Sends a response to this request.
-    pub fn respond<R: Reader>(self, response: Response<R>) {
+    pub fn respond<R: Reader>(mut self, response: Response<R>) {
         let response = response.with_http_version(self.http_version);
 
-        let w: Box<Writer> = unsafe { ::std::mem::transmute(self.response_writer) };        // TODO: 
-        match response.raw_print(w) {
+        match Request::passthrough(self.response_writer, response) {
             Ok(_) => (),
             Err(err) => println!("error while sending answer: {}", err)     // TODO: handle better?
         }

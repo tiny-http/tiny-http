@@ -2,11 +2,9 @@ use std::io;
 use std::io::net::tcp;
 use std::io::net::ip::SocketAddr;
 use std::io::BufferedReader;
-use std::io::util::LimitReader;
 use common::{Header, HTTPVersion, Method};
 use Request;
 use url::Path;
-use std::sync;
 use sequential::{SequentialReader, SequentialReaderBuilder, SequentialWriterBuilder};
 
 /// A ClientConnection is an object that will store a socket to a client

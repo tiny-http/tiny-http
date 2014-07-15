@@ -241,8 +241,9 @@ impl Request {
     }
 
     /// Allows to read the body of the request.
-    pub fn as_reader<'a>(&'a mut self) -> &'a mut Box<Reader+Send> {
-        &mut self.data_reader
+    pub fn as_reader<'a>(&'a mut self) -> &'a mut Reader {
+        fn passthrough<'a>(r: &'a mut Reader) -> &'a mut Reader { r }
+        passthrough(self.data_reader)
     }
 
     /// Turns the Request into a writer.
@@ -252,15 +253,13 @@ impl Request {
         self.response_writer
     }
 
-    fn passthrough<R: Reader>(w: &mut Writer, response: Response<R>) -> IoResult<()> {
-        response.raw_print(w)
-    }
-
     /// Sends a response to this request.
     pub fn respond<R: Reader>(mut self, response: Response<R>) {
+        fn passthrough<'a>(w: &'a mut Writer) -> &'a mut Writer { w }
+
         let response = response.with_http_version(self.http_version);
 
-        match Request::passthrough(self.response_writer, response) {
+        match response.raw_print(passthrough(self.response_writer)) {
             Ok(_) => (),
             Err(err) => println!("error while sending answer: {}", err)     // TODO: handle better?
         }

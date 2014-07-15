@@ -72,8 +72,12 @@ impl ClientConnection {
                             let line = try!(line);
                             if line.as_slice().trim().len() == 0 { break };
                             headers.push(
-                                try!(parse_header(line.as_slice().trim()))
-                            )
+                                match from_str(line.as_slice().trim()) {
+                                    Some(h) => h,
+                                    None => return Err(gen_invalid_input(
+                                        "Could not parse header"))
+                                }
+                            );
                         },
                         None => break
                     }
@@ -86,7 +90,7 @@ impl ClientConnection {
 
         // finding length of body
         let body_length = headers.iter()
-            .find(|h| h.field.equiv(&"Content-Length"))
+            .find(|h: &&Header| h.field.equiv(&"Content-Length"))
             .and_then(|h| from_str::<uint>(h.value.as_slice()))
             .unwrap_or(0u);
 
@@ -207,31 +211,6 @@ fn parse_request_line(line: &str) -> io::IoResult<(Method, Path, HTTPVersion)> {
     Ok((method, path, version))
 }
 
-/// Parses a header line.
-/// eg. Host: example.com
-fn parse_header(line: &str) -> io::IoResult<Header> {
-    let elems = line.splitn(':', 2).map(|e| e.to_string()).collect::<Vec<String>>();
-
-    if elems.len() <= 1 {
-        return Err(gen_invalid_input(
-            "Wrong header format (no ':')"))
-    }
-    if elems.get(1).as_slice().chars().next() != Some(' ') {
-        return Err(gen_invalid_input(
-            "Wrong header format (missing space after ':')"))
-    }
-
-    let field = match from_str(elems.get(0).as_slice()) {
-        None => return Err(gen_invalid_input("Could not parse header")),
-        Some(f) => f
-    };
-
-    Ok(Header {
-        field: field,
-        value: elems.get(1).as_slice().slice_from(1).to_string()
-    })
-}
-
 #[cfg(test)]
 mod test {
     #[test]
@@ -245,15 +224,5 @@ mod test {
 
         assert!(super::parse_request_line("GET /hello").is_err());
         assert!(super::parse_request_line("qsd qsd qsd").is_err());
-    }
-
-    #[test]
-    fn test_parse_header() {
-        let header = super::parse_header("Content-Type: text/html").unwrap();
-
-        assert!(header.field.equiv(&"content-type"));
-        assert!(header.value.as_slice() == "text/html");
-
-        assert!(super::parse_header("hello world").is_err());
     }
 }

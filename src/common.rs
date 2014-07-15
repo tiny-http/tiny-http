@@ -44,6 +44,29 @@ pub struct Header {
     pub value: String,
 }
 
+impl ::std::from_str::FromStr for Header {
+    fn from_str(input: &str) -> Option<Header> {
+        let elems = input.splitn(':', 2).map(|e| e.to_string()).collect::<Vec<String>>();
+
+        if elems.len() <= 1 {
+            return None;
+        }
+        if elems.get(1).as_slice().chars().next() != Some(' ') {
+            return None;
+        }
+
+        let field = match from_str(elems.get(0).as_slice()) {
+            None => return None,
+            Some(f) => f
+        };
+
+        Some(Header {
+            field: field,
+            value: elems.get(1).as_slice().slice_from(1).to_string()
+        })
+    }
+}
+
 impl Show for Header {
     fn fmt(&self, formatter: &mut Formatter) -> Result<(), FormatError> {
         (format!("{}: {}", self.field, self.value)).fmt(formatter)
@@ -162,5 +185,21 @@ impl PartialOrd for HTTPVersion {
         }
 
         my_minor.partial_cmp(&other_minor)
+    }
+}
+
+
+#[cfg(test)]
+mod test {
+    use super::Header;
+
+    #[test]
+    fn test_parse_header() {
+        let header: Header = from_str("Content-Type: text/html").unwrap();
+
+        assert!(header.field.equiv(&"content-type"));
+        assert!(header.value.as_slice() == "text/html");
+
+        assert!(from_str::<Header>("hello world").is_none());
     }
 }

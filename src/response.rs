@@ -6,6 +6,25 @@ use std::io::util::NullReader;
 use chunks::ChunksEncoder;
 
 /// Object representing an HTTP response.
+/// 
+/// Some headers cannot be changed. Trying to define the value
+///  of one of these will have no effect:
+/// 
+///  - `Accept-Ranges`
+///  - `Connection`
+///  - `Content-Range`
+///  - `Trailer`
+///  - `Transfer-Encoding`
+///  - `Upgrade`
+///
+/// Some headers have special behaviors:
+/// 
+///  - `Content-Encoding`: If you define this header, the library
+///      will assume that the data from the `Reader` has the specified encoding
+///      and will just pass-through.
+///  - `Content-Length`: If you define this header to `N`, only the first `N` bytes
+///      of the `Reader` will be read. If the `Reader` reaches `EOF` before `N` bytes have
+///      been read, `0`s will be sent.
 #[experimental]
 pub struct Response<R> {
     reader: R,

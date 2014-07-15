@@ -12,9 +12,10 @@ fn get_content_type(path: &Path) -> &'static str {
         "jpeg" => "image/jpeg",
         "png" => "image/png",
         "pdf" => "application/pdf",
-        "htm" => "text/html",
-        "html" => "text/html",
-        _ => "text/plain"
+        "htm" => "text/html; charset=utf8",
+        "html" => "text/html; charset=utf8",
+        "txt" => "text/plain; charset=utf8",
+        _ => "text/plain; charset=utf8"
     }
 }
 

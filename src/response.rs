@@ -1,4 +1,4 @@
-use common::{StatusCode, Header};
+use common::{Header, HTTPVersion, StatusCode};
 use std::io::{IoResult, MemReader};
 use std::io::fs::File;
 use std::io::util;
@@ -9,6 +9,7 @@ pub struct Response<R> {
     reader: R,
     status_code: StatusCode,
     headers: Vec<Header>,
+    http_version: HTTPVersion,
 }
 
 impl<R: Reader> Response<R> {
@@ -26,6 +27,7 @@ impl<R: Reader> Response<R> {
             reader: data,
             status_code: status_code,
             headers: headers,
+            http_version: HTTPVersion(1, 1),
         }
     }
 
@@ -38,6 +40,12 @@ impl<R: Reader> Response<R> {
     /// Returns the same request, but with a different status code.
     pub fn with_status_code(mut self, code: StatusCode) -> Response<R> {
         self.status_code = code;
+        self
+    }
+
+    /// Forces an HTTP version.
+    pub fn with_http_version(mut self, version: HTTPVersion) -> Response<R> {
+        self.http_version = version;
         self
     }
 
@@ -64,7 +72,8 @@ impl<R: Reader> Response<R> {
         self.purify_headers();
 
         // writing status line
-        try!(write!(writer, "HTTP/1.1 {} {}\r\n",
+        try!(write!(writer, "HTTP/{} {} {}\r\n",
+            self.http_version,
             self.status_code.as_uint(),
             self.status_code.get_default_message()
         ));

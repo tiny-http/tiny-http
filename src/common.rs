@@ -142,12 +142,25 @@ impl<S: Str> Equiv<S> for Method {
 }
 
 /// HTTP version (usually 1.0 or 1.1).
-#[deriving(Clone)]
+#[deriving(Clone, PartialEq, Eq, Ord)]
 pub struct HTTPVersion(pub uint, pub uint);
 
 impl Show for HTTPVersion {
     fn fmt(&self, formatter: &mut Formatter) -> Result<(), FormatError> {
         let (major, minor) = match self { &HTTPVersion(m, n) => (m, n) };
         (format!("{}.{}", major, minor)).fmt(formatter)
+    }
+}
+
+impl PartialOrd for HTTPVersion {
+    fn partial_cmp(&self, other: &HTTPVersion) -> Option<Ordering> {
+        let (my_major, my_minor) = match self { &HTTPVersion(m, n) => (m, n) };
+        let (other_major, other_minor) = match other { &HTTPVersion(m, n) => (m, n) };
+
+        if my_major != other_major {
+            return my_major.partial_cmp(&other_major)
+        }
+
+        my_minor.partial_cmp(&other_minor)
     }
 }

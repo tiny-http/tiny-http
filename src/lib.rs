@@ -257,6 +257,8 @@ impl Request {
 
     /// Sends a response to this request.
     pub fn respond<R: Reader>(self, response: Response<R>) {
+        let response = response.with_http_version(self.http_version);
+
         Request::finish_reading(self.read_socket);
 
         match response.raw_print(self.write_socket) {

@@ -30,6 +30,7 @@ pub struct Server {
 pub struct Request {
     read_socket: LimitReader<BufferedReader<tcp::TcpStream>>,
     write_socket: tcp::TcpStream,
+    remote_addr: ip::SocketAddr,
     method: Method,
     path: url::Path,
     http_version: HTTPVersion,
@@ -236,6 +237,11 @@ impl Request {
         self.body_length
     }
 
+    /// Returns the length of the body in bytes.
+    pub fn get_remote_addr<'a>(&'a self) -> &'a ip::SocketAddr {
+        &self.remote_addr
+    }
+
     /// Allows to read the body of the request.
     pub fn as_reader<'a>(&'a mut self)
         -> RefReader<'a, LimitReader<BufferedReader<tcp::TcpStream>>>
@@ -430,7 +436,7 @@ impl std::fmt::Show for Request {
     fn fmt(&self, formatter: &mut std::fmt::Formatter)
         -> Result<(), std::fmt::FormatError>
     {
-        (format!("Request({} {})",
-            self.method, self.path)).fmt(formatter)
+        (format!("Request({} {} from {})",
+            self.method, self.path, self.remote_addr.ip)).fmt(formatter)
     }
 }

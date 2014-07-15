@@ -153,7 +153,8 @@ impl ClientConnection {
             .unwrap_or(0u);
 
         // this is the socket that we will give to the Request
-        let initial_socket = self.socket.get_ref().clone();
+        let mut initial_socket = self.socket.get_ref().clone();
+        let remote_addr = try!(initial_socket.peer_name());
 
         // building the request
         Ok(Request {
@@ -161,6 +162,7 @@ impl ClientConnection {
                         BufferedReader::new(initial_socket.clone()), body_length
                     ),
             write_socket: initial_socket,
+            remote_addr: remote_addr,
             method: method,
             path: path,
             http_version: version,

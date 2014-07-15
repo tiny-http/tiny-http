@@ -13,9 +13,7 @@ use std::sync;
 use std::comm::Select;
 use client::ClientConnection;
 
-pub use common::Header;
-pub use common::Method;
-pub use common::StatusCode;
+pub use common::{Header, HeaderField, Method, StatusCode};
 pub use response::Response;
 
 mod client;

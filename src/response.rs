@@ -5,7 +5,7 @@ use std::io::util;
 use std::io::util::NullReader;
 use chunks::ChunksEncoder;
 
-/// Object representing an HTTP response.
+/// Object representing an HTTP response whose purpose is to be given to a `Request`.
 /// 
 /// Some headers cannot be changed. Trying to define the value
 ///  of one of these will have no effect:
@@ -25,6 +25,7 @@ use chunks::ChunksEncoder;
 ///  - `Content-Length`: If you define this header to `N`, only the first `N` bytes
 ///      of the `Reader` will be read. If the `Reader` reaches `EOF` before `N` bytes have
 ///      been read, `0`s will be sent.
+///
 #[experimental]
 pub struct Response<R> {
     reader: R,
@@ -59,6 +60,9 @@ impl<R: Reader> Response<R> {
     }
 
     /// Returns the same request, but with an additional header.
+    ///
+    /// Some headers cannot be modified and some other have a
+    ///  special behavior. See the documentation above.
     #[experimental]
     pub fn with_header(mut self, header: Header) -> Response<R> {
         self.headers.push(header);
@@ -147,6 +151,10 @@ impl<R: Reader> Response<R> {
 }
 
 impl Response<File> {
+    /// Builds a new `Response` from a `File`.
+    ///
+    /// The `Content-Type` will **not** be automatically detected,
+    ///  you must set it yourself.
     #[experimental]
     pub fn from_file(mut file: File) -> Response<File> {
         let file_size = file.stat().ok().map(|v| v.size as uint);
@@ -189,20 +197,11 @@ impl Response<MemReader> {
 }
 
 impl Response<NullReader> {
+    /// Builds an empty `Response` with the given status code.
     #[experimental]
-    pub fn empty() -> Response<NullReader> {
+    pub fn new_empty(status_code: StatusCode) -> Response<NullReader> {
         Response::new(
-            StatusCode(204),
-            Vec::new(),
-            NullReader,
-            Some(0)
-        )
-    }
-
-    #[experimental]
-    pub fn not_modified() -> Response<NullReader> {
-        Response::new(
-            StatusCode(304),
+            status_code,
             Vec::new(),
             NullReader,
             Some(0)

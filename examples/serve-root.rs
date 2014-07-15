@@ -46,7 +46,7 @@ fn main() {
             rq.respond(response);
 
         } else {
-            let rep = httpd::Response::empty().with_status_code(httpd::StatusCode(404));
+            let rep = httpd::Response::new_empty(httpd::StatusCode(404));
             rq.respond(rep);
         }
     }

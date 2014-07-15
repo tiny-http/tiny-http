@@ -100,7 +100,7 @@ impl Server {
     #[unstable]
     pub fn new_with_random_port() -> IoResult<(Server, ip::Port)> {
         Server::new_with_addr(&ip::SocketAddr{ip: ip::Ipv4Addr(0, 0, 0, 0), port: 0})
-            .map(|s| { let port = s.get_port(); (s, port) })
+            .map(|s| { let port = s.get_server_addr().port; (s, port) })
     }
 
     /// Builds a new server that listens on the specified address.
@@ -148,10 +148,10 @@ impl Server {
         })
     }
 
-    /// Returns the port where the server is currently running on.
+    /// Returns the address the server is listening to.
     #[experimental]
-    pub fn get_port(&self) -> ip::Port {
-        self.listening_addr.port
+    pub fn get_server_addr(&self) -> ip::SocketAddr {
+        self.listening_addr
     }
 
     /// Returns the number of clients currently connected to the server.

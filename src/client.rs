@@ -24,6 +24,9 @@ pub struct ClientConnection {
 
 impl ClientConnection {
     pub fn new(mut socket: tcp::TcpStream) -> ClientConnection {
+        socket.set_keepalive(Some(10));
+        socket.set_timeout(Some(10000));
+
         let remote_addr = socket.peer_name();
 
         let mut source = SequentialReaderBuilder::new(socket.clone());

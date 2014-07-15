@@ -117,6 +117,7 @@ impl ClientConnection {
     fn read(&mut self) -> io::IoResult<Request> {
         let mut lines = self.socket.lines();
 
+        // reading the request line
         let (method, path, version) =
             try!(ClientConnection::parse_first_line(
                 match lines.next() {
@@ -126,6 +127,7 @@ impl ClientConnection {
                 }.as_slice().trim()
             ));
 
+        // getting all headers
         let headers = {
             let mut headers = Vec::new();
             loop {
@@ -143,15 +145,23 @@ impl ClientConnection {
             headers
         };
 
+        // finding length of body
+        let body_length = headers.iter()
+            .find(|h| h.field.equiv(&"Content-Length"))
+            .and_then(|h| from_str::<uint>(h.value.as_slice()))
+            .unwrap_or(0u);
+
+        // building the request
         Ok(Request {
             read_socket: LimitReader::new(
-                        BufferedReader::new(self.initial_socket.clone()), 1024
+                        BufferedReader::new(self.initial_socket.clone()), body_length
                     ),
             write_socket: self.initial_socket.clone(),
             method: method,
             path: path,
             http_version: version,
             headers: headers,
+            body_length: body_length,
         })
     }
 }

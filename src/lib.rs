@@ -5,7 +5,7 @@
 extern crate semver;
 extern crate url;
 
-use std::io::{Acceptor, BufferedReader, IoResult, Listener, RefWriter};
+use std::io::{Acceptor, BufferedReader, IoResult, Listener, RefReader, RefWriter};
 use std::io::net::ip;
 use std::io::net::tcp;
 use std::io::util::LimitReader;
@@ -35,6 +35,7 @@ pub struct Request {
     path: url::Path,
     http_version: semver::Version,
     headers: Vec<Header>,
+    body_length: uint,
 }
 
 impl Server {
@@ -150,6 +151,21 @@ impl Request {
     /// Returns a list of all headers sent by the client.
     pub fn get_headers<'a>(&'a self) -> &'a [Header] {
         self.headers.as_slice()
+    }
+
+    /// Returns the length of the body in bytes.
+    pub fn get_body_length(&self) -> uint {
+        self.body_length
+    }
+
+    /// Allows to read the body of the request.
+    pub fn as_reader<'a>(&'a mut self)
+        -> RefReader<'a, LimitReader<BufferedReader<tcp::TcpStream>>>
+    {
+        fn as_reader_impl<'a, R: Reader>(elem: &'a mut R) -> RefReader<'a, R> {
+            elem.by_ref()
+        }
+        as_reader_impl(&mut self.read_socket)
     }
 
     // TODO: turn this into a function that consumes the Request

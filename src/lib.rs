@@ -2,7 +2,6 @@
 #![crate_type = "lib"]
 #![license = "Apache"]
 
-extern crate semver;
 extern crate url;
 
 use std::io::{Acceptor, BufferedReader, IoError, IoResult, Listener, RefReader};
@@ -13,7 +12,7 @@ use std::sync;
 use std::comm::Select;
 use client::ClientConnection;
 
-pub use common::{Header, HeaderField, Method, StatusCode};
+pub use common::{Header, HeaderField, HTTPVersion, Method, StatusCode};
 pub use response::Response;
 
 mod client;
@@ -33,7 +32,7 @@ pub struct Request {
     write_socket: tcp::TcpStream,
     method: Method,
     path: url::Path,
-    http_version: semver::Version,
+    http_version: HTTPVersion,
     headers: Vec<Header>,
     body_length: uint,
 }

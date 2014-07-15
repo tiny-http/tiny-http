@@ -2,10 +2,9 @@ use std::io;
 use std::io::net::tcp;
 use std::io::BufferedReader;
 use std::io::util::LimitReader;
-use common::{Header, Method};
+use common::{Header, HTTPVersion, Method};
 use Request;
 use url::Path;
-use semver::Version;
 
 /// A ClientConnection is an object that will store a socket to a client
 /// and return Request objects.
@@ -33,7 +32,7 @@ impl ClientConnection {
     }
 
     /// Parses a "HTTP/1.1" string.
-    fn parse_http_version(version: &str) -> io::IoResult<Version> {
+    fn parse_http_version(version: &str) -> io::IoResult<HTTPVersion> {
         let elems = version.splitn('/', 2).map(|e| e.to_string()).collect::<Vec<String>>();
         if elems.len() != 2 {
             return Err(ClientConnection::gen_invalid_input("Wrong HTTP version format"))
@@ -47,20 +46,14 @@ impl ClientConnection {
 
         match (from_str(elems.get(0).as_slice()), from_str(elems.get(1).as_slice())) {
             (Some(major), Some(minor)) =>
-                Ok(Version {
-                    major: major,
-                    minor: minor,
-                    patch: 0,
-                    pre: Vec::new(),
-                    build: Vec::new()
-                }),
+                Ok(HTTPVersion(major, minor)),
             _ => Err(ClientConnection::gen_invalid_input("Wrong HTTP version format"))
         }
     }
 
     /// Parses the request line of the request.
     /// eg. GET / HTTP/1.1
-    fn parse_request_line(line: &str) -> io::IoResult<(Method, Path, Version)> {
+    fn parse_request_line(line: &str) -> io::IoResult<(Method, Path, HTTPVersion)> {
         let mut words = line.words();
 
         let method = words.next();

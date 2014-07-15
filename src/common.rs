@@ -140,3 +140,14 @@ impl<S: Str> Equiv<S> for Method {
         other.as_slice().eq_ignore_ascii_case(self.as_str().as_str_ascii())
     }
 }
+
+/// HTTP version (usually 1.0 or 1.1).
+#[deriving(Clone)]
+pub struct HTTPVersion(pub uint, pub uint);
+
+impl Show for HTTPVersion {
+    fn fmt(&self, formatter: &mut Formatter) -> Result<(), FormatError> {
+        let (major, minor) = match self { &HTTPVersion(m, n) => (m, n) };
+        (format!("{}.{}", major, minor)).fmt(formatter)
+    }
+}

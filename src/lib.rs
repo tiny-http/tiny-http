@@ -11,6 +11,7 @@ use std::io::net::tcp;
 use std::io::util::LimitReader;
 use std::sync;
 use std::comm::{Handle, Select};
+use client::ClientConnection;
 
 pub use common::Header;
 pub use common::Method;
@@ -24,7 +25,7 @@ mod response;
 /// The main class of this library.
 /// Create a new server using `Server::new()`.
 pub struct Server {
-    connections_receiver: Receiver<IoResult<client::ClientConnection>>,
+    connections_receiver: Receiver<IoResult<ClientConnection>>,
     requests_receiver: sync::Mutex<Vec<Receiver<Request>>>,
 }
 
@@ -41,6 +42,13 @@ pub struct Request {
 
 pub struct ResponseWriter {
     writer: tcp::TcpStream
+}
+
+enum ServerRecvEvent {
+    NewRequest(Request),
+    NewClient(ClientConnection),
+    ReceiverErrord(uint),
+    ServerSocketCrashed
 }
 
 impl Server {
@@ -67,7 +75,7 @@ impl Server {
             let mut server = server;
 
             loop {
-                let val = server.accept().map(|sock| client::ClientConnection::new(sock));
+                let val = server.accept().map(|sock| ClientConnection::new(sock));
 
                 match tx.send_opt(val) {
                     Err(_) => break,
@@ -91,35 +99,18 @@ impl Server {
     /// Blocks until an HTTP request has been submitted and returns it.
     pub fn recv(&self) -> Request {
         loop {
-            let (connec, rq, errord) = self.recv_impl();
-
-            // removing closed connections
-            {
-                let mut errord = errord;
-                errord.sort_by(|a, b| b.cmp(a));
-                let mut locked_receivers = self.requests_receiver.lock();
-                for id in errord.move_iter() {
-                    locked_receivers.remove(id);
-                }
+            match self.recv_impl() {
+                NewClient(client) => self.add_client(client),
+                NewRequest(rq) => return rq,
+                ReceiverErrord(id) => { self.requests_receiver.lock().remove(id); },
+                _ => println!("The server socket crashed")
             }
-
-            // adding the connection, if any
-            match connec {
-                None => (),
-                Some(c) => self.add_client(c)
-            };
-
-            // returning the request, if any
-            match rq {
-                Some(rq) => return rq,
-                None => ()
-            };
         }
     }
 
     /// Returns either a new client or a request, plus a list of connections that are
     ///   no longer valid
-    fn recv_impl(&self) -> (Option<client::ClientConnection>, Option<Request>, Vec<uint>) {
+    fn recv_impl(&self) -> ServerRecvEvent {
         let mut locked_receivers = self.requests_receiver.lock();
 
         let select = Select::new();
@@ -145,39 +136,35 @@ impl Server {
                     Ok(Ok(connec)) => {
                         for h in rq_handles.mut_iter() { unsafe { h.remove() } };
                         unsafe { connections_handle.remove() };
-                        return (Some(connec), None, Vec::new());
+                        return NewClient(connec);
                     },
                     _ => {
-                        println!("The server socket crashed");
-                        continue
+                        for h in rq_handles.mut_iter() { unsafe { h.remove() } };
+                        unsafe { connections_handle.remove() };
+                        return ServerSocketCrashed
                     }
                 }
             }
 
             // checking the clients
             let mut result = None;
-            let mut errord = Vec::new();
-
             for (id, h) in rq_handles.mut_iter().enumerate() {
                 if handle_id == h.id() {
                     match h.recv_opt() {
-                        Ok(rq) => { result = Some(rq); break },
-                        Err(_) => { errord.push(id); }
+                        Ok(rq) => result = Some(NewRequest(rq)),
+                        Err(_) => result = Some(ReceiverErrord(id))
                     }
+                    break
                 }
-            }
+            };
 
-            if result.is_some() {
-                for h in rq_handles.mut_iter() { unsafe { h.remove() } };
-                unsafe { connections_handle.remove() };
-
-                return (None, result, errord)
-
-            } else if errord.len() >= 1 {
-                for h in rq_handles.mut_iter() { unsafe { h.remove() } };
-                unsafe { connections_handle.remove() };
-                
-                return (None, None, errord)
+            match result {
+                None => continue,
+                Some(r) => {
+                    for h in rq_handles.mut_iter() { unsafe { h.remove() } };
+                    unsafe { connections_handle.remove() };
+                    return r;
+                }
             }
         }
     }
@@ -219,7 +206,7 @@ impl Server {
     }
 
     /// Adds a new client to the list.
-    fn add_client(&self, client: client::ClientConnection) {
+    fn add_client(&self, client: ClientConnection) {
         let (tx, rx) = channel();
         spawn(proc() {
             let mut client = client;

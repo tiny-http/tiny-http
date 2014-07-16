@@ -21,6 +21,3 @@ script:
 after_script:
   - rustdoc src/lib.rs
   - curl http://www.rust-ci.org/artifacts/put?t=$RUSTCI_TOKEN | sh
-  - cargo build --release
-  - rustc --opt-level=3 -L target/release -L target/release/deps examples/simple-server.rs
-  - ab -c 20 -n 10000 -k http://localhost:9975/

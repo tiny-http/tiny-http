@@ -88,5 +88,5 @@ request.respond(response)
 On my local machine, `ab -c 20 -n 1000 -k http://localhost/` gives:
  - ~0.65 sec for apache2
  - ~1.56 sec for nodejs
- - ~7.77 sec for tiny-http
- - ~11.1 sec for rust-http
+ - ~1.074 sec for rust-http
+ - ~3.98 sec for tiny-http

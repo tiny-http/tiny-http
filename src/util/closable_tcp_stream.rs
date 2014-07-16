@@ -26,6 +26,13 @@ impl ClosableTcpStream {
     }
 }
 
+impl Drop for ClosableTcpStream {
+    fn drop(&mut self) {
+        self.stream.close_read().ok();      // ignoring outcome
+        self.stream.close_write().ok();     // ignoring outcome
+    }
+}
+
 impl Reader for ClosableTcpStream {
     fn read(&mut self, buf: &mut [u8]) -> IoResult<uint> {
         use std::io;

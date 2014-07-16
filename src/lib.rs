@@ -52,9 +52,9 @@ pub struct Server {
     // must always be valid while the `Server` is alive
     tasks_pool: sync::Mutex<SchedPoolAutoDestruct>,
 
-    connections_receiver: Receiver<IoResult<ClientConnection>>,
+    connections_receiver: Receiver<IoResult<(ClientConnection, Sender<()>)>>,
     connections_close: Sender<()>,
-    requests_receiver: sync::Mutex<Vec<Receiver<Request>>>,
+    requests_receiver: sync::Mutex<Vec<(Receiver<Request>, Sender<()>)>>,
     listening_addr: ip::SocketAddr,
 }
 
@@ -107,7 +107,7 @@ pub struct Request {
 
 enum ServerRecvEvent {
     NewRequest(Request),
-    NewClient(ClientConnection),
+    NewClient((ClientConnection, Sender<()>)),
     ReceiverErrord(uint),
     ServerSocketCrashed(IoError),
 }
@@ -164,7 +164,10 @@ impl Server {
 
             loop {
                 let new_client = server.accept().map(|sock| {
-                    ClientConnection::new(sock)
+                    use util::ClosableTcpStream;
+                    let (read_closable, tx_close) = ClosableTcpStream::new(sock.clone());
+                    let (write_closable, _) = ClosableTcpStream::new(sock.clone());
+                    (ClientConnection::new(write_closable, read_closable), tx_close)
                 });
 
                 if tx_incoming.send_opt(new_client).is_err() {
@@ -222,7 +225,7 @@ impl Server {
         // add all the existing connections
         let mut rq_handles = Vec::new();
         for rc in locked_receivers.iter() {
-            rq_handles.push(select.handle(rc));
+            rq_handles.push(select.handle(rc.ref0()));
         }
         for h in rq_handles.mut_iter() { unsafe { h.add() } }
 
@@ -278,7 +281,7 @@ impl Server {
         {
             let mut locked_receivers = self.requests_receiver.lock();
             for rx in locked_receivers.iter() {
-                let attempt = rx.try_recv();
+                let attempt = rx.ref0().try_recv();
                 if attempt.is_ok() {       // TODO: remove the channel if it is closed
                     return Ok(Some(attempt.unwrap()));
                 }
@@ -308,9 +311,11 @@ impl Server {
     }
 
     /// Adds a new client to the list.
-    fn add_client(&self, client: ClientConnection) {
+    fn add_client(&self, client: (ClientConnection, Sender<()>)) {
         use std::task::TaskBuilder;
         use green::GreenTaskBuilder;
+
+        let (client, tx_close) = client;
 
         let (tx, rx) = channel();
 
@@ -323,7 +328,7 @@ impl Server {
             });
         }
 
-        self.requests_receiver.lock().push(rx);
+        self.requests_receiver.lock().push((rx, tx_close));
     }
 }
 

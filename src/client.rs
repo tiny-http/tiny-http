@@ -7,6 +7,7 @@ use common::{Header, HTTPVersion, Method};
 use Request;
 use url::Path;
 use sequential::{SequentialReader, SequentialReaderBuilder, SequentialWriterBuilder};
+use util::ClosableTcpStream;
 
 /// A ClientConnection is an object that will store a socket to a client
 /// and return Request objects.
@@ -16,14 +17,14 @@ pub struct ClientConnection {
 
     // sequence of Readers to the stream, so that the data is not read in
     //  the wrong order
-    source: SequentialReaderBuilder<tcp::TcpStream>,
+    source: SequentialReaderBuilder<ClosableTcpStream>,
 
     // sequence of Writers to the stream, to avoid writing response #2 before
     //  response #1
-    sink: SequentialWriterBuilder<tcp::TcpStream>,
+    sink: SequentialWriterBuilder<ClosableTcpStream>,
 
     // Reader to read the next header from
-	next_header_source: SequentialReader<tcp::TcpStream>,
+	next_header_source: SequentialReader<ClosableTcpStream>,
 
     // set to true if the client sent a "Connection: close" in the previous request
     connection_must_close: bool,
@@ -31,17 +32,17 @@ pub struct ClientConnection {
 
 impl ClientConnection {
     /// Creates a new ClientConnection that takes ownership of the TcpStream.
-    pub fn new(mut socket: tcp::TcpStream) -> ClientConnection {
-        socket.set_timeout(Some(10000));
+    pub fn new(write_socket: ClosableTcpStream, mut read_socket: ClosableTcpStream)
+        -> ClientConnection
+    {
+        let remote_addr = read_socket.peer_name();
 
-        let remote_addr = socket.peer_name();
-
-        let mut source = SequentialReaderBuilder::new(socket.clone());
+        let mut source = SequentialReaderBuilder::new(read_socket);
         let first_header = source.next().unwrap();
 
         ClientConnection {
             source: source,
-            sink: SequentialWriterBuilder::new(socket),
+            sink: SequentialWriterBuilder::new(write_socket),
             remote_addr: remote_addr,
             next_header_source: first_header,
             connection_must_close: false,

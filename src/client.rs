@@ -1,5 +1,5 @@
 use std::io;
-use std::io::IoResult;
+use std::io::{BufferedReader, BufferedWriter, IoResult};
 use std::io::net::ip::SocketAddr;
 use common::{Header, HTTPVersion, Method};
 use Request;
@@ -15,14 +15,14 @@ pub struct ClientConnection {
 
     // sequence of Readers to the stream, so that the data is not read in
     //  the wrong order
-    source: SequentialReaderBuilder<ClosableTcpStream>,
+    source: SequentialReaderBuilder<BufferedReader<ClosableTcpStream>>,
 
     // sequence of Writers to the stream, to avoid writing response #2 before
     //  response #1
-    sink: SequentialWriterBuilder<ClosableTcpStream>,
+    sink: SequentialWriterBuilder<BufferedWriter<ClosableTcpStream>>,
 
     // Reader to read the next header from
-	next_header_source: SequentialReader<ClosableTcpStream>,
+	next_header_source: SequentialReader<BufferedReader<ClosableTcpStream>>,
 
     // set to true if the client sent a "Connection: close" in the previous request
     connection_must_close: bool,
@@ -35,12 +35,12 @@ impl ClientConnection {
     {
         let remote_addr = read_socket.peer_name();
 
-        let mut source = SequentialReaderBuilder::new(read_socket);
+        let mut source = SequentialReaderBuilder::new(BufferedReader::new(read_socket));
         let first_header = source.next().unwrap();
 
         ClientConnection {
             source: source,
-            sink: SequentialWriterBuilder::new(write_socket),
+            sink: SequentialWriterBuilder::new(BufferedWriter::new(write_socket)),
             remote_addr: remote_addr,
             next_header_source: first_header,
             connection_must_close: false,

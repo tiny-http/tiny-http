@@ -115,6 +115,7 @@ impl ClientConnection {
         };
 
         // finding length of body
+        // TODO: handle transfer-encoding
         let body_length = headers.iter()
             .find(|h: &&Header| h.field.equiv(&"Content-Length"))
             .and_then(|h| from_str::<uint>(h.value.as_slice()))

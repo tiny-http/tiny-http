@@ -400,6 +400,8 @@ impl Request {
     pub fn respond<R: Reader>(mut self, response: Response<R>) {
         fn passthrough<'a>(w: &'a mut Writer) -> &'a mut Writer { w }
 
+        // TODO: pass a NullWriter if method is HEAD
+
         match response.raw_print(passthrough(self.response_writer),
                                 self.http_version, self.headers.as_slice())
         {

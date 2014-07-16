@@ -112,6 +112,7 @@ impl<R: Reader> Response<R> {
     ///
     /// The HTTP version and headers passed as arguments are used to
     ///  decide which features (most notably, encoding) to use.
+    // TODO: status codes 1xx, 204 and 304 must not include a response body
     #[unstable]
     pub fn raw_print<W: Writer>(mut self, mut writer: W, http_version: HTTPVersion,
                                 request_headers: &[Header]) -> IoResult<()>

@@ -20,6 +20,7 @@ mod client;
 mod common;
 mod response;
 mod sequential;
+mod util;
 
 /// The main class of this library.
 /// 

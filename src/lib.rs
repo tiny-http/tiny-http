@@ -109,6 +109,11 @@ pub struct Server {
     listening_addr: ip::SocketAddr,
 }
 
+#[unstable]
+pub struct IncomingRequests<'a> {
+    server: &'a Server
+}
+
 /// Represents an HTTP request made by a client.
 ///
 /// A `Request` object is what is produced by the server, and is your what
@@ -200,6 +205,14 @@ impl Server {
             requests_receiver: sync::Mutex::new(Vec::new()),
             listening_addr: local_addr,
         })
+    }
+
+    /// Returns an iterator for all the incoming requests.
+    ///
+    /// The iterator will return `None` if the server socket is shutdown.
+    #[unstable]
+    pub fn incoming_requests<'a>(&'a self) -> IncomingRequests<'a> {
+        IncomingRequests { server: self }
     }
 
     /// Returns the address the server is listening to.
@@ -425,6 +438,12 @@ impl Request {
             Ok(_) => (),
             Err(err) => println!("error while sending answer: {}", err)     // TODO: handle better?
         }
+    }
+}
+
+impl<'a> Iterator<Request> for IncomingRequests<'a> {
+    fn next(&mut self) -> Option<Request> {
+        self.server.recv().ok()
     }
 }
 

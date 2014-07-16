@@ -24,6 +24,8 @@ fn curl_bench() {
 
 #[bench]
 fn sequential_requests(bencher: &mut test::Bencher) {
+    ::std::io::test::raise_fd_limit();
+    
     let (server, port) = httpd::Server::new_with_random_port().unwrap();
 
     let mut stream = std::io::net::tcp::TcpStream::connect("127.0.0.1", port).unwrap();
@@ -41,6 +43,8 @@ fn sequential_requests(bencher: &mut test::Bencher) {
 
 #[bench]
 fn parallel_requests(bencher: &mut test::Bencher) {
+    ::std::io::test::raise_fd_limit();
+
     let (server, port) = httpd::Server::new_with_random_port().unwrap();
 
     bencher.bench_n(5, |_| {

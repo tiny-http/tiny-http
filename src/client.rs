@@ -1,4 +1,5 @@
 use std::io;
+use std::io::IoResult;
 use std::io::net::tcp;
 use std::io::net::ip::SocketAddr;
 use std::io::BufferedReader;
@@ -22,7 +23,7 @@ pub struct ClientConnection {
     sink: SequentialWriterBuilder<tcp::TcpStream>,
 
     // Reader to read the next header from
-	next_header_source: BufferedReader<SequentialReader<tcp::TcpStream>>,
+	next_header_source: SequentialReader<tcp::TcpStream>,
 
     // set to true if the client sent a "Connection: close" in the previous request
     connection_must_close: bool,
@@ -42,8 +43,39 @@ impl ClientConnection {
             source: source,
             sink: SequentialWriterBuilder::new(socket),
             remote_addr: remote_addr,
-            next_header_source: BufferedReader::new(first_header),
+            next_header_source: first_header,
             connection_must_close: false,
+        }
+    }
+
+    /// Reads the next line from self.next_header_source.
+    /// 
+    /// Reads until `CRLF` is reached. The next read will start
+    ///  at the first byte of the new line.
+    fn read_next_line(&mut self) -> IoResult<String> {
+        use std::io;
+        use std::path::BytesContainer;
+
+        let mut buf = Vec::new();
+        let mut prev_byte_was_cr = false;
+
+        loop {
+            let byte = try!(self.next_header_source.read_byte());
+
+            if byte == b'\n' && prev_byte_was_cr {
+                return match buf.container_as_str() {
+                    Some(s) => Ok(s.to_string()),
+                    None => Err(io::standard_error(io::InvalidInput))
+                }
+            }
+
+            if byte == b'\r' {
+                prev_byte_was_cr = true;
+            } else {
+                prev_byte_was_cr = false;
+            }
+
+            buf.push(byte);
         }
     }
 
@@ -51,36 +83,29 @@ impl ClientConnection {
     /// Blocks until the header has been read.
     fn read(&mut self) -> io::IoResult<Request> {
         let (method, path, version, headers) = {
-            let mut lines = self.next_header_source.lines();
-
             // reading the request line
-            let (method, path, version) =
+            let (method, path, version) = {
+                let line = try!(self.read_next_line());
+
                 try!(parse_request_line(
-                    match lines.next() {
-                        Some(line) => try!(line),
-                        None => return Err(gen_invalid_input(
-                                    "Missing request line"))
-                    }.as_slice().trim()
-                ));
+                    line.as_slice().trim()
+                ))
+            };
 
             // getting all headers
             let headers = {
                 let mut headers = Vec::new();
                 loop {
-                    match lines.next() {
-                        Some(line) => {
-                            let line = try!(line);
-                            if line.as_slice().trim().len() == 0 { break };
-                            headers.push(
-                                match from_str(line.as_slice().trim()) {
-                                    Some(h) => h,
-                                    None => return Err(gen_invalid_input(
-                                        "Could not parse header"))
-                                }
-                            );
-                        },
-                        None => break
-                    }
+                    let line = try!(self.read_next_line());
+
+                    if line.as_slice().trim().len() == 0 { break };
+                    headers.push(
+                        match from_str(line.as_slice().trim()) {
+                            Some(h) => h,
+                            None => return Err(gen_invalid_input(
+                                "Could not parse header"))
+                        }
+                    );
                 }
                 headers
             };
@@ -96,7 +121,7 @@ impl ClientConnection {
 
         // building the next reader
         let data_reader = self.source.next().unwrap();
-        self.next_header_source = BufferedReader::new(self.source.next().unwrap());
+        self.next_header_source = self.source.next().unwrap();
 
         // building the writer
         let writer = self.sink.next().unwrap();

@@ -1,47 +1,48 @@
 use std::io::IoResult;
 use std::sync;
+use std::sync::{Arc, Mutex};
 
 pub struct SequentialReaderBuilder<R> {
-    reader: R,
+    reader: Arc<Mutex<R>>,
     next_trigger: Option<sync::Future<()>>,
 }
 
 pub struct SequentialReader<R> {
     trigger: Option<sync::Future<()>>,
-    reader: R,
+    reader: Arc<Mutex<R>>,
     on_finish: Sender<()>,
 }
 
 pub struct SequentialWriterBuilder<W> {
-    writer: W,
+    writer: Arc<Mutex<W>>,
     next_trigger: Option<sync::Future<()>>,
 }
 
 pub struct SequentialWriter<W> {
     trigger: Option<sync::Future<()>>,
-    writer: W,
+    writer: Arc<Mutex<W>>,
     on_finish: Sender<()>,
 }
 
-impl<R: Reader> SequentialReaderBuilder<R> {
+impl<R: Reader + Send> SequentialReaderBuilder<R> {
     pub fn new(reader: R) -> SequentialReaderBuilder<R> {
         SequentialReaderBuilder {
-            reader: reader,
+            reader: Arc::new(Mutex::new(reader)),
             next_trigger: None,
         }
     }
 }
 
-impl<W: Writer> SequentialWriterBuilder<W> {
+impl<W: Writer + Send> SequentialWriterBuilder<W> {
     pub fn new(writer: W) -> SequentialWriterBuilder<W> {
         SequentialWriterBuilder {
-            writer: writer,
+            writer: Arc::new(Mutex::new(writer)),
             next_trigger: None,
         }
     }
 }
 
-impl<R: Reader + Clone> Iterator<SequentialReader<R>> for SequentialReaderBuilder<R> {
+impl<R: Reader + Send> Iterator<SequentialReader<R>> for SequentialReaderBuilder<R> {
     fn next(&mut self) -> Option<SequentialReader<R>> {
         let (tx, rx) = channel();
         let mut next_next_trigger = Some(sync::Future::from_receiver(rx));
@@ -55,7 +56,7 @@ impl<R: Reader + Clone> Iterator<SequentialReader<R>> for SequentialReaderBuilde
     }
 }
 
-impl<W: Writer + Clone> Iterator<SequentialWriter<W>> for SequentialWriterBuilder<W> {
+impl<W: Writer + Send> Iterator<SequentialWriter<W>> for SequentialWriterBuilder<W> {
     fn next(&mut self) -> Option<SequentialWriter<W>> {
         let (tx, rx) = channel();
         let mut next_next_trigger = Some(sync::Future::from_receiver(rx));
@@ -69,21 +70,21 @@ impl<W: Writer + Clone> Iterator<SequentialWriter<W>> for SequentialWriterBuilde
     }
 }
 
-impl<R: Reader> Reader for SequentialReader<R> {
+impl<R: Reader + Send> Reader for SequentialReader<R> {
     fn read(&mut self, buf: &mut [u8]) -> IoResult<uint> {
         self.trigger.as_mut().map(|v| v.get());
         self.trigger = None;
 
-        self.reader.read(buf)
+        self.reader.lock().read(buf)
     }
 }
 
-impl<W: Writer> Writer for SequentialWriter<W> {
+impl<W: Writer + Send> Writer for SequentialWriter<W> {
     fn write(&mut self, buf: &[u8]) -> IoResult<()> {
         self.trigger.as_mut().map(|v| v.get());
         self.trigger = None;
 
-        self.writer.write(buf)
+        self.writer.lock().write(buf)
     }
 }
 

@@ -41,7 +41,7 @@ Check the documentation!
 
 ### Some benchmarking
 
-On my local machine, `ab -c 50 -n 10000 -k http://localhost/` gives:
+On my local machine, `ab -c 50 -n 100000 -k http://localhost/` gives:
  - ~4.9 sec for apache2
  - ~15.0 sec for nodejs
  - ~16.9 sec for rust-http

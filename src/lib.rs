@@ -260,9 +260,6 @@ impl Server {
 
         // getting the result
         loop {
-            // yielding ; this function call is very important for good perfs
-            { use std::task; task::deschedule(); }
-
             // waiting
             let handle_id = select.wait();
 

@@ -74,16 +74,21 @@ fn choose_transfer_encoding(request_headers: &[Header], http_version: &HTTPVersi
                             entity_length: &Option<uint>)
     -> TransferEncoding
 {
+    // HTTP 1.0 doesn't support other encodings
+    if http_version <= HTTPVersion(1, 0) {
+        return Identity;
+    }
+
+    // TODO: parse the request's TE header
+
     // if we don't have a Content-Length, or if the Content-Length is too big, using chunks writer
     let chunks_threshold = 32768;
-    if
-        *http_version >= HTTPVersion(1, 1) &&
-        entity_length.as_ref().filtered(|val| **val < chunks_threshold).is_none()
-    {
-        Chunked
-    } else {
-        Identity
+    if entity_length.as_ref().filtered(|val| **val < chunks_threshold).is_none() {
+        return Chunked;
     }
+
+    // Identity by default
+    Identity
 }
 
 impl<R: Reader> Response<R> {

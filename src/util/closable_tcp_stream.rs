@@ -5,10 +5,12 @@ use std::io::net::ip::SocketAddr;
 pub struct ClosableTcpStream {
     stream: TcpStream,
     close: Receiver<()>,
+    close_read: bool,
+    close_write: bool,
 }
 
 impl ClosableTcpStream {
-    pub fn new(mut stream: TcpStream) -> (ClosableTcpStream, Sender<()>) {
+    pub fn new(mut stream: TcpStream, close_read: bool, close_write: bool) -> (ClosableTcpStream, Sender<()>) {
         let (tx, rx) = channel();
 
         stream.set_timeout(Some(100));
@@ -16,6 +18,8 @@ impl ClosableTcpStream {
         let acc = ClosableTcpStream {
             stream: stream,
             close: rx,
+            close_read: close_read,
+            close_write: close_write,
         };
 
         (acc, tx)
@@ -28,8 +32,12 @@ impl ClosableTcpStream {
 
 impl Drop for ClosableTcpStream {
     fn drop(&mut self) {
-        self.stream.close_read().ok();      // ignoring outcome
-        self.stream.close_write().ok();     // ignoring outcome
+        if self.close_read {
+            self.stream.close_read().ok();      // ignoring outcome
+        }
+        if self.close_write {
+            self.stream.close_write().ok();     // ignoring outcome
+        }
     }
 }
 

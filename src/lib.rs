@@ -165,8 +165,8 @@ impl Server {
             loop {
                 let new_client = server.accept().map(|sock| {
                     use util::ClosableTcpStream;
-                    let (read_closable, tx_close) = ClosableTcpStream::new(sock.clone());
-                    let (write_closable, _) = ClosableTcpStream::new(sock.clone());
+                    let (read_closable, tx_close) = ClosableTcpStream::new(sock.clone(), true, false);
+                    let (write_closable, _) = ClosableTcpStream::new(sock.clone(), false, true);
                     (ClientConnection::new(write_closable, read_closable), tx_close)
                 });
 

@@ -122,8 +122,23 @@ impl ClientConnection {
             .unwrap_or(0u);
 
         // building the next reader
-        let data_reader = self.source.next().unwrap();
-        let (data_reader, _) = EqualReader::new(data_reader, body_length);   // TODO:
+        let request_body_reader =
+            if body_length == 0 {
+                use std::io::util::NullReader;
+                box NullReader as Box<Reader + Send>
+
+            } else if body_length <= 1024 {
+                use std::io::MemReader;
+                let data = try!(self.next_header_source.read_exact(body_length));
+                box MemReader::new(data) as Box<Reader + Send>
+
+            } else {
+                let data_reader = self.source.next().unwrap();
+                let (data_reader, _) = EqualReader::new(data_reader, body_length);   // TODO:
+                box data_reader as Box<Reader + Send>
+            };
+
+        // follow-up for next potential request
         self.next_header_source = self.source.next().unwrap();
 
         // building the writer
@@ -131,7 +146,7 @@ impl ClientConnection {
 
         // building the request
         Ok(Request {
-            data_reader: box data_reader,
+            data_reader: request_body_reader,
             response_writer: box writer,
             remote_addr: self.remote_addr.clone().unwrap(),     // TODO: could fail
             method: method,

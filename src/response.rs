@@ -192,7 +192,8 @@ impl<R: Reader> Response<R> {
                     from_str("Transfer-Encoding: chunked").unwrap()
                 );
 
-                try!(write_message_header(writer.by_ref(), &http_version, &self.status_code, self.headers.as_slice()));
+                try!(write_message_header(writer.by_ref(), &http_version,
+                    &self.status_code, self.headers.as_slice()));
 
                 let mut writer = ChunksEncoder::new(writer);
                 try!(util::copy(&mut self.reader, &mut writer));
@@ -205,16 +206,20 @@ impl<R: Reader> Response<R> {
                 use util::EqualReader;
 
                 assert!(self.data_length.is_some());
+                let data_length = self.data_length.unwrap();
 
                 self.headers.push(
-                    from_str(format!("Content-Length: {}", self.data_length.unwrap()).as_slice()).unwrap()
+                    from_str(format!("Content-Length: {}", data_length).as_slice()).unwrap()
                 );
 
-                try!(write_message_header(writer.by_ref(), &http_version, &self.status_code, self.headers.as_slice()));
+                try!(write_message_header(writer.by_ref(), &http_version,
+                    &self.status_code, self.headers.as_slice()));
 
-                assert!(self.data_length.is_some());
-                let (mut equ_reader, _) = EqualReader::new(self.reader.by_ref(), self.data_length.unwrap());
-                try!(util::copy(&mut equ_reader, &mut writer));
+                if data_length >= 1 {
+                    let (mut equ_reader, _) =
+                        EqualReader::new(self.reader.by_ref(), data_length);
+                    try!(util::copy(&mut equ_reader, &mut writer));
+                }
 
                 // flushing!
                 try!(writer.flush());

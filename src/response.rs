@@ -35,6 +35,12 @@ pub struct Response<R> {
     data_length: Option<uint>,
 }
 
+/// Builds a Date: header with the current date.
+// TODO: 
+fn build_date_header() -> Header {
+    from_str("Date: unknown").unwrap()
+}
+
 impl<R: Reader> Response<R> {
     #[experimental]
     pub fn new(status_code: StatusCode, headers: Vec<Header>,
@@ -115,6 +121,11 @@ impl<R: Reader> Response<R> {
         let use_chunks = 
             http_version >= HTTPVersion(1, 1) &&
             self.data_length.as_ref().filtered(|val| **val < chunks_threshold).is_none();
+
+        // add `Date` if not in the headers
+        if self.headers.iter().find(|h| h.field.equiv(&"Date")).is_none() {
+            self.headers.unshift(build_date_header());
+        }
 
         // add `Server` if not in the headers
         if self.headers.iter().find(|h| h.field.equiv(&"Server")).is_none() {

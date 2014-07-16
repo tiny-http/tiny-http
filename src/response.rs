@@ -3,7 +3,6 @@ use std::io::{IoResult, MemReader};
 use std::io::fs::File;
 use std::io::util;
 use std::io::util::NullReader;
-use chunks::ChunksEncoder;
 
 /// Object representing an HTTP response whose purpose is to be given to a `Request`.
 /// 
@@ -75,7 +74,7 @@ fn choose_transfer_encoding(request_headers: &[Header], http_version: &HTTPVersi
     -> TransferEncoding
 {
     // HTTP 1.0 doesn't support other encodings
-    if http_version <= HTTPVersion(1, 0) {
+    if *http_version <= HTTPVersion(1, 0) {
         return Identity;
     }
 
@@ -185,6 +184,8 @@ impl<R: Reader> Response<R> {
         // writing data
         match transfer_encoding {
             Chunked => {
+                use util::ChunksEncoder;
+
                 self.headers.push(
                     from_str("Transfer-Encoding: chunked").unwrap()
                 );

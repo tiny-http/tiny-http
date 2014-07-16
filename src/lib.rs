@@ -17,7 +17,6 @@ use client::ClientConnection;
 pub use common::{Header, HeaderField, HTTPVersion, Method, StatusCode};
 pub use response::Response;
 
-mod chunks;
 mod client;
 mod common;
 mod response;

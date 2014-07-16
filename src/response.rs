@@ -35,10 +35,55 @@ pub struct Response<R> {
     data_length: Option<uint>,
 }
 
+/// Transfer encoding to use when sending the message.
+/// Note that only *supported* encoding are listed here.
+enum TransferEncoding {
+    Identity,
+    Chunked,
+}
+
 /// Builds a Date: header with the current date.
 // TODO: 
 fn build_date_header() -> Header {
     from_str("Date: unknown").unwrap()
+}
+
+fn write_message_header<W: Writer>(mut writer: W, http_version: &HTTPVersion,
+                                   status_code: &StatusCode, headers: &[Header])
+    -> IoResult<()>
+{
+    // writing status line
+    try!(write!(writer, "HTTP/{} {} {}\r\n",
+        http_version,
+        status_code.as_uint(),
+        status_code.get_default_reason_phrase()
+    ));
+
+    // writing headers
+    for header in headers.iter() {
+        try!(write!(writer, "{}: {}\r\n", header.field, header.value));
+    }
+
+    // separator between header and data
+    try!(write!(writer, "\r\n"));
+
+    Ok(())
+}
+
+fn choose_transfer_encoding(request_headers: &[Header], http_version: &HTTPVersion,
+                            entity_length: &Option<uint>)
+    -> TransferEncoding
+{
+    // if we don't have a Content-Length, or if the Content-Length is too big, using chunks writer
+    let chunks_threshold = 32768;
+    if
+        *http_version >= HTTPVersion(1, 1) &&
+        entity_length.as_ref().filtered(|val| **val < chunks_threshold).is_none()
+    {
+        Chunked
+    } else {
+        Identity
+    }
 }
 
 impl<R: Reader> Response<R> {
@@ -117,11 +162,8 @@ impl<R: Reader> Response<R> {
     pub fn raw_print<W: Writer>(mut self, mut writer: W, http_version: HTTPVersion,
                                 request_headers: &[Header]) -> IoResult<()>
     {
-        // if we don't have a Content-Length, or if the Content-Length is too big, using chunks writer
-        let chunks_threshold = 32768;
-        let use_chunks = 
-            http_version >= HTTPVersion(1, 1) &&
-            self.data_length.as_ref().filtered(|val| **val < chunks_threshold).is_none();
+        let transfer_encoding = choose_transfer_encoding(request_headers,
+                                    &http_version, &self.data_length);
 
         // add `Date` if not in the headers
         if self.headers.iter().find(|h| h.field.equiv(&"Date")).is_none() {
@@ -135,38 +177,35 @@ impl<R: Reader> Response<R> {
             );
         }
 
-        // add transfer-encoding header
-        if use_chunks {
-            self.headers.push(
-                Header{field: from_str("Transfer-Encoding").unwrap(), value: "chunked".to_string()}
-            )
-        }
-
-        // writing status line
-        try!(write!(writer, "HTTP/{} {} {}\r\n",
-            http_version,
-            self.status_code.as_uint(),
-            self.status_code.get_default_reason_phrase()
-        ));
-
-        // writing headers
-        for header in self.headers.iter() {
-            try!(write!(writer, "{}: {}\r\n", header.field, header.value));
-        }
-
-        // separator between header and data
-        try!(write!(writer, "\r\n"));
-
         // writing data
-        if use_chunks {
-            let mut writer = ChunksEncoder::new(writer);
-            try!(util::copy(&mut self.reader, &mut writer));
-        } else {
-            use util::EqualReader;
-            assert!(self.data_length.is_some());
-            let (mut equ_reader, _) = EqualReader::new(self.reader.by_ref(), self.data_length.unwrap());
-            try!(util::copy(&mut equ_reader, &mut writer));
-        }
+        match transfer_encoding {
+            Chunked => {
+                self.headers.push(
+                    from_str("Transfer-Encoding: chunked").unwrap()
+                );
+
+                try!(write_message_header(writer.by_ref(), &http_version, &self.status_code, self.headers.as_slice()));
+
+                let mut writer = ChunksEncoder::new(writer);
+                try!(util::copy(&mut self.reader, &mut writer));
+            },
+
+            Identity => {
+                use util::EqualReader;
+
+                assert!(self.data_length.is_some());
+
+                self.headers.push(
+                    from_str(format!("Content-Length: {}", self.data_length.unwrap()).as_slice()).unwrap()
+                );
+
+                try!(write_message_header(writer.by_ref(), &http_version, &self.status_code, self.headers.as_slice()));
+
+                assert!(self.data_length.is_some());
+                let (mut equ_reader, _) = EqualReader::new(self.reader.by_ref(), self.data_length.unwrap());
+                try!(util::copy(&mut equ_reader, &mut writer));
+            }
+        };
 
         Ok(())
     }

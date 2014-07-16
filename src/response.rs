@@ -105,16 +105,20 @@ impl<R: Reader> Response<R> {
     /// Prints the HTTP response to a writer.
     #[experimental]
     pub fn raw_print<W: Writer>(mut self, mut writer: W) -> IoResult<()> {
+        use util::EqualReader;
+
         self.purify_headers();
+
+        // trying to get the value of Content-Length
+        let content_length = self.headers.iter()
+            .find(|h| h.field.equiv(&"Content-Length"))
+            .and_then(|h| from_str::<uint>(h.value.as_slice()));
 
         // if we don't have a Content-Length, or if the Content-Length is too big, using chunks writer
         let chunks_threshold = 32768;
         let use_chunks = 
             self.http_version >= HTTPVersion(1, 1) &&
-            self.headers.iter().find(|h| h.field.equiv(&"Content-Length"))
-                .and_then(|h| from_str::<uint>(h.value.as_slice()))
-                .filtered(|val| *val < chunks_threshold)
-                .is_none();
+            content_length.as_ref().filtered(|val| **val < chunks_threshold).is_none();
 
         // add transfer-encoding header
         if use_chunks {
@@ -143,7 +147,9 @@ impl<R: Reader> Response<R> {
             let mut writer = ChunksEncoder::new(writer);
             try!(util::copy(&mut self.reader, &mut writer));
         } else {
-            try!(util::copy(&mut self.reader, &mut writer));
+            assert!(content_length.is_some());
+            let (mut equ_reader, _) = EqualReader::new(self.reader.by_ref(), content_length.unwrap());
+            try!(util::copy(&mut equ_reader, &mut writer));
         }
 
         Ok(())

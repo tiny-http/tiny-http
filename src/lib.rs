@@ -400,9 +400,9 @@ impl Request {
     pub fn respond<R: Reader>(mut self, response: Response<R>) {
         fn passthrough<'a>(w: &'a mut Writer) -> &'a mut Writer { w }
 
-        let response = response.with_http_version(self.http_version);
-
-        match response.raw_print(passthrough(self.response_writer)) {
+        match response.raw_print(passthrough(self.response_writer),
+                                self.http_version, self.headers.as_slice())
+        {
             Ok(_) => (),
             Err(err) => println!("error while sending answer: {}", err)     // TODO: handle better?
         }

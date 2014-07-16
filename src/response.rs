@@ -31,7 +31,6 @@ pub struct Response<R> {
     reader: R,
     status_code: StatusCode,
     headers: Vec<Header>,
-    http_version: HTTPVersion,
 }
 
 impl<R: Reader> Response<R> {
@@ -55,7 +54,6 @@ impl<R: Reader> Response<R> {
             reader: data,
             status_code: status_code,
             headers: headers,
-            http_version: HTTPVersion(1, 1),
         }
     }
 
@@ -73,13 +71,6 @@ impl<R: Reader> Response<R> {
     #[experimental]
     pub fn with_status_code(mut self, code: StatusCode) -> Response<R> {
         self.status_code = code;
-        self
-    }
-
-    /// Forces an HTTP version.
-    #[experimental]
-    pub fn with_http_version(mut self, version: HTTPVersion) -> Response<R> {
-        self.http_version = version;
         self
     }
 
@@ -103,8 +94,16 @@ impl<R: Reader> Response<R> {
     }
 
     /// Prints the HTTP response to a writer.
+    ///
+    /// This function is the one used to send the response to the client's socket.
+    /// Therefore you shouldn't expect anything pretty-printed or even readable.
+    ///
+    /// The HTTP version and headers passed as arguments are used to
+    ///  decide which features (most notably, encoding) to use.
     #[experimental]
-    pub fn raw_print<W: Writer>(mut self, mut writer: W) -> IoResult<()> {
+    pub fn raw_print<W: Writer>(mut self, mut writer: W, http_version: HTTPVersion,
+                                request_headers: &[Header]) -> IoResult<()>
+    {
         use util::EqualReader;
 
         self.purify_headers();
@@ -117,7 +116,7 @@ impl<R: Reader> Response<R> {
         // if we don't have a Content-Length, or if the Content-Length is too big, using chunks writer
         let chunks_threshold = 32768;
         let use_chunks = 
-            self.http_version >= HTTPVersion(1, 1) &&
+            http_version >= HTTPVersion(1, 1) &&
             content_length.as_ref().filtered(|val| **val < chunks_threshold).is_none();
 
         // add transfer-encoding header
@@ -129,7 +128,7 @@ impl<R: Reader> Response<R> {
 
         // writing status line
         try!(write!(writer, "HTTP/{} {} {}\r\n",
-            self.http_version,
+            http_version,
             self.status_code.as_uint(),
             self.status_code.get_default_reason_phrase()
         ));

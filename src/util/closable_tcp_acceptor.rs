@@ -10,8 +10,6 @@ impl ClosableTcpAcceptor {
     pub fn new(mut acceptor: TcpAcceptor) -> (ClosableTcpAcceptor, Sender<()>) {
         let (tx, rx) = channel();
 
-        acceptor.set_timeout(Some(100));
-
         let acc = ClosableTcpAcceptor {
             acceptor: acceptor,
             close: rx,
@@ -29,6 +27,8 @@ impl Acceptor<TcpStream> for ClosableTcpAcceptor {
             if self.close.try_recv().is_ok() {
                 return Err(io::standard_error(io::Closed));
             }
+
+            self.acceptor.set_timeout(Some(100));
 
             match self.acceptor.accept() {
                 Err(ref err) if err.kind == io::TimedOut

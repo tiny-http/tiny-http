@@ -13,8 +13,6 @@ impl ClosableTcpStream {
     pub fn new(mut stream: TcpStream, close_read: bool, close_write: bool) -> (ClosableTcpStream, Sender<()>) {
         let (tx, rx) = channel();
 
-        stream.set_timeout(Some(100));
-
         let acc = ClosableTcpStream {
             stream: stream,
             close: rx,
@@ -50,6 +48,8 @@ impl Reader for ClosableTcpStream {
                 return Err(io::standard_error(io::Closed));
             }
 
+            self.stream.set_read_timeout(Some(100));
+
             match self.stream.read(buf) {
                 Err(ref err) if err.kind == io::TimedOut
                     => continue,
@@ -67,6 +67,8 @@ impl Writer for ClosableTcpStream {
             if self.close.try_recv().is_ok() {
                 return Err(io::standard_error(io::Closed));
             }
+
+            self.stream.set_write_timeout(Some(100));
 
             match self.stream.write(buf) {
                 Err(ref err) if err.kind == io::TimedOut

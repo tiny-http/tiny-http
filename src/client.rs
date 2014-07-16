@@ -1,8 +1,6 @@
 use std::io;
 use std::io::IoResult;
-use std::io::net::tcp;
 use std::io::net::ip::SocketAddr;
-use std::io::BufferedReader;
 use common::{Header, HTTPVersion, Method};
 use Request;
 use url::Path;

@@ -6,8 +6,8 @@ use std::io::net::tcp::TcpStream;
 fn basic_handling() {
     let (server, port) = httpd::Server::new_with_random_port().unwrap();
 
-    let mut stream = std::io::net::tcp::TcpStream::connect("127.0.0.1", port).unwrap();
-    write!(stream, "GET / HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n");
+    let mut stream = TcpStream::connect("127.0.0.1", port).unwrap();
+    (write!(stream, "GET / HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n")).unwrap();
 
     let request = server.recv().unwrap();
     assert!(request.get_method().equiv(&"get"));

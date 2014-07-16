@@ -7,7 +7,7 @@ extern crate green;
 extern crate rustuv;
 extern crate url;
 
-use std::io::{Acceptor, IoError, IoResult, Listener, TimedOut};
+use std::io::{Acceptor, IoError, IoResult, Listener};
 use std::io::net::ip;
 use std::io::net::tcp;
 use std::sync;

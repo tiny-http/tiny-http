@@ -1,4 +1,4 @@
-use std::io::{Acceptor, IoResult};
+use std::io::IoResult;
 use std::io::net::tcp::TcpStream;
 use std::io::net::ip::SocketAddr;
 

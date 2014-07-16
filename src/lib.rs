@@ -3,6 +3,7 @@
 #![license = "Apache"]
 #![feature(unsafe_destructor)]
 
+extern crate encoding;
 extern crate green;
 extern crate rustuv;
 extern crate url;

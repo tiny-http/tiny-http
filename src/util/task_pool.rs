@@ -1,28 +1,26 @@
 use std::sync::Arc;
 use std::sync::mpsc_queue::Queue;
 
+/// Manages a collection of threads.
+///
+/// A new thread is created every time all the existing threads are full.
+/// Any idle thread will automatically die after 5 seconds.
 pub struct TaskPool {
     free_tasks: Arc<Queue<Sender<proc():Send>>>,
 }
 
+/// Number of milliseconds after which an idle thread dies.
+static THREAD_IDLE_DIEAFTER: u64 = 5000;
+
 impl TaskPool {
     pub fn new() -> TaskPool {
-        let mut pool = TaskPool {
+        TaskPool {
             free_tasks: Arc::new(Queue::new()),
-        };
-
-        // adding one thread per CPU
-        {
-            use std::os;
-            use std::cmp;
-            for _ in range(0, cmp::min(1u, os::num_cpus() - 1)) {
-                pool.add_thread(None);
-            }
         }
-
-        pool
     }
 
+    /// Executes a function in a thread.
+    /// If no thread is available, spawns a new one.
     pub fn spawn(&mut self, mut code: proc():Send) {
         use std::task;
         use std::sync::mpsc_queue::{Data, Empty, Inconsistent};
@@ -62,7 +60,7 @@ impl TaskPool {
                 let (tx, rx) = channel();
                 queue.push(tx);
 
-                let timeout = timer.oneshot(5000);
+                let timeout = timer.oneshot(THREAD_IDLE_DIEAFTER);
                 select! {
                     next_fn = rx.recv() => next_fn(),
                     _ = timeout.recv() => break

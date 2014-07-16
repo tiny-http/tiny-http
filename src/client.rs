@@ -82,6 +82,8 @@ impl ClientConnection {
     /// Reads a request from the stream.
     /// Blocks until the header has been read.
     fn read(&mut self) -> io::IoResult<Request> {
+        use util::EqualReader;
+
         let (method, path, version, headers) = {
             // reading the request line
             let (method, path, version) = {
@@ -121,6 +123,7 @@ impl ClientConnection {
 
         // building the next reader
         let data_reader = self.source.next().unwrap();
+        let (data_reader, _) = EqualReader::new(data_reader, body_length);   // TODO:
         self.next_header_source = self.source.next().unwrap();
 
         // building the writer

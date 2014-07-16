@@ -3,7 +3,7 @@
 [![Build Status](https://travis-ci.org/tomaka/tiny-http.svg?branch=master)](https://travis-ci.org/tomaka/tiny-http)
 
 Tiny but strong HTTP server in Rust.
-It has two **objectives**: be 100% compliant with the HTTP standard, and be as fast as possible.
+Its main objectives are to be 100% compliant with the HTTP standard and to provide an easy way to create an HTTP server.
 
 What does **tiny-http** handle?
  - Accepting and managing connections to the clients
@@ -45,11 +45,3 @@ for request in server.incoming_requests() {
     handle_request(request)
 }
 ```
-
-### Some benchmarking
-
-On my local machine, `ab -c 50 -n 100000 -k http://localhost/` gives:
- - ~4.9 sec for apache2
- - ~15.0 sec for nodejs
- - ~16.9 sec for rust-http
- - ~11.2 sec for tiny-http

@@ -4,14 +4,13 @@
 #![feature(unsafe_destructor)]
 
 extern crate encoding;
-extern crate green;
-extern crate rustuv;
 extern crate url;
 
 use std::io::{Acceptor, IoError, IoResult, Listener};
 use std::io::net::ip;
 use std::io::net::tcp;
 use std::sync;
+use std::sync::Mutex;
 use std::comm::Select;
 use client::ClientConnection;
 
@@ -48,39 +47,11 @@ mod util;
 /// ```
 #[unstable]
 pub struct Server {
-    // it is an option so that `.shutdown()` can be called in the destructor
-    // must always be valid while the `Server` is alive
-    tasks_pool: sync::Mutex<SchedPoolAutoDestruct>,
-
+    tasks_pool: Mutex<util::TaskPool>,
     connections_receiver: Receiver<IoResult<(ClientConnection, Sender<()>)>>,
     connections_close: Sender<()>,
     requests_receiver: sync::Mutex<Vec<(Receiver<Request>, Sender<()>)>>,
     listening_addr: ip::SocketAddr,
-}
-
-/// Wraps around a SchedPool and destroys it in the destructor.
-struct SchedPoolAutoDestruct {
-    pool: Option<green::SchedPool>
-}
-
-impl SchedPoolAutoDestruct {
-    pub fn new(pool: green::SchedPool) -> SchedPoolAutoDestruct {
-        SchedPoolAutoDestruct { pool: Some(pool) }
-    }
-
-    pub fn as_pool<'a>(&'a mut self) -> &'a mut green::SchedPool {
-        self.pool.as_mut().unwrap()
-    }
-}
-
-impl Drop for SchedPoolAutoDestruct {
-    fn drop(&mut self) {
-        use std::mem;
-
-        let mut val = None;
-        mem::swap(&mut val, &mut self.pool);
-        val.unwrap().shutdown();
-    }
 }
 
 /// Represents an HTTP request made by a client.
@@ -138,16 +109,6 @@ impl Server {
     /// Builds a new server that listens on the specified address.
     #[unstable]
     pub fn new_with_addr(addr: &ip::SocketAddr) -> IoResult<Server> {
-        use std::task::TaskBuilder;
-        use green::GreenTaskBuilder;
-
-        // creating the green tasks pool
-        let mut tasks_pool = {
-            let mut green_config = green::PoolConfig::new();
-            green_config.event_loop_factory = rustuv::event_loop;
-            green::SchedPool::new(green_config)
-        };
-
         // building the TcpAcceptor
         let mut listener = try!(tcp::TcpListener::bind(
             format!("{}", addr.ip).as_slice(), addr.port));
@@ -159,7 +120,7 @@ impl Server {
         // and ClientConnection objects are returned in the receiver
         let (tx_incoming, rx_incoming) = channel();
 
-        TaskBuilder::new().green(&mut tasks_pool).spawn(proc() {
+        spawn(proc() {
             let mut server = server;
 
             loop {
@@ -178,7 +139,7 @@ impl Server {
 
         // result
         Ok(Server {
-            tasks_pool: sync::Mutex::new(SchedPoolAutoDestruct::new(tasks_pool)),
+            tasks_pool: Mutex::new(util::TaskPool::new()),
             connections_receiver: rx_incoming,
             connections_close: tx_close,
             requests_receiver: sync::Mutex::new(Vec::new()),
@@ -316,16 +277,13 @@ impl Server {
 
     /// Adds a new client to the list.
     fn add_client(&self, client: (ClientConnection, Sender<()>)) {
-        use std::task::TaskBuilder;
-        use green::GreenTaskBuilder;
-
         let (client, tx_close) = client;
 
         let (tx, rx) = channel();
 
         {
             let mut locked_tasks_pool = self.tasks_pool.lock();
-            TaskBuilder::new().green(locked_tasks_pool.as_pool()).spawn(proc() {
+            locked_tasks_pool.spawn(proc() {
                 let mut client = client;
                 // TODO: when the channel is being closed, immediatly notify the task
                 client.advance(|rq| tx.send_opt(rq).is_ok());

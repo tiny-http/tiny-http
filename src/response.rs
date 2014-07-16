@@ -194,6 +194,9 @@ impl<R: Reader> Response<R> {
 
                 let mut writer = ChunksEncoder::new(writer);
                 try!(util::copy(&mut self.reader, &mut writer));
+                
+                // flushing!
+                try!(writer.flush());
             },
 
             Identity => {
@@ -210,6 +213,9 @@ impl<R: Reader> Response<R> {
                 assert!(self.data_length.is_some());
                 let (mut equ_reader, _) = EqualReader::new(self.reader.by_ref(), self.data_length.unwrap());
                 try!(util::copy(&mut equ_reader, &mut writer));
+
+                // flushing!
+                try!(writer.flush());
             }
         };
 

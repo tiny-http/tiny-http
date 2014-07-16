@@ -89,7 +89,7 @@ pub struct Header {
 
 impl ::std::from_str::FromStr for Header {
     fn from_str(input: &str) -> Option<Header> {
-        let elems = input.splitn(':', 2).map(|e| e.to_string()).collect::<Vec<String>>();
+        let elems = input.splitn(':', 1).map(|e| e.to_string()).collect::<Vec<String>>();
 
         if elems.len() <= 1 {
             return None;
@@ -246,5 +246,13 @@ mod test {
         assert!(header.value.as_slice() == "text/html");
 
         assert!(from_str::<Header>("hello world").is_none());
+    }
+
+    #[test]
+    fn test_parse_header_with_doublecolon() {
+        let header: Header = from_str("Time: 20: 34").unwrap();
+
+        assert!(header.field.equiv(&"time"));
+        assert!(header.value.as_slice() == "20: 34");
     }
 }

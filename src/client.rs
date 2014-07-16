@@ -207,12 +207,12 @@ fn gen_invalid_input(desc: &'static str) -> io::IoError {
 
 /// Parses a "HTTP/1.1" string.
 fn parse_http_version(version: &str) -> io::IoResult<HTTPVersion> {
-    let elems = version.splitn('/', 2).map(|e| e.to_string()).collect::<Vec<String>>();
+    let elems = version.splitn('/', 1).map(|e| e.to_string()).collect::<Vec<String>>();
     if elems.len() != 2 {
         return Err(gen_invalid_input("Wrong HTTP version format"))
     }
 
-    let elems = elems.get(1).as_slice().splitn('.', 2)
+    let elems = elems.get(1).as_slice().splitn('.', 1)
         .map(|e| e.to_string()).collect::<Vec<String>>();
     if elems.len() != 2 {
         return Err(gen_invalid_input("Wrong HTTP version format"))

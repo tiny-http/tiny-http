@@ -3,6 +3,8 @@
 #![license = "Apache"]
 #![feature(unsafe_destructor)]
 
+extern crate green;
+extern crate rustuv;
 extern crate url;
 
 use std::io::{Acceptor, IoError, IoResult, Listener, TimedOut};
@@ -46,10 +48,39 @@ mod util;
 /// ```
 #[unstable]
 pub struct Server {
+    // it is an option so that `.shutdown()` can be called in the destructor
+    // must always be valid while the `Server` is alive
+    tasks_pool: sync::Mutex<SchedPoolAutoDestruct>,
+
     connections_receiver: Receiver<IoResult<ClientConnection>>,
     connections_close: Sender<()>,
     requests_receiver: sync::Mutex<Vec<Receiver<Request>>>,
     listening_addr: ip::SocketAddr,
+}
+
+/// Wraps around a SchedPool and destroys it in the destructor.
+struct SchedPoolAutoDestruct {
+    pool: Option<green::SchedPool>
+}
+
+impl SchedPoolAutoDestruct {
+    pub fn new(pool: green::SchedPool) -> SchedPoolAutoDestruct {
+        SchedPoolAutoDestruct { pool: Some(pool) }
+    }
+
+    pub fn as_pool<'a>(&'a mut self) -> &'a mut green::SchedPool {
+        self.pool.as_mut().unwrap()
+    }
+}
+
+impl Drop for SchedPoolAutoDestruct {
+    fn drop(&mut self) {
+        use std::mem;
+
+        let mut val = None;
+        mem::swap(&mut val, &mut self.pool);
+        val.unwrap().shutdown();
+    }
 }
 
 /// Represents an HTTP request made by a client.
@@ -107,41 +138,44 @@ impl Server {
     /// Builds a new server that listens on the specified address.
     #[unstable]
     pub fn new_with_addr(addr: &ip::SocketAddr) -> IoResult<Server> {
+        use std::task::TaskBuilder;
+        use green::GreenTaskBuilder;
+
+        // creating the green tasks pool
+        let mut tasks_pool = {
+            let mut green_config = green::PoolConfig::new();
+            green_config.event_loop_factory = rustuv::event_loop;
+            green::SchedPool::new(green_config)
+        };
+
         // building the TcpAcceptor
         let mut listener = try!(tcp::TcpListener::bind(
             format!("{}", addr.ip).as_slice(), addr.port));
         let local_addr = try!(listener.socket_name());
         let server = try!(listener.listen());
+        let (server, tx_close) = util::ClosableTcpAcceptor::new(server);
 
         // creating a task where server.accept() is continuously called
         // and ClientConnection objects are returned in the receiver
         let (tx_incoming, rx_incoming) = channel();
-        let (tx_close, rx_close) = channel();
-        spawn(proc() {
+
+        TaskBuilder::new().green(&mut tasks_pool).spawn(proc() {
             let mut server = server;
-            server.set_timeout(Some(2000));
 
             loop {
-                match rx_close.try_recv() {
-                    Ok(_) => break,
-                    _ => ()
-                };
+                let new_client = server.accept().map(|sock| {
+                    ClientConnection::new(sock)
+                });
 
-                let val = match server.accept().map(|sock| ClientConnection::new(sock)) {
-                    Err(ref err) if err.kind == TimedOut =>
-                        continue,
-                    a => a
-                };
-
-                match tx_incoming.send_opt(val) {
-                    Err(_) => break,
-                    _ => ()
+                if tx_incoming.send_opt(new_client).is_err() {
+                    break
                 }
             }
         });
 
         // result
         Ok(Server {
+            tasks_pool: sync::Mutex::new(SchedPoolAutoDestruct::new(tasks_pool)),
             connections_receiver: rx_incoming,
             connections_close: tx_close,
             requests_receiver: sync::Mutex::new(Vec::new()),
@@ -275,12 +309,20 @@ impl Server {
 
     /// Adds a new client to the list.
     fn add_client(&self, client: ClientConnection) {
+        use std::task::TaskBuilder;
+        use green::GreenTaskBuilder;
+
         let (tx, rx) = channel();
-        spawn(proc() {
-            let mut client = client;
-            // TODO: when the channel is being closed, immediatly notify the task
-            client.advance(|rq| tx.send_opt(rq).is_ok());
-        });
+
+        {
+            let mut locked_tasks_pool = self.tasks_pool.lock();
+            TaskBuilder::new().green(locked_tasks_pool.as_pool()).spawn(proc() {
+                let mut client = client;
+                // TODO: when the channel is being closed, immediatly notify the task
+                client.advance(|rq| tx.send_opt(rq).is_ok());
+            });
+        }
+
         self.requests_receiver.lock().push(rx);
     }
 }

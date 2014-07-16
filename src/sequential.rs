@@ -86,6 +86,13 @@ impl<W: Writer + Send> Writer for SequentialWriter<W> {
 
         self.writer.lock().write(buf)
     }
+
+    fn flush(&mut self) -> IoResult<()> {
+        self.trigger.as_mut().map(|v| v.get());
+        self.trigger = None;
+
+        self.writer.lock().flush()
+    }
 }
 
 #[unsafe_destructor]

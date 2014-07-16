@@ -24,73 +24,79 @@ use chunks::ChunksEncoder;
 ///      and will just pass-through.
 ///  - `Content-Length`: If you define this header to `N`, only the first `N` bytes
 ///      of the `Reader` will be read. If the `Reader` reaches `EOF` before `N` bytes have
-///      been read, `0`s will be sent.
+///      been read, `0`s will be sent. Also, this header may not be passed to the final
+///      output.
 ///
 #[experimental]
 pub struct Response<R> {
     reader: R,
     status_code: StatusCode,
     headers: Vec<Header>,
+    data_length: Option<uint>,
 }
 
 impl<R: Reader> Response<R> {
     #[experimental]
-    pub fn new(status_code: StatusCode, mut headers: Vec<Header>,
+    pub fn new(status_code: StatusCode, headers: Vec<Header>,
                data: R, data_length: Option<uint>) -> Response<R>
     {
-        // add Content-Length if not in the headers
-        if data_length.is_some() {
-            if headers.iter().find(|h| h.field.equiv(&"Content-Length")).is_none() {
-                headers.unshift(
-                    Header{
-                        field: from_str("Content-Length").unwrap(),
-                        value: format!("{}", data_length.unwrap())
-                    }
-                );
-            }
-        }
-
-        Response {
+        let mut response = Response {
             reader: data,
             status_code: status_code,
-            headers: headers,
+            headers: Vec::new(),
+            data_length: data_length,
+        };
+
+        for h in headers.move_iter() {
+            response.add_header(h)
         }
+
+        response
+    }
+
+    /// Adds a header to the list.
+    /// Does all the checks.
+    #[experimental]
+    pub fn add_header(&mut self, header: Header) {
+        // ignoring forbidden headers
+        if header.field.equiv(&"Accept-Ranges") ||
+           header.field.equiv(&"Connection") ||
+           header.field.equiv(&"Content-Range") ||
+           header.field.equiv(&"Trailer") ||
+           header.field.equiv(&"Transfer-Encoding") ||
+           header.field.equiv(&"Upgrade")
+        {
+            return;
+        }
+
+        // if the header is Content-Length, setting the data length
+        if header.field.equiv(&"Content-Length") {
+            match from_str::<uint>(header.value.as_slice()) {
+                Some(val) => self.data_length = Some(val),
+                None => ()      // wrong value for content-length
+            };
+
+            return;
+        }
+
+        self.headers.push(header)
     }
 
     /// Returns the same request, but with an additional header.
     ///
     /// Some headers cannot be modified and some other have a
     ///  special behavior. See the documentation above.
-    #[experimental]
+    #[unstable]
     pub fn with_header(mut self, header: Header) -> Response<R> {
-        self.headers.push(header);
+        self.add_header(header);
         self
     }
 
     /// Returns the same request, but with a different status code.
-    #[experimental]
+    #[unstable]
     pub fn with_status_code(mut self, code: StatusCode) -> Response<R> {
         self.status_code = code;
         self
-    }
-
-    /// Cleans-up the headers so that they can be returned.
-    #[experimental]
-    fn purify_headers(&mut self) {
-        // removing some unwanted headers, like Connection
-        self.headers.retain(|h| !h.field.equiv(&"Connection"));
-
-        // add Server if not in the headers
-        if self.headers.iter().find(|h| h.field.equiv(&"Server")).is_none() {
-            self.headers.unshift(
-                Header{field: from_str("Server").unwrap(), value: "tiny-http (Rust)".to_string()}
-            );
-        }
-
-        // add Connection: close
-        /*self.headers.push(
-            Header{field: "Connection".to_string(), value: "close".to_string()}
-        );*/
     }
 
     /// Prints the HTTP response to a writer.
@@ -100,24 +106,22 @@ impl<R: Reader> Response<R> {
     ///
     /// The HTTP version and headers passed as arguments are used to
     ///  decide which features (most notably, encoding) to use.
-    #[experimental]
+    #[unstable]
     pub fn raw_print<W: Writer>(mut self, mut writer: W, http_version: HTTPVersion,
                                 request_headers: &[Header]) -> IoResult<()>
     {
-        use util::EqualReader;
-
-        self.purify_headers();
-
-        // trying to get the value of Content-Length
-        let content_length = self.headers.iter()
-            .find(|h| h.field.equiv(&"Content-Length"))
-            .and_then(|h| from_str::<uint>(h.value.as_slice()));
-
         // if we don't have a Content-Length, or if the Content-Length is too big, using chunks writer
         let chunks_threshold = 32768;
         let use_chunks = 
             http_version >= HTTPVersion(1, 1) &&
-            content_length.as_ref().filtered(|val| **val < chunks_threshold).is_none();
+            self.data_length.as_ref().filtered(|val| **val < chunks_threshold).is_none();
+
+        // add `Server` if not in the headers
+        if self.headers.iter().find(|h| h.field.equiv(&"Server")).is_none() {
+            self.headers.unshift(
+                from_str("Server: tiny-http (Rust)").unwrap()
+            );
+        }
 
         // add transfer-encoding header
         if use_chunks {
@@ -146,8 +150,9 @@ impl<R: Reader> Response<R> {
             let mut writer = ChunksEncoder::new(writer);
             try!(util::copy(&mut self.reader, &mut writer));
         } else {
-            assert!(content_length.is_some());
-            let (mut equ_reader, _) = EqualReader::new(self.reader.by_ref(), content_length.unwrap());
+            use util::EqualReader;
+            assert!(self.data_length.is_some());
+            let (mut equ_reader, _) = EqualReader::new(self.reader.by_ref(), self.data_length.unwrap());
             try!(util::copy(&mut equ_reader, &mut writer));
         }
 

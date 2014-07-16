@@ -53,6 +53,11 @@ impl TaskPool {
         spawn(proc() {
             let mut timer = Timer::new().unwrap();
 
+            if initial_fn.is_some() {
+                let f = initial_fn.unwrap();
+                f();
+            }
+
             loop {
                 let (tx, rx) = channel();
                 queue.push(tx);

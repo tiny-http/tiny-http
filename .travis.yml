@@ -8,8 +8,8 @@ install:
   - tar xzf rust-nightly-x86_64-unknown-linux-gnu.tar.gz
   - export PATH=$PATH:$(pwd)/rust-nightly-x86_64-unknown-linux-gnu/bin
   - export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$(pwd)/rust-nightly-x86_64-unknown-linux-gnu/lib
-  # liblua
-  - sudo apt-get install liblua5.2-dev
+  # apache2-utils
+  - sudo apt-get install apache2-utils
   # cargo
   - curl -O http://static.rust-lang.org/cargo-dist/cargo-nightly-linux.tar.gz
   - tar xf cargo-nightly-linux.tar.gz
@@ -21,3 +21,6 @@ script:
 after_script:
   - rustdoc src/lib.rs
   - curl http://www.rust-ci.org/artifacts/put?t=$RUSTCI_TOKEN | sh
+  - cargo build --release
+  - rustc --opt-level=3 -L target/release -L target/release/deps examples/simple-server.rs
+  - ab -c 20 -n 10000 -k http://localhost:9975/

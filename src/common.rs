@@ -94,18 +94,15 @@ impl ::std::from_str::FromStr for Header {
         if elems.len() <= 1 {
             return None;
         }
-        if elems.get(1).as_slice().chars().next() != Some(' ') {
-            return None;
-        }
 
-        let field = match from_str(elems.get(0).as_slice()) {
+        let field = match from_str(elems.get(0).as_slice().trim()) {
             None => return None,
             Some(f) => f
         };
 
         Some(Header {
             field: field,
-            value: elems.get(1).as_slice().slice_from(1).to_string()
+            value: elems.get(1).as_slice().trim().to_string()
         })
     }
 }
@@ -131,7 +128,7 @@ impl HeaderField {
 
 impl ::std::from_str::FromStr for HeaderField {
     fn from_str(s: &str) -> Option<HeaderField> {
-        s.to_ascii_opt().map(|s| HeaderField(Vec::from_slice(s)))
+        s.trim().to_ascii_opt().map(|s| HeaderField(Vec::from_slice(s)))
     }
 }
 

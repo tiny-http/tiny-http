@@ -41,8 +41,8 @@ Check the documentation!
 
 ### Some benchmarking
 
-On my local machine, `ab -c 20 -n 1000 -k http://localhost/` gives:
- - ~0.65 sec for apache2
- - ~1.56 sec for nodejs
- - ~1.074 sec for rust-http
- - ~1.141 sec for tiny-http
+On my local machine, `ab -c 50 -n 10000 -k http://localhost/` gives:
+ - ~4.9 sec for apache2
+ - ~15.0 sec for nodejs
+ - ~16.9 sec for rust-http
+ - ~11.2 sec for tiny-http

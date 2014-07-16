@@ -42,9 +42,11 @@ enum TransferEncoding {
 }
 
 /// Builds a Date: header with the current date.
-// TODO: 
+// TODO: this is optimisable
 fn build_date_header() -> Header {
-    from_str("Date: unknown").unwrap()
+    use time;
+    let date = time::now_utc().strftime("%a, %d %b %Y %H:%M:%S GMT");
+    from_str(format!("Date: {}", date).as_slice()).unwrap()
 }
 
 fn write_message_header<W: Writer>(mut writer: W, http_version: &HTTPVersion,

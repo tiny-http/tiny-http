@@ -58,6 +58,7 @@ request.respond(response)
 #![feature(unsafe_destructor)]
 
 extern crate encoding;
+extern crate time;
 extern crate url;
 
 use std::io::{Acceptor, IoError, IoResult, Listener};

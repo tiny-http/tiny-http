@@ -7,7 +7,7 @@ pub struct ClosableTcpAcceptor {
 }
 
 impl ClosableTcpAcceptor {
-    pub fn new(mut acceptor: TcpAcceptor) -> (ClosableTcpAcceptor, Sender<()>) {
+    pub fn new(acceptor: TcpAcceptor) -> (ClosableTcpAcceptor, Sender<()>) {
         let (tx, rx) = channel();
 
         let acc = ClosableTcpAcceptor {

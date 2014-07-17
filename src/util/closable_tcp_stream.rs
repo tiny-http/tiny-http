@@ -10,7 +10,7 @@ pub struct ClosableTcpStream {
 }
 
 impl ClosableTcpStream {
-    pub fn new(mut stream: TcpStream, close_read: bool, close_write: bool) -> (ClosableTcpStream, Sender<()>) {
+    pub fn new(stream: TcpStream, close_read: bool, close_write: bool) -> (ClosableTcpStream, Sender<()>) {
         let (tx, rx) = channel();
 
         let acc = ClosableTcpStream {

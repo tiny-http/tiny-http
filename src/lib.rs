@@ -76,6 +76,7 @@ mod client;
 mod common;
 mod response;
 mod sequential;
+#[allow(dead_code)]     // TODO: remove when everything is implemented
 mod util;
 
 /// The main class of this library.

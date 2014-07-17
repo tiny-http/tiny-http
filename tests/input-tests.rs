@@ -1,7 +1,5 @@
 extern crate httpd = "tiny-http";
 
-use std::io::net::tcp::TcpStream;
-
 mod support;
 
 #[test]

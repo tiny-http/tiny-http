@@ -145,7 +145,9 @@ fn choose_transfer_encoding(request_headers: &[Header], http_version: &HTTPVersi
 impl<R: Reader> Response<R> {
     #[experimental]
     pub fn new(status_code: StatusCode, headers: Vec<Header>,
-               data: R, data_length: Option<uint>) -> Response<R>
+               data: R, data_length: Option<uint>,
+               additional_headers: Option<Receiver<Header>>)
+                -> Response<R>
     {
         let mut response = Response {
             reader: data,
@@ -156,6 +158,13 @@ impl<R: Reader> Response<R> {
 
         for h in headers.move_iter() {
             response.add_header(h)
+        }
+
+        // dummy implementation
+        if additional_headers.is_some() {
+            for h in additional_headers.unwrap().iter() {
+                response.add_header(h)
+            }
         }
 
         response
@@ -309,7 +318,8 @@ impl Response<File> {
             StatusCode(200),
             Vec::new(),
             file,
-            file_size
+            file_size,
+            None,
         )
     }
 }
@@ -323,7 +333,8 @@ impl Response<MemReader> {
             StatusCode(200),
             Vec::new(),
             MemReader::new(data),
-            Some(data_len)
+            Some(data_len),
+            None,
         )
     }
 
@@ -337,7 +348,8 @@ impl Response<MemReader> {
                 from_str("Content-Type: text/plain; charset=UTF-8").unwrap()
             ),
             MemReader::new(data.into_bytes()),
-            Some(data_len)
+            Some(data_len),
+            None,
         )        
     }
 }
@@ -350,7 +362,8 @@ impl Response<NullReader> {
             status_code,
             Vec::new(),
             NullReader,
-            Some(0)
+            Some(0),
+            None,
         )
     }
 }

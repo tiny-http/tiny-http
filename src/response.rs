@@ -213,6 +213,8 @@ impl<R: Reader> Response<R> {
     ///
     /// The HTTP version and headers passed as arguments are used to
     ///  decide which features (most notably, encoding) to use.
+    /// 
+    /// Note: does not flush the writer.
     #[unstable]
     pub fn raw_print<W: Writer>(mut self, mut writer: W, http_version: HTTPVersion,
                                 request_headers: &[Header], do_not_send_body: bool)

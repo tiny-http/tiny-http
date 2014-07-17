@@ -444,7 +444,9 @@ impl Request {
             Err(ref err) if err.kind == io::ConnectionReset => (),
             Err(ref err) =>
                 println!("error while sending answer: {}", err)     // TODO: handle better?
-        }
+        };
+
+        self.response_writer.flush().ok();
     }
 }
 

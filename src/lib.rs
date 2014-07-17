@@ -399,9 +399,11 @@ impl Request {
     }
 
     /// Returns the length of the body in bytes.
+    ///
+    /// Returns `None` if the length is unknown.
     #[unstable]
-    pub fn get_body_length(&self) -> uint {
-        self.body_length
+    pub fn get_body_length(&self) -> Option<uint> {
+        Some(self.body_length)
     }
 
     /// Returns the length of the body in bytes.

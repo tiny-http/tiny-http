@@ -49,7 +49,7 @@ for request in server.incoming_requests() {
     );
 
     let response = httpd::Response::from_string("hello world".to_string());
-    rq.respond(response);
+    request.respond(response);
 }
 ```
 

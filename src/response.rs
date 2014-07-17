@@ -21,10 +21,11 @@ use std::io::util::NullReader;
 ///  - `Content-Encoding`: If you define this header, the library
 ///      will assume that the data from the `Reader` has the specified encoding
 ///      and will just pass-through.
-///  - `Content-Length`: If you define this header to `N`, only the first `N` bytes
-///      of the `Reader` will be read. If the `Reader` reaches `EOF` before `N` bytes have
-///      been read, `0`s will be sent. Also, this header may not be passed to the final
-///      output.
+/// 
+///  - `Content-Length`: The length of the data should be set manually
+///      using the `Reponse` object's API. Attempting to set the value of this
+///      header will be equivalent to modifying the size of the data but the header
+///      itself may not be present in the final result.
 ///
 #[experimental]
 pub struct Response<R> {
@@ -86,7 +87,7 @@ fn write_message_header<W: Writer>(mut writer: W, http_version: &HTTPVersion,
 }
 
 fn choose_transfer_encoding(request_headers: &[Header], http_version: &HTTPVersion,
-                            entity_length: &Option<uint>)
+                            entity_length: &Option<uint>, has_additional_headers: bool)
     -> TransferEncoding
 {
     use util;
@@ -132,6 +133,11 @@ fn choose_transfer_encoding(request_headers: &[Header], http_version: &HTTPVersi
         return user_request.unwrap();
     }
 
+    // if we have additional headers, using chunked
+    if has_additional_headers {
+        return Chunked;
+    }
+
     // if we don't have a Content-Length, or if the Content-Length is too big, using chunks writer
     let chunks_threshold = 32768;
     if entity_length.as_ref().filtered(|val| **val < chunks_threshold).is_none() {
@@ -143,6 +149,12 @@ fn choose_transfer_encoding(request_headers: &[Header], http_version: &HTTPVersi
 }
 
 impl<R: Reader> Response<R> {
+    /// Creates a new Response object.
+    ///
+    /// The `additional_headers` argument is a receiver that
+    ///  may provide headers even after the response has been sent.
+    ///
+    /// All the other arguments are straight-forward.
     #[experimental]
     pub fn new(status_code: StatusCode, headers: Vec<Header>,
                data: R, data_length: Option<uint>,
@@ -230,7 +242,7 @@ impl<R: Reader> Response<R> {
                                 -> IoResult<()>
     {
         let transfer_encoding = choose_transfer_encoding(request_headers,
-                                    &http_version, &self.data_length);
+                                    &http_version, &self.data_length, false /* TODO */);
 
         // add `Date` if not in the headers
         if self.headers.iter().find(|h| h.field.equiv(&"Date")).is_none() {

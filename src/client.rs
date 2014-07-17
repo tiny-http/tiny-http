@@ -1,5 +1,5 @@
 use std::io;
-use std::io::{BufferedReader, BufferedWriter, IoResult};
+use std::io::{BufferedReader, BufferedWriter, IoError, IoResult};
 use std::io::net::ip::SocketAddr;
 use common::{Header, HTTPVersion, Method};
 use Request;
@@ -26,6 +26,13 @@ pub struct ClientConnection {
 
     // set to true if the client sent a "Connection: close" in the previous request
     connection_must_close: bool,
+}
+
+/// Error that can happen when reading a request.
+enum ReadError {
+    WrongRequestLine,
+    WrongHeader(HTTPVersion),
+    ReadIoError(IoError),
 }
 
 impl ClientConnection {
@@ -80,13 +87,13 @@ impl ClientConnection {
 
     /// Reads a request from the stream.
     /// Blocks until the header has been read.
-    fn read(&mut self) -> io::IoResult<Request> {
+    fn read(&mut self) -> Result<Request, ReadError> {
         use util::EqualReader;
 
         let (method, path, version, headers) = {
             // reading the request line
             let (method, path, version) = {
-                let line = try!(self.read_next_line());
+                let line = try!(self.read_next_line().map_err(|e| ReadIoError(e)));
 
                 try!(parse_request_line(
                     line.as_slice().trim()
@@ -97,17 +104,17 @@ impl ClientConnection {
             let headers = {
                 let mut headers = Vec::new();
                 loop {
-                    let line = try!(self.read_next_line());
+                    let line = try!(self.read_next_line().map_err(|e| ReadIoError(e)));
 
                     if line.as_slice().trim().len() == 0 { break };
                     headers.push(
                         match from_str(line.as_slice().trim()) {
                             Some(h) => h,
-                            None => return Err(gen_invalid_input(
-                                "Could not parse header"))
+                            None => return Err(WrongHeader(version))
                         }
                     );
                 }
+
                 headers
             };
 
@@ -129,7 +136,8 @@ impl ClientConnection {
 
             } else if body_length <= 1024 {
                 use std::io::MemReader;
-                let data = try!(self.next_header_source.read_exact(body_length));
+                let data = try!(self.next_header_source.read_exact(body_length)
+                    .map_err(|e| ReadIoError(e)));
                 box MemReader::new(data) as Box<Reader + Send>
 
             } else {
@@ -162,6 +170,8 @@ impl Iterator<Request> for ClientConnection {
     /// Blocks until the next Request is available.
     /// Returns None when no new Requests will come from the client.
     fn next(&mut self) -> Option<Request> {
+        use {Response, StatusCode};
+
         // the client sent a "connection: close" header in this previous request
         //  or is using HTTP 1.0, meaning that no new request will come
         if self.connection_must_close {
@@ -171,7 +181,25 @@ impl Iterator<Request> for ClientConnection {
         // TODO: send back message to client in case of parsing error
         loop {
             let rq = match self.read() {
-                Err(_) => return None,
+                Err(WrongRequestLine) => {
+                    let writer = self.sink.next().unwrap();
+                    let response = Response::new_empty(StatusCode(400));
+                    response.raw_print(writer, HTTPVersion(1, 1), &[], false).ok();
+                    return None;    // we don't know where the next request would start,
+                                    // se we have to close
+                },
+
+                Err(WrongHeader(ver)) => {
+                    let writer = self.sink.next().unwrap();
+                    let response = Response::new_empty(StatusCode(400));
+                    response.raw_print(writer, ver, &[], false).ok();
+                    return None;    // we don't know where the next request would start,
+                                    // se we have to close
+                },
+
+                Err(ReadIoError(_)) =>
+                    return None,
+
                 Ok(rq) => rq
             };
 
@@ -195,39 +223,29 @@ impl Iterator<Request> for ClientConnection {
     }
 }
 
-/// Generates an IoError with invalid input.
-/// This function is here because it is incredibly annoying to create this error.
-fn gen_invalid_input(desc: &'static str) -> io::IoError {
-    io::IoError {
-        kind: io::InvalidInput,
-        desc: desc,
-        detail: None
-    }
-}
-
 /// Parses a "HTTP/1.1" string.
-fn parse_http_version(version: &str) -> io::IoResult<HTTPVersion> {
+fn parse_http_version(version: &str) -> Result<HTTPVersion, ReadError> {
     let elems = version.splitn('/', 1).map(|e| e.to_string()).collect::<Vec<String>>();
     if elems.len() != 2 {
-        return Err(gen_invalid_input("Wrong HTTP version format"))
+        return Err(WrongRequestLine)
     }
 
     let elems = elems.get(1).as_slice().splitn('.', 1)
         .map(|e| e.to_string()).collect::<Vec<String>>();
     if elems.len() != 2 {
-        return Err(gen_invalid_input("Wrong HTTP version format"))
+        return Err(WrongRequestLine)
     }
 
     match (from_str(elems.get(0).as_slice()), from_str(elems.get(1).as_slice())) {
         (Some(major), Some(minor)) =>
             Ok(HTTPVersion(major, minor)),
-        _ => Err(gen_invalid_input("Wrong HTTP version format"))
+        _ => Err(WrongRequestLine)
     }
 }
 
 /// Parses the request line of the request.
 /// eg. GET / HTTP/1.1
-fn parse_request_line(line: &str) -> io::IoResult<(Method, Path, HTTPVersion)> {
+fn parse_request_line(line: &str) -> Result<(Method, Path, HTTPVersion), ReadError> {
     let mut words = line.words();
 
     let method = words.next();
@@ -236,17 +254,17 @@ fn parse_request_line(line: &str) -> io::IoResult<(Method, Path, HTTPVersion)> {
 
     let (method, path, version) = match (method, path, version) {
         (Some(m), Some(p), Some(v)) => (m, p, v),
-        _ => return Err(gen_invalid_input("Missing element in request line"))
+        _ => return Err(WrongRequestLine)
     };
 
     let method = match from_str(method) {
         Some(method) => method,
-        None => return Err(gen_invalid_input("Could not parse method"))
+        None => return Err(WrongRequestLine)
     };
 
     let path = match Path::parse(path) {
         Ok(p) => p,
-        Err(_) => return Err(gen_invalid_input("Wrong requested URL"))
+        Err(_) => return Err(WrongRequestLine)
     };
 
     let version = try!(parse_http_version(version));
@@ -259,7 +277,10 @@ mod test {
     #[test]
     fn test_parse_request_line() {
         let (method, path, ver) =
-            super::parse_request_line("GET /hello HTTP/1.1").unwrap();
+            match super::parse_request_line("GET /hello HTTP/1.1") {
+                Err(_) => fail!(),
+                Ok(v) => v
+            };
 
         assert!(method.equiv(&"get"));
         assert!(path == from_str("/hello").unwrap());

@@ -210,7 +210,6 @@ impl<R: Reader> Response<R> {
     ///
     /// The HTTP version and headers passed as arguments are used to
     ///  decide which features (most notably, encoding) to use.
-    // TODO: status codes 1xx, 204 and 304 must not include a response body
     #[unstable]
     pub fn raw_print<W: Writer>(mut self, mut writer: W, http_version: HTTPVersion,
                                 request_headers: &[Header]) -> IoResult<()>
@@ -230,48 +229,61 @@ impl<R: Reader> Response<R> {
             );
         }
 
-        // writing data
+        // checking whether to ignore the body of the response
+        let ignore_response_body = match self.status_code.as_uint() {
+            // sattus code 1xx, 204 and 304 MUST not include a body
+            100..199 | 204 | 304 => true,
+            _ => false
+        };
+
+        // preparing headers for transfer
         match transfer_encoding {
             Chunked => {
-                use util::ChunksEncoder;
-
                 self.headers.push(
                     from_str("Transfer-Encoding: chunked").unwrap()
-                );
-
-                try!(write_message_header(writer.by_ref(), &http_version,
-                    &self.status_code, self.headers.as_slice()));
-
-                let mut writer = ChunksEncoder::new(writer);
-                try!(util::copy(&mut self.reader, &mut writer));
-                
-                // flushing!
-                try!(writer.flush());
+                )
             },
 
             Identity => {
-                use util::EqualReader;
-
                 assert!(self.data_length.is_some());
                 let data_length = self.data_length.unwrap();
-
+                
                 self.headers.push(
                     from_str(format!("Content-Length: {}", data_length).as_slice()).unwrap()
-                );
-
-                try!(write_message_header(writer.by_ref(), &http_version,
-                    &self.status_code, self.headers.as_slice()));
-
-                if data_length >= 1 {
-                    let (mut equ_reader, _) =
-                        EqualReader::new(self.reader.by_ref(), data_length);
-                    try!(util::copy(&mut equ_reader, &mut writer));
-                }
-
-                // flushing!
-                try!(writer.flush());
+                )
             }
         };
+
+        // sending headers
+        try!(write_message_header(writer.by_ref(), &http_version,
+            &self.status_code, self.headers.as_slice()));
+
+        // sending the body
+        if !ignore_response_body {
+            match transfer_encoding {
+
+                Chunked => {
+                    use util::ChunksEncoder;
+
+                    let mut writer = ChunksEncoder::new(writer);
+                    try!(util::copy(&mut self.reader, &mut writer));
+                },
+
+                Identity => {
+                    use util::EqualReader;
+
+                    assert!(self.data_length.is_some());
+                    let data_length = self.data_length.unwrap();
+
+                    if data_length >= 1 {
+                        let (mut equ_reader, _) =
+                            EqualReader::new(self.reader.by_ref(), data_length);
+                        try!(util::copy(&mut equ_reader, &mut writer));
+                    }
+                }
+                
+            }
+        }
 
         Ok(())
     }

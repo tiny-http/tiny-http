@@ -114,6 +114,9 @@ fn choose_transfer_encoding(request_headers: &[Header], http_version: &HTTPVersi
 
             // trying to parse each requested encoding
             for value in parse.iter() {
+                // q=0 are ignored
+                if value.val1() <= 0.0 { continue }
+
                 match from_str::<TransferEncoding>(value.val0()) {
                     Some(te) => return Some(te),
                     _ => ()     // unrecognized/unsupported encoding

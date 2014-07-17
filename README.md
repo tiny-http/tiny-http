@@ -42,7 +42,14 @@ extern crate httpd = "tiny-http"
 let server = httpd::Server::new().unwrap();
 
 for request in server.incoming_requests() {
-    handle_request(request)
+    println!("received request! method: {}, url: {}, headers: {}",
+        request.get_method(),
+        request.get_url(),
+        request.get_headers()
+    );
+
+    let response = httpd::Response::from_string("hello world".to_string());
+    rq.respond(response);
 }
 ```
 

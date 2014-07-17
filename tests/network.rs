@@ -31,6 +31,20 @@ fn http_1_0_connection_close() {
 }
 
 #[test]
+fn detect_connection_closed() {
+    let mut client = support::new_client_to_hello_world_server(1);
+
+    (write!(client, "GET / HTTP/1.1\r\nConnection: keep-alive\r\n\r\n")).unwrap();
+    timer::sleep(1000);
+
+    client.close_write();
+
+    // if the connection was not closed, this will err with timeout
+    client.set_timeout(Some(100));
+    client.read_to_end().unwrap();
+}
+
+#[test]
 fn poor_network_test() {
     let mut client = support::new_client_to_hello_world_server(1);
 

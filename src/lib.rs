@@ -379,6 +379,12 @@ impl Request {
         self.headers.as_slice()
     }
 
+    /// Returns the HTTP version of the request.
+    #[unstable]
+    pub fn get_http_version<'a>(&'a self) -> &'a HTTPVersion {
+        &self.http_version
+    }
+
     /// Returns the length of the body in bytes.
     #[unstable]
     pub fn get_body_length(&self) -> uint {

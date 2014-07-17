@@ -2,11 +2,11 @@ extern crate httpd = "tiny-http";
 
 use std::io::net::tcp::TcpStream;
 
+mod support;
+
 #[test]
 fn basic_handling() {
-    let (server, port) = httpd::Server::new_with_random_port().unwrap();
-
-    let mut stream = TcpStream::connect("127.0.0.1", port).unwrap();
+    let (server, mut stream) = support::new_one_server_one_client();
     (write!(stream, "GET / HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n")).unwrap();
 
     let request = server.recv().unwrap();

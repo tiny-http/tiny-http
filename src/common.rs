@@ -89,20 +89,24 @@ pub struct Header {
 
 impl ::std::from_str::FromStr for Header {
     fn from_str(input: &str) -> Option<Header> {
-        let elems = input.splitn(':', 1).map(|e| e.to_string()).collect::<Vec<String>>();
+        let mut elems = input.splitn(':', 1);
 
-        if elems.len() <= 1 {
-            return None;
-        }
+        let field = elems.next();
+        let value = elems.next();
 
-        let field = match from_str(elems.get(0).as_slice().trim()) {
-            None => return None,
-            Some(f) => f
+        let (field, value) = match (field, value) {
+            (Some(f), Some(v)) => (f, v),
+            _ => return None
+        };
+
+        let field = match from_str(field) {
+            Some(f) => f,
+            None => return None
         };
 
         Some(Header {
             field: field,
-            value: elems.get(1).as_slice().trim().to_string()
+            value: value.trim().to_string(),
         })
     }
 }

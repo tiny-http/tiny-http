@@ -83,4 +83,8 @@ impl Writer for ClosableTcpStream {
             };
         }
     }
+
+    fn flush(&mut self) -> IoResult<()> {
+        self.stream.flush()
+    }
 }

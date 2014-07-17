@@ -45,3 +45,23 @@ for request in server.incoming_requests() {
     handle_request(request)
 }
 ```
+
+### Speed
+
+Tiny-http was designed with speed in mind:
+ - Each client connection will be dispatched to a thread pool. Each thread will handle one client.
+ If there is no thread available when a client connects, a new one is created. Threads that are idle
+ for a long time (currently 5 seconds) will automatically die.
+ - If multiple requests from the same client are being pipelined (ie. multiple requests
+ are sent without waiting for the answer), tiny-http will read them all at once and they will
+ all be available via `server.recv()`. Tiny-http will automatically rearrange the responses
+ so that they are sent in the right order.
+ - One exception to the previous statement exists when a request has a large body (currently > 1kB),
+ in which case the request handler will read the body directly from the stream and tiny-http
+ will wait for it to be read before processing the next request. Tiny-http will never wait for
+ a request to be answered to read the next one.
+ - When a client connection has sent its last request (by sending `Connection: close` header),
+ the thread will immediatly stop reading from this client and can be reclaimed, even when the
+ request has not yet been answered. The reading part of the socket will also be immediatly closed.
+ - Decoding the client's request is done lazily. If you don't read the request's body, it will not
+ be decoded.

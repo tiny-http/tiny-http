@@ -71,3 +71,23 @@ fn pipelining_test() {
     let data = client.read_to_string().unwrap();
     assert_eq!(data.as_slice().split_str("hello world").count(), 4);
 }
+
+#[test]
+#[ignore]   // TODO: fails
+fn server_crash_results_in_response() {
+    use std::io::net::tcp::TcpStream;
+
+    let (server, port) = httpd::Server::new_with_random_port().unwrap();
+    let mut client = TcpStream::connect("127.0.0.1", port).unwrap();
+
+    spawn(proc() {
+        server.recv().unwrap();
+        // oops, server crash
+    });
+
+    (write!(client, "GET / HTTP/1.1\r\nHost: localhost\r\n\r\n")).unwrap();
+
+    client.set_timeout(Some(200));
+    let content = client.read_to_string().unwrap();
+    assert!(content.as_slice().slice_from(9).starts_with("5"));   // 5xx status code
+}

@@ -429,10 +429,11 @@ impl Request {
 
         fn passthrough<'a>(w: &'a mut Writer) -> &'a mut Writer { w }
 
-        // TODO: pass a NullWriter if method is HEAD
+        let do_not_send_body = self.method.equiv(&"HEAD");
 
         match response.raw_print(passthrough(self.response_writer),
-                                self.http_version, self.headers.as_slice())
+                                self.http_version, self.headers.as_slice(),
+                                do_not_send_body)
         {
             Ok(_) => (),
             Err(ref err) if err.kind == io::Closed => (),

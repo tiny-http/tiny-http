@@ -212,7 +212,8 @@ impl<R: Reader> Response<R> {
     ///  decide which features (most notably, encoding) to use.
     #[unstable]
     pub fn raw_print<W: Writer>(mut self, mut writer: W, http_version: HTTPVersion,
-                                request_headers: &[Header]) -> IoResult<()>
+                                request_headers: &[Header], do_not_send_body: bool)
+                                -> IoResult<()>
     {
         let transfer_encoding = choose_transfer_encoding(request_headers,
                                     &http_version, &self.data_length);
@@ -230,11 +231,12 @@ impl<R: Reader> Response<R> {
         }
 
         // checking whether to ignore the body of the response
-        let ignore_response_body = match self.status_code.as_uint() {
-            // sattus code 1xx, 204 and 304 MUST not include a body
-            100..199 | 204 | 304 => true,
-            _ => false
-        };
+        let do_not_send_body = do_not_send_body || 
+            match self.status_code.as_uint() {
+                // sattus code 1xx, 204 and 304 MUST not include a body
+                100..199 | 204 | 304 => true,
+                _ => false
+            };
 
         // preparing headers for transfer
         match transfer_encoding {
@@ -259,7 +261,7 @@ impl<R: Reader> Response<R> {
             &self.status_code, self.headers.as_slice()));
 
         // sending the body
-        if !ignore_response_body {
+        if !do_not_send_body {
             match transfer_encoding {
 
                 Chunked => {
@@ -281,7 +283,7 @@ impl<R: Reader> Response<R> {
                         try!(util::copy(&mut equ_reader, &mut writer));
                     }
                 }
-                
+
             }
         }
 

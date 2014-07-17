@@ -41,6 +41,12 @@ enum TransferEncoding {
     Chunked,
 }
 
+impl ::std::from_str::FromStr for TransferEncoding {
+    fn from_str(input: &str) -> Option<TransferEncoding> {
+        None
+    }
+}
+
 /// Builds a Date: header with the current date.
 // TODO: this is optimisable
 fn build_date_header() -> Header {
@@ -75,12 +81,45 @@ fn choose_transfer_encoding(request_headers: &[Header], http_version: &HTTPVersi
                             entity_length: &Option<uint>)
     -> TransferEncoding
 {
-    // HTTP 1.0 doesn't support other encodings
+    use util;
+
+    // HTTP 1.0 doesn't support other encoding
     if *http_version <= HTTPVersion(1, 0) {
         return Identity;
     }
 
-    // TODO: parse the request's TE header
+    // parsing the request's TE header
+    let user_request = request_headers.iter()
+        // finding TE
+        .find(|h| h.field.equiv(&"TE"))
+
+        // getting its value
+        .map(|h| h.value.as_slice())
+
+        // getting the corresponding TransferEncoding
+        .and_then(|value| {
+            // getting list of requested elements
+            let mut parse = util::parse_header_value(value);
+
+            // sorting elements by most priority
+            parse.sort_by(|a, b| b.val1().partial_cmp(&a.val1()).unwrap_or(Equal));
+
+            // trying to parse each requested encoding
+            for value in parse.iter() {
+                match from_str::<TransferEncoding>(value.val0()) {
+                    Some(te) => return Some(te),
+                    _ => ()     // unrecognized/unsupported encoding
+                };
+            }
+
+            // encoding not found
+            None
+        });
+
+    // 
+    if user_request.is_some() {
+        return user_request.unwrap();
+    }
 
     // if we don't have a Content-Length, or if the Content-Length is too big, using chunks writer
     let chunks_threshold = 32768;

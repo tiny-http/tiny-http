@@ -75,7 +75,7 @@ pub use response::Response;
 mod client;
 mod common;
 mod response;
-mod sequential;
+
 #[allow(dead_code)]     // TODO: remove when everything is implemented
 mod util;
 

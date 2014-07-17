@@ -4,7 +4,7 @@ use std::io::net::ip::SocketAddr;
 use common::{Header, HTTPVersion, Method};
 use Request;
 use url::Path;
-use sequential::{SequentialReader, SequentialReaderBuilder, SequentialWriterBuilder};
+use util::{SequentialReader, SequentialReaderBuilder, SequentialWriterBuilder};
 use util::ClosableTcpStream;
 
 /// A ClientConnection is an object that will store a socket to a client

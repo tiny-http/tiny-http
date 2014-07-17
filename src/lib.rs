@@ -1,7 +1,10 @@
 /*!
 # Simple usage
 
-The first step is to create a `Server` object. To do so, simply call `Server::new()`.
+## Creating the server
+
+The easiest way to create a server is to call `Server::new()`.
+
 The `new()` function returns an `IoResult<Server>` which will return an error
 in the case where the server creation fails (for example if the listening port is already
 occupied).
@@ -13,9 +16,9 @@ let server = httpd::Server::new().unwrap();
 A newly-created `Server` will immediatly start listening for incoming connections and HTTP
 requests.
 
-Calling `server.recv()` will block until the next request is available.
-This is usually what you should do if you write a website in Rust.
+## Receiving requests
 
+Calling `server.recv()` will block until the next request is available.
 This function returns an `IoResult<Request>`, so you need to handle the possible errors.
 
 ```rust
@@ -26,20 +29,38 @@ loop {
         Err(e) => { println!("error: {}", e); break }
     };
 
-    // user-defined function to handle the request
-    handle_request(request)
+    // do something with the request
+    ...
+}
+```
+
+In a real-case scenario, you will probably want to spawn multiple worker tasks and call
+`server.recv()` on all of them. Like this:
+
+```rust
+let server = Arc::new(server);
+
+for _ in range(0u, 4) {
+    spawn(proc() {
+        loop {
+            let rq = server.recv().unwrap();
+
+            ...
+        }
+    })
 }
 ```
 
 If you don't want to block, you can call `server.try_recv()` instead.
 
+## Handling requests
+
 The `Request` object returned by `server.recv()` contains informations about the client's request.
 The most useful methods are probably `request.get_method()` and `request.get_url()` which return
-the requested method (GET, POST, etc.) and url.
+the requested method (`GET`, `POST`, etc.) and url.
 
-To handle a request, you need to create a `Response` object. There are multiple
-functions that allow you to create this object.
-Here is an example of creating a Response from a file:
+To handle a request, you need to create a `Response` object. See the docs of this object for
+more infos. Here is an example of creating a `Response` from a file:
 
 ```rust
 let response = httpd::Response::from_file(Path::new("image.png"));
@@ -81,26 +102,9 @@ mod util;
 
 /// The main class of this library.
 /// 
-/// Usually your code will look like this:
-/// 
-/// ```
-/// let server = httpd::Server::new();
-/// 
-/// let pool = std::sync::TaskPool<()>::new(
-///     std::cmp::min(1, std::os::num_cpus() - 1), || {}
-/// );
-///
-/// loop {
-///     let rq = match server.recv() {
-///         Ok(rq) => rq,
-///         Err(_) => break
-///     };
-///
-///     pool.execute(proc(_) {
-///         handle_request(rq)
-///     });
-/// }
-/// ```
+/// Destroying this object will immediatly close the listening socket annd the reading
+///  part of all the client's connections. Requests that have already been returned by
+///  the `recv()` function will not close and the responses will be transferred to the client.
 #[unstable]
 pub struct Server {
     tasks_pool: Mutex<util::TaskPool>,
@@ -120,11 +124,17 @@ pub struct IncomingRequests<'a> {
 /// A `Request` object is what is produced by the server, and is your what
 ///  your code must analyse and answer.
 ///
-/// This object implements the `Send` trait, therefore you can spawn several threads to
-///  handle multiple requests at once.
+/// This object implements the `Send` trait, therefore you can dispatch your requests to
+///  worker threads.
 ///
-/// It is possible that multiple requests objects are linked to the same client, but
-///  don't worry: the library automatically handles synchronization of the answers.
+/// It is possible that multiple requests objects are simultaneously linked to the same client,
+///  but don't worry: tiny-http automatically handles synchronization of the answers.
+///
+/// If a `Request` object is destroyed without `into_writer` or `respond` being called,
+///  an empty response with a 500 status code (internal server error) will automatically be
+///  sent back to the client.
+/// This means that if your code fails during the handling of a request, this "internal server
+///  error" response will automatically be sent during the stack unwinding.
 #[unstable]
 pub struct Request {
     data_reader: Box<Reader + Send>,

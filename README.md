@@ -19,7 +19,7 @@ Tiny-http handles everything that is related to client connections and data tran
 Everything else (parsing the values of the headers, multipart data, routing, etags, cache-control, HTML templates, etc.) must be handled by your code.
 If you want to create a website in Rust, I strongly recommend using a framework instead of this library.
 
-[**Link to the documentation**](http://www.rust-ci.org/tomaka/tiny-http/doc/tiny-http/index.html) (note: the link works from time to time)
+[**Link to the documentation**](http://www.rust-ci.org/tomaka/tiny-http/doc/tiny-http/index.html)
 
 ### Installation
 

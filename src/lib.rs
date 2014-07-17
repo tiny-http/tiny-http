@@ -425,6 +425,8 @@ impl Request {
     /// Sends a response to this request.
     #[unstable]
     pub fn respond<R: Reader>(mut self, response: Response<R>) {
+        use std::io;
+
         fn passthrough<'a>(w: &'a mut Writer) -> &'a mut Writer { w }
 
         // TODO: pass a NullWriter if method is HEAD
@@ -433,7 +435,13 @@ impl Request {
                                 self.http_version, self.headers.as_slice())
         {
             Ok(_) => (),
-            Err(err) => println!("error while sending answer: {}", err)     // TODO: handle better?
+            Err(ref err) if err.kind == io::Closed => (),
+            Err(ref err) if err.kind == io::BrokenPipe => (),
+            Err(ref err) if err.kind == io::ConnectionAborted => (),
+            Err(ref err) if err.kind == io::ConnectionRefused => (),
+            Err(ref err) if err.kind == io::ConnectionReset => (),
+            Err(ref err) =>
+                println!("error while sending answer: {}", err)     // TODO: handle better?
         }
     }
 }

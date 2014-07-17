@@ -128,7 +128,10 @@ pub struct IncomingRequests<'a> {
 #[unstable]
 pub struct Request {
     data_reader: Box<Reader + Send>,
-    response_writer: Box<Writer + Send>,
+
+    // if this writer is empty, then the request has been answered
+    response_writer: Option<Box<Writer + Send>>,
+
     remote_addr: ip::SocketAddr,
     method: Method,
     path: url::Path,
@@ -425,20 +428,35 @@ impl Request {
     ///  the writing of the next response.
     /// Therefore you should always destroy the `Writer` as soon as possible.
     #[stable]
-    pub fn into_writer(self) -> Box<Writer + Send> {
-        self.response_writer
+    pub fn into_writer(mut self) -> Box<Writer + Send> {
+        self.into_writer_impl()
+    }
+
+    fn into_writer_impl(&mut self) -> Box<Writer + Send> {
+        use std::mem;
+
+        assert!(self.response_writer.is_some());
+
+        let mut writer = None;
+        mem::swap(&mut self.response_writer, &mut writer);
+        writer.unwrap()
     }
 
     /// Sends a response to this request.
     #[unstable]
     pub fn respond<R: Reader>(mut self, response: Response<R>) {
+        self.respond_impl(response)
+    }
+
+    fn respond_impl<R: Reader>(&mut self, response: Response<R>) {
         use std::io;
 
         fn passthrough<'a>(w: &'a mut Writer) -> &'a mut Writer { w }
+        let mut writer = self.into_writer_impl();
 
         let do_not_send_body = self.method.equiv(&"HEAD");
 
-        match response.raw_print(passthrough(self.response_writer),
+        match response.raw_print(passthrough(writer),
                                 self.http_version, self.headers.as_slice(),
                                 do_not_send_body)
         {
@@ -452,7 +470,7 @@ impl Request {
                 println!("error while sending answer: {}", err)     // TODO: handle better?
         };
 
-        self.response_writer.flush().ok();
+        writer.flush().ok();
     }
 }
 
@@ -468,6 +486,15 @@ impl std::fmt::Show for Request {
     {
         (format!("Request({} {} from {})",
             self.method, self.path, self.remote_addr.ip)).fmt(formatter)
+    }
+}
+
+impl Drop for Request {
+    fn drop(&mut self) {
+        if self.response_writer.is_some() {
+            let response = Response::new_empty(StatusCode(500));
+            self.respond_impl(response);
+        }
     }
 }
 

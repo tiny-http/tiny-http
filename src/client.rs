@@ -155,7 +155,7 @@ impl ClientConnection {
         // building the request
         Ok(Request {
             data_reader: request_body_reader,
-            response_writer: box writer,
+            response_writer: Some(box writer as Box<Writer + Send>),
             remote_addr: self.remote_addr.clone().unwrap(),     // TODO: could fail
             method: method,
             path: path,

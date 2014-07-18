@@ -82,13 +82,12 @@ extern crate encoding;
 extern crate time;
 extern crate url;
 
-use std::io::{Acceptor, IoError, IoResult, Listener};
+use std::io::{Acceptor, IoResult, Listener};
 use std::io::net::ip;
 use std::io::net::tcp;
-use std::sync;
 use std::comm::Select;
+use std::sync::Arc;
 use std::sync::atomics::AtomicBool;
-use std::sync::{Arc, Mutex};
 use client::ClientConnection;
 
 pub use common::{Header, HeaderField, HTTPVersion, Method, StatusCode};

@@ -42,7 +42,7 @@ impl Drop for ClosableTcpStream {
 impl Reader for ClosableTcpStream {
     fn read(&mut self, buf: &mut [u8]) -> IoResult<uint> {
         use std::io;
-        use std::sync::atomics::Relaxed;
+        //use std::sync::atomics::Relaxed;
 
         loop {
             // TODO: this makes some tests fail
@@ -64,7 +64,7 @@ impl Reader for ClosableTcpStream {
 impl Writer for ClosableTcpStream {
     fn write(&mut self, buf: &[u8]) -> IoResult<()> {
         use std::io;
-        use std::sync::atomics::Relaxed;
+        //use std::sync::atomics::Relaxed;
 
         loop {
             // TODO: this makes some tests fail

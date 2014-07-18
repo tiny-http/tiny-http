@@ -240,13 +240,13 @@ fn parse_http_version(version: &str) -> Result<HTTPVersion, ReadError> {
         return Err(WrongRequestLine)
     }
 
-    let elems = elems.get(1).as_slice().splitn('.', 1)
+    let elems = elems[1].as_slice().splitn('.', 1)
         .map(|e| e.to_string()).collect::<Vec<String>>();
     if elems.len() != 2 {
         return Err(WrongRequestLine)
     }
 
-    match (from_str(elems.get(0).as_slice()), from_str(elems.get(1).as_slice())) {
+    match (from_str(elems[0].as_slice()), from_str(elems[1].as_slice())) {
         (Some(major), Some(minor)) =>
             Ok(HTTPVersion(major, minor)),
         _ => Err(WrongRequestLine)

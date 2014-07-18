@@ -20,5 +20,5 @@ after_script:
   - rustdoc -L target/test/deps src/lib.rs
   - curl http://www.rust-ci.org/artifacts/put?t=$RUSTCI_TOKEN | sh
   # benchmarking
-  - sudo apt-get install apache2 apache2-utils nodejs gccgo-go
+  - sudo apt-get install apache2 apache2-utils nodejs
   - ./.travis-bench

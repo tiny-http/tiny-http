@@ -1,3 +1,4 @@
+pub use self::chunks_decoder::ChunksDecoder;
 pub use self::chunks_encoder::ChunksEncoder;
 pub use self::closable_tcp_acceptor::ClosableTcpAcceptor;
 pub use self::closable_tcp_stream::ClosableTcpStream;
@@ -7,6 +8,7 @@ pub use self::sequential::{SequentialReaderBuilder, SequentialReader};
 pub use self::sequential::{SequentialWriterBuilder, SequentialWriter};
 pub use self::task_pool::TaskPool;
 
+mod chunks_decoder;
 mod chunks_encoder;
 mod closable_tcp_acceptor;
 mod closable_tcp_stream;

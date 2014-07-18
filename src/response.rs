@@ -227,6 +227,17 @@ impl<R: Reader> Response<R> {
         self
     }
 
+    /// Returns the same request, but with different data.
+    #[unstable]
+    pub fn with_data<S: Reader>(self, reader: S, data_length: Option<uint>) -> Response<S> {
+        Response {
+            reader: reader,
+            headers: self.headers,
+            status_code: self.status_code,
+            data_length: data_length,
+        }
+    }
+
     /// Prints the HTTP response to a writer.
     ///
     /// This function is the one used to send the response to the client's socket.

@@ -128,6 +128,10 @@ pub struct Server {
     listening_addr: ip::SocketAddr,
 }
 
+// this trait is to make sure that Server implements Share and Send
+trait MustBeShareDummy : Share + Send {}
+impl MustBeShareDummy for Server {}
+
 #[unstable]
 pub struct IncomingRequests<'a> {
     server: &'a Server
@@ -163,6 +167,10 @@ pub struct Request {
     headers: Vec<Header>,
     body_length: uint,
 }
+
+// this trait is to make sure that Request implements Send
+trait MustBeSendDummy : Send {}
+impl MustBeSendDummy for Request {}
 
 impl Server {
     /// Builds a new server on port 80 that listens to all inputs.

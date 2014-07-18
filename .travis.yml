@@ -8,8 +8,6 @@ install:
   - tar xzf rust-nightly-x86_64-unknown-linux-gnu.tar.gz
   - export PATH=$PATH:$(pwd)/rust-nightly-x86_64-unknown-linux-gnu/bin
   - export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$(pwd)/rust-nightly-x86_64-unknown-linux-gnu/lib
-  # apache2-utils
-  - sudo apt-get install apache2-utils
   # cargo
   - curl -O http://static.rust-lang.org/cargo-dist/cargo-nightly-linux.tar.gz
   - tar xf cargo-nightly-linux.tar.gz
@@ -21,3 +19,6 @@ script:
 after_script:
   - rustdoc -L target/test/deps src/lib.rs
   - curl http://www.rust-ci.org/artifacts/put?t=$RUSTCI_TOKEN | sh
+  # benchmarking
+  - sudo apt-get install apache2 apache2-utils nodejs gccgo-go
+  - ./travis-bench

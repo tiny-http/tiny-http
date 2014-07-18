@@ -21,7 +21,7 @@ impl TaskPool {
 
     /// Executes a function in a thread.
     /// If no thread is available, spawns a new one.
-    pub fn spawn(&mut self, mut code: proc():Send) {
+    pub fn spawn(&self, mut code: proc():Send) {
         use std::task;
         use std::sync::mpsc_queue::{Data, Empty, Inconsistent};
 
@@ -43,7 +43,7 @@ impl TaskPool {
         }
     }
 
-    fn add_thread(&mut self, initial_fn: Option<proc():Send>) {
+    fn add_thread(&self, initial_fn: Option<proc():Send>) {
         use std::io::timer::Timer;
 
         let queue = self.free_tasks.clone();

@@ -109,7 +109,7 @@ mod util;
 #[unstable]
 pub struct Server {
     // tasks where the client connections are dispatched
-    tasks_pool: Mutex<util::TaskPool>,
+    tasks_pool: util::TaskPool,
 
     // receiver for client connections
     connections_receiver: Receiver<IoResult<ClientConnection>>,
@@ -226,7 +226,7 @@ impl Server {
 
         // result
         Ok(Server {
-            tasks_pool: Mutex::new(util::TaskPool::new()),
+            tasks_pool: util::TaskPool::new(),
             connections_receiver: rx_incoming,
             accepting_task_close: tx_close,
             requests_sender: tx_requests,
@@ -333,14 +333,11 @@ impl Server {
     fn add_client(&self, client: ClientConnection) {
         let requests_sender = self.requests_sender.clone();
 
-        {
-            let mut locked_tasks_pool = self.tasks_pool.lock();
-            locked_tasks_pool.spawn(proc() {
-                let mut client = client;
-                // TODO: when the channel is being closed, immediatly notify the task
-                client.advance(|rq| requests_sender.send_opt(rq).is_ok());
-            });
-        }
+        self.tasks_pool.spawn(proc() {
+            let mut client = client;
+            // TODO: when the channel is being closed, immediatly notify the task
+            client.advance(|rq| requests_sender.send_opt(rq).is_ok());
+        });
     }
 }
 

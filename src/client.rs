@@ -1,7 +1,7 @@
 use std::io;
 use std::io::{BufferedReader, BufferedWriter, IoError, IoResult};
 use std::io::net::ip::SocketAddr;
-use common::{Header, HTTPVersion, Method};
+use common::{HTTPVersion, Method};
 use Request;
 use url::Path;
 use util::{SequentialReader, SequentialReaderBuilder, SequentialWriterBuilder};
@@ -88,8 +88,6 @@ impl ClientConnection {
     /// Reads a request from the stream.
     /// Blocks until the header has been read.
     fn read(&mut self) -> Result<Request, ReadError> {
-        use util::EqualReader;
-
         let (method, path, version, headers) = {
             // reading the request line
             let (method, path, version) = {
@@ -121,48 +119,20 @@ impl ClientConnection {
             (method, path, version, headers)
         };
 
-        // finding length of body
-        // TODO: handle transfer-encoding
-        let body_length = headers.iter()
-            .find(|h: &&Header| h.field.equiv(&"Content-Length"))
-            .and_then(|h| from_str::<uint>(h.value.as_slice()))
-            .unwrap_or(0u);
-
-        // building the next reader
-        let request_body_reader =
-            if body_length == 0 {
-                use std::io::util::NullReader;
-                box NullReader as Box<Reader + Send>
-
-            } else if body_length <= 1024 {
-                use std::io::MemReader;
-                let data = try!(self.next_header_source.read_exact(body_length)
-                    .map_err(|e| ReadIoError(e)));
-                box MemReader::new(data) as Box<Reader + Send>
-
-            } else {
-                let data_reader = self.source.next().unwrap();
-                let (data_reader, _) = EqualReader::new(data_reader, body_length);   // TODO:
-                box data_reader as Box<Reader + Send>
-            };
-
-        // follow-up for next potential request
-        self.next_header_source = self.source.next().unwrap();
-
-        // building the writer
+        // building the writer for the request
         let writer = self.sink.next().unwrap();
 
-        // building the request
-        Ok(Request {
-            data_reader: request_body_reader,
-            response_writer: Some(box writer as Box<Writer + Send>),
-            remote_addr: self.remote_addr.clone().unwrap(),     // TODO: could fail
-            method: method,
-            path: path,
-            http_version: version,
-            headers: headers,
-            body_length: Some(body_length),
-        })
+        // follow-up for next potential request
+        let mut data_source = self.source.next().unwrap();
+        ::std::mem::swap(&mut self.next_header_source, &mut data_source);
+
+        // building the next reader
+        let request = try!(Request::new(method, path, version,
+            headers, self.remote_addr.clone().unwrap(), data_source, writer)
+            .map_err(|e| ReadIoError(e)));
+
+        // return the request
+        Ok(request)
     }
 }
 

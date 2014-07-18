@@ -368,6 +368,47 @@ impl Server {
 }
 
 impl Request {
+    /// Builds a new request
+    fn new<R: Reader + Send, W: Writer + Send>(method: Method, path: url::Path,
+                                 version: HTTPVersion, headers: Vec<Header>,
+                                 remote_addr: ip::SocketAddr, mut source_data: R, writer: W)
+        -> IoResult<Request>
+    {
+        // finding length of body
+        // TODO: handle transfer-encoding
+        let body_length = headers.iter()
+            .find(|h: &&Header| h.field.equiv(&"Content-Length"))
+            .and_then(|h| from_str::<uint>(h.value.as_slice()))
+            .unwrap_or(0u);
+
+        let reader =
+            if body_length == 0 {
+                use std::io::util::NullReader;
+                box NullReader as Box<Reader + Send>
+
+            } else if body_length <= 1024 {
+                use std::io::MemReader;
+                let data = try!(source_data.read_exact(body_length));
+                box MemReader::new(data) as Box<Reader + Send>
+
+            } else {
+                use util::EqualReader;
+                let (data_reader, _) = EqualReader::new(source_data, body_length);   // TODO:
+                box data_reader as Box<Reader + Send>
+            };
+
+        Ok(Request {
+            data_reader: reader,
+            response_writer: Some(box writer as Box<Writer + Send>),
+            remote_addr: remote_addr,
+            method: method,
+            path: path,
+            http_version: version,
+            headers: headers,
+            body_length: Some(body_length),
+        })
+    }
+
     /// Returns the method requested by the client (eg. `GET`, `POST`, etc.).
     #[stable]
     pub fn get_method<'a>(&'a self) -> &'a Method {

@@ -20,11 +20,11 @@ start_bench() {
 
 	# benchmarking nodejs
 	echo "Benchmarking nodejs (concurrency: ${concurrency})"
-	(sudo node bench.js) & (sleep 1 ; exec ab -n ${num} -c ${concurrency} http://localhost:21890/)
+	(node bench.js) & (sleep 1 ; exec ab -n ${num} -c ${concurrency} http://localhost:9615/ 2> /dev/null | grep "per second")
 
 	# benchmarking tiny-http
 	echo "Benchmarking tiny-http (concurrency: ${concurrency})"
-	(sudo ./hello_world 1> /dev/null) & (sleep 1 ; exec ab -n ${num} -c ${concurrency} http://localhost:30119/)
+	(./hello_world 1> /dev/null) & (sleep 1 ; exec ab -n ${num} -c ${concurrency} http://localhost:9975/ 2> /dev/null | grep "per second")
 
 	# benchmarking apache2
 	echo "Benchmarking apache2 (concurrency: ${concurrency})"
@@ -46,7 +46,7 @@ echo "var http = require('http');" > bench.js
 echo "http.createServer(function (req, res) {" >> bench.js
 echo "  res.writeHead(200, {'Content-Type': 'text/plain'});" >> bench.js
 echo "  res.end(\"hello world\");" >> bench.js
-echo "}).listen(21890);" >> bench.js
+echo "}).listen(9615);" >> bench.js
 
 # 
 start_bench 1

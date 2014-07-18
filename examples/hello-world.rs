@@ -4,8 +4,8 @@ use std::os;
 use std::sync::Arc;
 
 fn main() {
-    let server = Arc::new(httpd::Server::new_with_port(30119).unwrap());
-    println!("Now listening on port 30119");
+    let server = Arc::new(httpd::Server::new_with_port(9975).unwrap());
+    println!("Now listening on port 9975");
 
     for _ in range(0, os::num_cpus()) {
         let server = server.clone();

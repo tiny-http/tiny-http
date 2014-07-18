@@ -215,6 +215,7 @@ impl<R: Reader> Response<R> {
     /// Some headers cannot be modified and some other have a
     ///  special behavior. See the documentation above.
     #[unstable]
+    #[inline]
     pub fn with_header(mut self, header: Header) -> Response<R> {
         self.add_header(header);
         self
@@ -222,6 +223,7 @@ impl<R: Reader> Response<R> {
 
     /// Returns the same request, but with a different status code.
     #[unstable]
+    #[inline]
     pub fn with_status_code(mut self, code: StatusCode) -> Response<R> {
         self.status_code = code;
         self

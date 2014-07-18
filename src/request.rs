@@ -116,24 +116,28 @@ pub fn new_request<R: Reader + Send, W: Writer + Send>(method: Method, path: ::u
 impl Request {
     /// Returns the method requested by the client (eg. `GET`, `POST`, etc.).
     #[stable]
+    #[inline]
     pub fn get_method<'a>(&'a self) -> &'a Method {
         &self.method
     }
 
     /// Returns the resource requested by the client.
     #[unstable]
+    #[inline]
     pub fn get_url<'a>(&'a self) -> &'a ::url::Path {
         &self.path
     }
 
     /// Returns a list of all headers sent by the client.
     #[stable]
+    #[inline]
     pub fn get_headers<'a>(&'a self) -> &'a [Header] {
         self.headers.as_slice()
     }
 
     /// Returns the HTTP version of the request.
     #[unstable]
+    #[inline]
     pub fn get_http_version<'a>(&'a self) -> &'a HTTPVersion {
         &self.http_version
     }
@@ -142,12 +146,14 @@ impl Request {
     ///
     /// Returns `None` if the length is unknown.
     #[unstable]
+    #[inline]
     pub fn get_body_length(&self) -> Option<uint> {
         self.body_length
     }
 
     /// Returns the length of the body in bytes.
     #[stable]
+    #[inline]
     pub fn get_remote_addr<'a>(&'a self) -> &'a ip::SocketAddr {
         &self.remote_addr
     }
@@ -164,6 +170,7 @@ impl Request {
     /// }
     /// ```
     #[unstable]
+    #[inline]
     pub fn as_reader<'a>(&'a mut self) -> &'a mut Reader {
         fn passthrough<'a>(r: &'a mut Reader) -> &'a mut Reader { r }
         passthrough(self.data_reader)
@@ -180,6 +187,7 @@ impl Request {
     ///  the writing of the next response.
     /// Therefore you should always destroy the `Writer` as soon as possible.
     #[stable]
+    #[inline]
     pub fn into_writer(mut self) -> Box<Writer + Send> {
         self.into_writer_impl()
     }
@@ -196,6 +204,7 @@ impl Request {
 
     /// Sends a response to this request.
     #[unstable]
+    #[inline]
     pub fn respond<R: Reader>(mut self, response: Response<R>) {
         self.respond_impl(response)
     }

@@ -142,12 +142,14 @@ pub struct IncomingRequests<'a> {
 impl Server {
     /// Builds a new server on port 80 that listens to all inputs.
     #[unstable]
+    #[inline]
     pub fn new() -> IoResult<Server> {
         Server::new_with_port(80)
     }
 
     /// Builds a new server on a given port and that listens to all inputs.
     #[unstable]
+    #[inline]
     pub fn new_with_port(port: ip::Port) -> IoResult<Server> {
         Server::new_with_addr(&ip::SocketAddr{ip: ip::Ipv4Addr(0, 0, 0, 0), port: port})
     }
@@ -157,6 +159,7 @@ impl Server {
     /// This function is guaranteed not to fail because of a port already in use,
     ///  and is useful for testing purposes.
     #[unstable]
+    #[inline]
     pub fn new_with_random_port() -> IoResult<(Server, ip::Port)> {
         Server::new_with_addr(&ip::SocketAddr{ip: ip::Ipv4Addr(0, 0, 0, 0), port: 0})
             .map(|s| { let port = s.get_server_addr().port; (s, port) })
@@ -223,12 +226,14 @@ impl Server {
     ///
     /// The iterator will return `None` if the server socket is shutdown.
     #[unstable]
+    #[inline]
     pub fn incoming_requests<'a>(&'a self) -> IncomingRequests<'a> {
         IncomingRequests { server: self }
     }
 
     /// Returns the address the server is listening to.
     #[experimental]
+    #[inline]
     pub fn get_server_addr(&self) -> ip::SocketAddr {
         self.listening_addr.clone()
     }

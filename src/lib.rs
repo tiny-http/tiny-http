@@ -86,7 +86,7 @@ use std::io::{Acceptor, IoResult, Listener};
 use std::io::net::ip;
 use std::io::net::tcp;
 use std::comm::Select;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::sync::atomics::AtomicBool;
 use client::ClientConnection;
 
@@ -111,7 +111,7 @@ pub struct Server {
     tasks_pool: util::TaskPool,
 
     // receiver for client connections
-    connections_receiver: Receiver<IoResult<ClientConnection>>,
+    connections_receiver: Mutex<Receiver<IoResult<ClientConnection>>>,
 
     // should be false as long as the server exists
     // when set to true, all the subtasks will close within a few hundreds ms
@@ -119,10 +119,10 @@ pub struct Server {
 
     // the sender linked to requests_receiver
     // cloned each time a client connection is created
-    requests_sender: Sender<Request>,
+    requests_sender: Mutex<Sender<Request>>,
 
     // channel to receive requests from
-    requests_receiver: Receiver<Request>,
+    requests_receiver: Mutex<Receiver<Request>>,
 
     // result of TcpListener::socket_name()
     listening_addr: ip::SocketAddr,
@@ -236,10 +236,10 @@ impl Server {
         // result
         Ok(Server {
             tasks_pool: util::TaskPool::new(),
-            connections_receiver: rx_incoming,
+            connections_receiver: Mutex::new(rx_incoming),
             close: close_trigger,
-            requests_sender: tx_requests,
-            requests_receiver: rx_requests,
+            requests_sender: Mutex::new(tx_requests),
+            requests_receiver: Mutex::new(rx_requests),
             listening_addr: local_addr,
         })
     }
@@ -255,7 +255,7 @@ impl Server {
     /// Returns the address the server is listening to.
     #[experimental]
     pub fn get_server_addr(&self) -> ip::SocketAddr {
-        self.listening_addr
+        self.listening_addr.clone()
     }
 
     /// Returns the number of clients currently connected to the server.
@@ -268,18 +268,18 @@ impl Server {
     /// Blocks until an HTTP request has been submitted and returns it.
     #[stable]
     pub fn recv(&self) -> IoResult<Request> {
-        let rx_requests = &self.requests_receiver;
-        let rx_connecs = &self.connections_receiver;
+        let connections_receiver = self.connections_receiver.lock();
+        let requests_receiver = self.requests_receiver.lock();
 
         // TODO: the select! macro doesn't seem to be usable without moving
         //       out of self, so we use Select directly
 
         let select = Select::new();
 
-        let mut request_handle = select.handle(rx_requests);
+        let mut request_handle = select.handle(&*requests_receiver);
         unsafe { request_handle.add() };
 
-        let mut connect_handle = select.handle(rx_connecs);
+        let mut connect_handle = select.handle(&*connections_receiver);
         unsafe { connect_handle.add() };
 
         loop {
@@ -326,21 +326,24 @@ impl Server {
     /// Same as `recv()` but doesn't block.
     #[stable]
     pub fn try_recv(&self) -> IoResult<Option<Request>> {
+        let mut connections_receiver = self.connections_receiver.lock();
+        let mut requests_receiver = self.requests_receiver.lock();
+
         // processing all new clients
         loop {
-            match self.connections_receiver.try_recv() {
+            match connections_receiver.try_recv() {
                 Ok(client) => self.add_client(try!(client)),
                 Err(_) => break
             }
         }
 
         // reading the next request
-        Ok(self.requests_receiver.try_recv().ok())
+        Ok(requests_receiver.try_recv().ok())
     }
 
     /// Adds a new client to the list.
     fn add_client(&self, client: ClientConnection) {
-        let requests_sender = self.requests_sender.clone();
+        let requests_sender = self.requests_sender.lock().clone();
 
         self.tasks_pool.spawn(proc() {
             let mut client = client;

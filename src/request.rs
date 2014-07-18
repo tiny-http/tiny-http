@@ -49,27 +49,56 @@ pub fn new_request<R: Reader + Send, W: Writer + Send>(method: Method, path: ::u
                              remote_addr: ip::SocketAddr, mut source_data: R, writer: W)
     -> IoResult<Request>
 {
-    // finding length of body
-    // TODO: handle transfer-encoding
-    let body_length = headers.iter()
-        .find(|h: &&Header| h.field.equiv(&"Content-Length"))
-        .and_then(|h| from_str::<uint>(h.value.as_slice()))
-        .unwrap_or(0u);
+    // finding the transfer-encoding header
+    let transfer_encoding = headers.iter()
+        .find(|h: &&Header| h.field.equiv(&"Transfer-Encoding"))
+        .map(|h| h.value.clone());
 
+    // finding the content-length header
+    let content_length = if transfer_encoding.is_some() {
+        // if transfer-encoding is specified, the Content-Length
+        //  header must be ignored (RFC2616 #4.4)
+        None
+
+    } else {
+        headers.iter()
+            .find(|h: &&Header| h.field.equiv(&"Content-Length"))
+            .and_then(|h| from_str::<uint>(h.value.as_slice()))
+    };
+
+    // building the reader depending on
+    //  transfer-encoding and content-length
     let reader =
-        if body_length == 0 {
-            use std::io::util::NullReader;
-            box NullReader as Box<Reader + Send>
+        if content_length.is_some() {
+            let content_length = content_length.as_ref().unwrap().clone();
 
-        } else if body_length <= 1024 {
-            use std::io::MemReader;
-            let data = try!(source_data.read_exact(body_length));
-            box MemReader::new(data) as Box<Reader + Send>
+            if content_length == 0 {
+                use std::io::util::NullReader;
+                box NullReader as Box<Reader + Send>
+
+            } else if content_length <= 1024 {
+                use std::io::MemReader;
+                let data = try!(source_data.read_exact(content_length));
+                box MemReader::new(data) as Box<Reader + Send>
+
+            } else {
+                use util::EqualReader;
+                let (data_reader, _) = EqualReader::new(source_data, content_length);   // TODO:
+                box data_reader as Box<Reader + Send>
+            }
+
+        } else if transfer_encoding.is_some() {
+            // if a transfer-encoding was specified, then "chunked"
+            //  is ALWAYS applied over the message (RFC2616 #3.6)
+            use util::ChunksDecoder;
+            box ChunksDecoder::new(source_data) as Box<Reader + Send>
 
         } else {
-            use util::EqualReader;
-            let (data_reader, _) = EqualReader::new(source_data, body_length);   // TODO:
-            box data_reader as Box<Reader + Send>
+            // if we have neither a Content-Length nor a Transfer-Encoding,
+            //  assuming that we have no data
+            // TODO: could also be multipart/byteranges
+            use std::io::util::NullReader;
+            box NullReader as Box<Reader + Send>
         };
 
     Ok(Request {
@@ -80,7 +109,7 @@ pub fn new_request<R: Reader + Send, W: Writer + Send>(method: Method, path: ::u
         path: path,
         http_version: version,
         headers: headers,
-        body_length: Some(body_length),
+        body_length: content_length,
     })
 }
 

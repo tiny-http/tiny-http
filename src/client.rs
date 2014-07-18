@@ -161,7 +161,7 @@ impl ClientConnection {
             path: path,
             http_version: version,
             headers: headers,
-            body_length: body_length,
+            body_length: Some(body_length),
         })
     }
 }

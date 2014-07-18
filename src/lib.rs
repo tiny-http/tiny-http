@@ -155,17 +155,23 @@ pub struct IncomingRequests<'a> {
 ///  error" response will automatically be sent during the stack unwinding.
 #[unstable]
 pub struct Request {
+    // where to read the body from
     data_reader: Box<Reader + Send>,
 
     // if this writer is empty, then the request has been answered
     response_writer: Option<Box<Writer + Send>>,
 
     remote_addr: ip::SocketAddr,
+
     method: Method,
+
     path: url::Path,
+
     http_version: HTTPVersion,
+
     headers: Vec<Header>,
-    body_length: uint,
+
+    body_length: Option<uint>,
 }
 
 // this trait is to make sure that Request implements Send
@@ -391,7 +397,7 @@ impl Request {
     /// Returns `None` if the length is unknown.
     #[unstable]
     pub fn get_body_length(&self) -> Option<uint> {
-        Some(self.body_length)
+        self.body_length
     }
 
     /// Returns the length of the body in bytes.

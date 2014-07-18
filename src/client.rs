@@ -127,7 +127,7 @@ impl ClientConnection {
         ::std::mem::swap(&mut self.next_header_source, &mut data_source);
 
         // building the next reader
-        let request = try!(Request::new(method, path, version,
+        let request = try!(::request::new_request(method, path, version,
             headers, self.remote_addr.clone().unwrap(), data_source, writer)
             .map_err(|e| ReadIoError(e)));
 
@@ -185,12 +185,12 @@ impl Iterator<Request> for ClientConnection {
 
             // updating the status of the connection
             {
-                let connection_header = rq.headers.iter()
+                let connection_header = rq.get_headers().iter()
                     .find(|h| h.field.equiv(&"Connection")).map(|h| h.value.as_slice());
 
                 if connection_header == Some("close") {
                     self.connection_must_close = true;
-                } else if rq.http_version == HTTPVersion(1, 0) &&
+                } else if *rq.get_http_version() == HTTPVersion(1, 0) &&
                         connection_header != Some("keep-alive")
                 {
                     self.connection_must_close = true;

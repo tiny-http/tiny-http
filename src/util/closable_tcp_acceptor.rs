@@ -1,30 +1,29 @@
 use std::io::{Acceptor, IoResult};
 use std::io::net::tcp::{TcpAcceptor, TcpStream};
+use std::sync::atomics::AtomicBool;
+use std::sync::Arc;
 
 pub struct ClosableTcpAcceptor {
     acceptor: TcpAcceptor,
-    close: Receiver<()>,
+    end_trigger: Arc<AtomicBool>,
 }
 
 impl ClosableTcpAcceptor {
-    pub fn new(acceptor: TcpAcceptor) -> (ClosableTcpAcceptor, Sender<()>) {
-        let (tx, rx) = channel();
-
-        let acc = ClosableTcpAcceptor {
+    pub fn new(acceptor: TcpAcceptor, end_trigger: Arc<AtomicBool>) -> ClosableTcpAcceptor {
+        ClosableTcpAcceptor {
             acceptor: acceptor,
-            close: rx,
-        };
-
-        (acc, tx)
+            end_trigger: end_trigger,
+        }
     }
 }
 
 impl Acceptor<TcpStream> for ClosableTcpAcceptor {
     fn accept(&mut self) -> IoResult<TcpStream> {
         use std::io;
+        use std::sync::atomics::Relaxed;
 
         loop {
-            if self.close.try_recv().is_ok() {
+            if self.end_trigger.load(Relaxed) {
                 return Err(io::standard_error(io::Closed));
             }
 

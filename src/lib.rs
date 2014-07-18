@@ -114,11 +114,9 @@ pub struct Server {
     // receiver for client connections
     connections_receiver: Receiver<IoResult<ClientConnection>>,
 
-    // 
-    //close: Arc<AtomicBool>,
-
-    // sending something to this sender will close the accepting thread
-    accepting_task_close: Sender<()>,
+    // should be false as long as the server exists
+    // when set to true, all the subtasks will close within a few hundreds ms
+    close: Arc<AtomicBool>,
 
     // the sender linked to requests_receiver
     // cloned each time a client connection is created
@@ -193,25 +191,37 @@ impl Server {
     /// Builds a new server that listens on the specified address.
     #[unstable]
     pub fn new_with_addr(addr: &ip::SocketAddr) -> IoResult<Server> {
+        // building the "close" variable
+        let close_trigger = Arc::new(AtomicBool::new(false));
+
         // building the TcpAcceptor
-        let mut listener = try!(tcp::TcpListener::bind(
-            format!("{}", addr.ip).as_slice(), addr.port));
-        let local_addr = try!(listener.socket_name());
-        let server = try!(listener.listen());
-        let (server, tx_close) = util::ClosableTcpAcceptor::new(server);
+        let (server, local_addr) = {
+            let mut listener = try!(tcp::TcpListener::bind(
+                format!("{}", addr.ip).as_slice(), addr.port));
+            let local_addr = try!(listener.socket_name());
+            let server = try!(listener.listen());
+            let server = util::ClosableTcpAcceptor::new(server, close_trigger.clone());
+            (server, local_addr)
+        };
 
         // creating a task where server.accept() is continuously called
         // and ClientConnection objects are returned in the receiver
         let (tx_incoming, rx_incoming) = channel();
 
+        let inside_close_trigger = close_trigger.clone();
         spawn(proc() {
             let mut server = server;
 
             loop {
                 let new_client = server.accept().map(|sock| {
                     use util::ClosableTcpStream;
-                    let (read_closable, _) = ClosableTcpStream::new(sock.clone(), true, false);
-                    let (write_closable, _) = ClosableTcpStream::new(sock.clone(), false, true);
+
+                    let read_closable = ClosableTcpStream::new(sock.clone(),
+                        inside_close_trigger.clone(), true, false);
+
+                    let write_closable = ClosableTcpStream::new(sock.clone(),
+                        inside_close_trigger.clone(), false, true);
+
                     ClientConnection::new(write_closable, read_closable)
                 });
 
@@ -228,7 +238,7 @@ impl Server {
         Ok(Server {
             tasks_pool: util::TaskPool::new(),
             connections_receiver: rx_incoming,
-            accepting_task_close: tx_close,
+            close: close_trigger,
             requests_sender: tx_requests,
             requests_receiver: rx_requests,
             listening_addr: local_addr,
@@ -480,6 +490,7 @@ impl Drop for Request {
 
 impl Drop for Server {
     fn drop(&mut self) {
-        self.accepting_task_close.send_opt(()).ok();
+        use std::sync::atomics::Relaxed;
+        self.close.store(true, Relaxed);
     }
 }

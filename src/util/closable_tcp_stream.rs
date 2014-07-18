@@ -1,26 +1,26 @@
 use std::io::IoResult;
 use std::io::net::tcp::TcpStream;
 use std::io::net::ip::SocketAddr;
+use std::sync::atomics::AtomicBool;
+use std::sync::Arc;
 
 pub struct ClosableTcpStream {
     stream: TcpStream,
-    close: Receiver<()>,
+    end_trigger: Arc<AtomicBool>,
     close_read: bool,
     close_write: bool,
 }
 
 impl ClosableTcpStream {
-    pub fn new(stream: TcpStream, close_read: bool, close_write: bool) -> (ClosableTcpStream, Sender<()>) {
-        let (tx, rx) = channel();
+    pub fn new(stream: TcpStream, end_trigger: Arc<AtomicBool>,
+               close_read: bool, close_write: bool) -> ClosableTcpStream {
 
-        let acc = ClosableTcpStream {
+        ClosableTcpStream {
             stream: stream,
-            close: rx,
+            end_trigger: end_trigger,
             close_read: close_read,
             close_write: close_write,
-        };
-
-        (acc, tx)
+        }
     }
 
     pub fn peer_name(&mut self) -> IoResult<SocketAddr> {
@@ -42,11 +42,13 @@ impl Drop for ClosableTcpStream {
 impl Reader for ClosableTcpStream {
     fn read(&mut self, buf: &mut [u8]) -> IoResult<uint> {
         use std::io;
+        use std::sync::atomics::Relaxed;
 
         loop {
-            if self.close.try_recv().is_ok() {
+            // TODO: this makes some tests fail
+            /*if self.end_trigger.load(Relaxed) {
                 return Err(io::standard_error(io::Closed));
-            }
+            }*/
 
             self.stream.set_read_timeout(Some(100));
 
@@ -62,11 +64,13 @@ impl Reader for ClosableTcpStream {
 impl Writer for ClosableTcpStream {
     fn write(&mut self, buf: &[u8]) -> IoResult<()> {
         use std::io;
+        use std::sync::atomics::Relaxed;
 
         loop {
-            if self.close.try_recv().is_ok() {
+            // TODO: this makes some tests fail
+            /*if self.end_trigger.load(Relaxed) {
                 return Err(io::standard_error(io::Closed));
-            }
+            }*/
 
             self.stream.set_write_timeout(Some(100));
 
@@ -75,7 +79,8 @@ impl Writer for ClosableTcpStream {
                     => continue,
                 Err(err) => {
                     match err.kind {
-                        io::ShortWrite(nb) => return self.write(buf.slice_from(nb)),
+                        io::ShortWrite(nb) =>
+                            return self.write(buf.slice_from(nb)),
                         _ => return Err(err)
                     };
                 }

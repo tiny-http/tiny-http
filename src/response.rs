@@ -379,3 +379,14 @@ impl Response<NullReader> {
         )
     }
 }
+
+impl Clone for Response<NullReader> {
+    fn clone(&self) -> Response<NullReader> {
+        Response {
+            reader: NullReader,
+            status_code: self.status_code.clone(),
+            headers: self.headers.clone(),
+            data_length: self.data_length.clone(),
+        }
+    }
+}

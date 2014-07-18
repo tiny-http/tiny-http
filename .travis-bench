@@ -20,11 +20,11 @@ start_bench() {
 
 	# benchmarking nodejs
 	echo "Benchmarking nodejs (concurrency: ${concurrency})"
-	(nodejs bench.js) & (sleep 1 ; exec ab -n ${num} -c ${concurrency} http://localhost:9615/ 2> /dev/null | grep "per second")
+	(node bench.js) & (sleep 1 ; exec ab -n ${num} -c ${concurrency} http://localhost:9615/ 2> /dev/null | grep "per second")
 
 	# benchmarking tiny-http
 	echo "Benchmarking tiny-http (concurrency: ${concurrency})"
-	(./hello_world &> /dev/null) & (sleep 1 ; exec ab -n ${num} -c ${concurrency} http://localhost:9975/ 2> /dev/null | grep "per second")
+	(./hello_world 1> /dev/null) & (sleep 1 ; exec ab -n ${num} -c ${concurrency} http://localhost:9975/)
 
 	# benchmarking apache2
 	echo "Benchmarking apache2 (concurrency: ${concurrency})"

@@ -150,6 +150,8 @@ impl Iterator<Request> for ClientConnection {
 
         // TODO: send back message to client in case of parsing error
         loop {
+            use std::io::TimedOut;
+
             let rq = match self.read() {
                 Err(WrongRequestLine) => {
                     let writer = self.sink.next().unwrap();
@@ -165,6 +167,14 @@ impl Iterator<Request> for ClientConnection {
                     response.raw_print(writer, ver, &[], false).ok();
                     return None;    // we don't know where the next request would start,
                                     // se we have to close
+                },
+
+                Err(ReadIoError(ref err)) if err.kind == TimedOut => {
+                    // request timeout
+                    let writer = self.sink.next().unwrap();
+                    let response = Response::new_empty(StatusCode(408));
+                    response.raw_print(writer, HTTPVersion(1, 1), &[], false).ok();
+                    return None;    // closing the connection
                 },
 
                 Err(ReadIoError(_)) =>

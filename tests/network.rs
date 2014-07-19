@@ -133,3 +133,25 @@ fn responses_reordered() {
     let content = client.read_to_string().unwrap();
     assert!(content.as_slice().ends_with("second request"));
 }
+
+#[test]
+fn connection_timeout() {
+    let (server, mut client) = support::new_one_server_one_client();
+    let (tx_stop, rx_stop) = channel();
+
+    // executing server in parallel
+    spawn(proc() {
+        loop {
+            server.try_recv();
+            timer::sleep(100);
+            if rx_stop.try_recv().is_ok() { break }
+        }
+    });
+
+    // waiting for the 408 response
+    let content = client.read_to_string().unwrap();
+    assert!(content.as_slice().slice_from(9).starts_with("408"));
+
+    // stopping server
+    tx_stop.send(());
+}

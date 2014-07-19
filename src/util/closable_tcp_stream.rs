@@ -40,9 +40,17 @@ impl Drop for ClosableTcpStream {
 }
 
 impl Reader for ClosableTcpStream {
+    /// Reads to this stream is similar to a regular read,
+    ///  except that the timeout is predefined.
     fn read(&mut self, buf: &mut [u8]) -> IoResult<uint> {
         use std::io;
+        use time;
         //use std::sync::atomics::Relaxed;
+
+        // getting the time when to stop the loop
+        // 10 seconds timeout
+        let timeout = time::precise_time_ns()
+            + 10 * 1000 * 1000 * 1000;
 
         loop {
             // TODO: this makes some tests fail
@@ -54,9 +62,14 @@ impl Reader for ClosableTcpStream {
 
             match self.stream.read(buf) {
                 Err(ref err) if err.kind == io::TimedOut
-                    => continue,
+                    => (),
                 a => return a
             };
+
+            // checking timeout
+            if timeout <= time::precise_time_ns() {
+                return Err(io::standard_error(io::TimedOut));
+            }
         }
     }
 }

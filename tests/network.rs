@@ -1,4 +1,5 @@
 extern crate httpd = "tiny-http";
+extern crate time;
 
 use std::io::timer;
 
@@ -7,7 +8,7 @@ mod support;
 
 #[test]
 fn connection_close_header() {
-    let mut client = support::new_client_to_hello_world_server(2);
+    let mut client = support::new_client_to_hello_world_server();
 
     (write!(client, "GET / HTTP/1.1\r\nConnection: keep-alive\r\n\r\n")).unwrap();
     timer::sleep(1000);
@@ -21,7 +22,7 @@ fn connection_close_header() {
 
 #[test]
 fn http_1_0_connection_close() {
-    let mut client = support::new_client_to_hello_world_server(1);
+    let mut client = support::new_client_to_hello_world_server();
 
     (write!(client, "GET / HTTP/1.0\r\nHost: localhost\r\n\r\n")).unwrap();
 
@@ -32,7 +33,7 @@ fn http_1_0_connection_close() {
 
 #[test]
 fn detect_connection_closed() {
-    let mut client = support::new_client_to_hello_world_server(1);
+    let mut client = support::new_client_to_hello_world_server();
 
     (write!(client, "GET / HTTP/1.1\r\nConnection: keep-alive\r\n\r\n")).unwrap();
     timer::sleep(1000);
@@ -46,7 +47,7 @@ fn detect_connection_closed() {
 
 #[test]
 fn poor_network_test() {
-    let mut client = support::new_client_to_hello_world_server(1);
+    let mut client = support::new_client_to_hello_world_server();
 
     (write!(client, "G")).unwrap();
     timer::sleep(100);
@@ -75,7 +76,7 @@ fn poor_network_test() {
 
 #[test]
 fn pipelining_test() {
-    let mut client = support::new_client_to_hello_world_server(3);
+    let mut client = support::new_client_to_hello_world_server();
 
     (write!(client, "GET / HTTP/1.1\r\nHost: localhost\r\n\r\n")).unwrap();
     (write!(client, "GET /hello HTTP/1.1\r\nHost: localhost\r\n\r\n")).unwrap();

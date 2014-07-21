@@ -1,4 +1,5 @@
 extern crate httpd = "tiny-http";
+extern crate time;
 
 #[allow(dead_code)]
 mod support;

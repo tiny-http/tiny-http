@@ -10,9 +10,24 @@ use {Header, HTTPVersion, Method, Response, StatusCode};
 /// This object implements the `Send` trait, therefore you can dispatch your requests to
 ///  worker threads.
 ///
-/// It is possible that multiple requests objects are simultaneously linked to the same client,
-///  but don't worry: tiny-http automatically handles synchronization of the answers.
+/// # Pipelining
+/// 
+/// If a client sends multiple requests in a row (without waiting for the response), then you will
+///  get multiple `Request` objects simultaneously. This is called *requests pipelining*.
+/// Tiny-http automatically reorders the responses so that you don't need to worry about the order
+///  in which you call `respond` or `into_writer`.
 ///
+/// This mechanic is disabled if:
+/// 
+///  - The body of a request is large enough (handling requires pipelining requires storing the
+///     body of the request in a buffer ; if the body is too big, tiny-http will avoid doing that)
+///  - A request sends a `Expect: 100-continue` header (which means that the client waits to
+///     know whether its body will be processed before sending it)
+///
+/// In these situations, you will only get one `Request` object per client at a time.
+///
+/// # Automatic cleanup
+/// 
 /// If a `Request` object is destroyed without `into_writer` or `respond` being called,
 ///  an empty response with a 500 status code (internal server error) will automatically be
 ///  sent back to the client.

@@ -41,6 +41,8 @@ In a real-case scenario, you will probably want to spawn multiple worker tasks a
 let server = Arc::new(server);
 
 for _ in range(0u, 4) {
+    let server = server.clone();
+
     spawn(proc() {
         loop {
             let rq = server.recv().unwrap();

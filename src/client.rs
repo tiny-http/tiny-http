@@ -24,8 +24,8 @@ pub struct ClientConnection {
     // Reader to read the next header from
 	next_header_source: SequentialReader<BufferedReader<ClosableTcpStream>>,
 
-    // set to true if the client sent a "Connection: close" in the previous request
-    connection_must_close: bool,
+    // set to true if we know that the previous request is the last one
+    no_more_requests: bool,
 }
 
 /// Error that can happen when reading a request.
@@ -54,7 +54,7 @@ impl ClientConnection {
             sink: SequentialWriterBuilder::new(BufferedWriter::new(write_socket)),
             remote_addr: remote_addr,
             next_header_source: first_header,
-            connection_must_close: false,
+            no_more_requests: false,
         }
     }
 
@@ -154,7 +154,7 @@ impl Iterator<Request> for ClientConnection {
 
         // the client sent a "connection: close" header in this previous request
         //  or is using HTTP 1.0, meaning that no new request will come
-        if self.connection_must_close {
+        if self.no_more_requests {
             return None
         }
 
@@ -211,16 +211,27 @@ impl Iterator<Request> for ClientConnection {
 
             // updating the status of the connection
             {
+                use std::ascii::StrAsciiExt;
+
                 let connection_header = rq.get_headers().iter()
                     .find(|h| h.field.equiv(&"Connection")).map(|h| h.value.as_slice());
 
-                if connection_header == Some("close") {
-                    self.connection_must_close = true;
-                } else if *rq.get_http_version() == HTTPVersion(1, 0) &&
-                        connection_header != Some("keep-alive")
-                {
-                    self.connection_must_close = true;
-                }
+                match connection_header {
+                    Some(ref val) if val.eq_ignore_ascii_case("close") => 
+                        self.no_more_requests = true,
+
+                    Some(ref val) if val.eq_ignore_ascii_case("upgrade") => 
+                        self.no_more_requests = true,
+
+                    Some(ref val) if !val.eq_ignore_ascii_case("keep-alive") &&
+                                    *rq.get_http_version() == HTTPVersion(1, 0) =>
+                        self.no_more_requests = true,
+
+                    None if *rq.get_http_version() == HTTPVersion(1, 0) =>
+                        self.no_more_requests = true,
+
+                    _ => ()
+                };
             }
 
             // returning the request

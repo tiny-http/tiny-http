@@ -1,6 +1,7 @@
-use std::io::IoError;
+use std::io::{IoError, Stream};
 use std::io::net::ip;
 use {Header, HTTPVersion, Method, Response, StatusCode};
+use util::{AnyReader, AnyWriter};
 
 /// Represents an HTTP request made by a client.
 ///
@@ -23,8 +24,9 @@ use {Header, HTTPVersion, Method, Response, StatusCode};
 ///     body of the request in a buffer ; if the body is too big, tiny-http will avoid doing that)
 ///  - A request sends a `Expect: 100-continue` header (which means that the client waits to
 ///     know whether its body will be processed before sending it)
-///
-/// In these situations, you will only get one `Request` object per client at a time.
+///  - A request sends a `Connection: close` header or `Connection: upgrade` header (used for
+///     websockets), which indicates that this is the last request that will be received on this
+///     connection
 ///
 /// # Automatic cleanup
 /// 
@@ -36,10 +38,10 @@ use {Header, HTTPVersion, Method, Response, StatusCode};
 #[unstable]
 pub struct Request {
     // where to read the body from
-    data_reader: Box<Reader + Send>,
+    data_reader: Option<AnyReader>,
 
     // if this writer is empty, then the request has been answered
-    response_writer: Option<Box<Writer + Send>>,
+    response_writer: Option<AnyWriter>,
 
     remote_addr: ip::SocketAddr,
 
@@ -139,8 +141,8 @@ pub fn new_request<R: Reader + Send, W: Writer + Send>(method: Method, path: ::u
         };
 
     Ok(Request {
-        data_reader: reader,
-        response_writer: Some(box writer as Box<Writer + Send>),
+        data_reader: Some(AnyReader::new(reader)),
+        response_writer: Some(AnyWriter::new(box writer as Box<Writer + Send>)),
         remote_addr: remote_addr,
         method: method,
         path: path,
@@ -196,6 +198,24 @@ impl Request {
         &self.remote_addr
     }
 
+    /// Turns the `Request` into a `Stream`.
+    /// 
+    /// The main purpose of this function is to support websockets.
+    /// If you detect that the request wants to use some kind of protocol upgrade, you can
+    ///  call this function to obtain full control of the socket stream.
+    /// Keep in mind that it is up to you to send the initial response.
+    /// 
+    /// If you call this on a non-websocket request, tiny-http will wait until this `Stream` object
+    ///  is destroyed before continuing to read or write on the socket. Therefore you should always
+    ///  destroy it as soon as possible.
+    #[unstable]
+    pub fn into_stream(mut self) -> Box<Stream + Send> {
+        use util::CustomStream;
+
+        let stream = CustomStream::new(self.into_reader_impl(), self.into_writer_impl());
+        box stream as Box<Stream + Send>
+    }
+
     /// Allows to read the body of the request.
     /// 
     /// # Example
@@ -214,17 +234,15 @@ impl Request {
     #[inline]
     pub fn as_reader<'a>(&'a mut self) -> &'a mut Reader {
         if self.must_send_continue {
-            fn pt<'a>(w: &'a mut Writer) -> &'a mut Writer { w }
-
             let msg = Response::new_empty(StatusCode(100));
-            msg.raw_print(pt(*self.response_writer.as_mut().unwrap()),
+            msg.raw_print(self.response_writer.as_mut().unwrap().by_ref(),
                 self.http_version, self.headers.as_slice(), true).ok();
             self.response_writer.as_mut().unwrap().flush().ok();
             self.must_send_continue = false;
         }
 
         fn passthrough<'a>(r: &'a mut Reader) -> &'a mut Reader { r }
-        passthrough(self.data_reader)
+        passthrough(self.data_reader.as_mut().unwrap())
     }
 
     /// Turns the `Request` into a writer.
@@ -240,10 +258,10 @@ impl Request {
     #[stable]
     #[inline]
     pub fn into_writer(mut self) -> Box<Writer + Send> {
-        self.into_writer_impl()
+        self.into_writer_impl().unwrap()
     }
 
-    fn into_writer_impl(&mut self) -> Box<Writer + Send> {
+    fn into_writer_impl(&mut self) -> AnyWriter {
         use std::mem;
 
         assert!(self.response_writer.is_some());
@@ -251,6 +269,16 @@ impl Request {
         let mut writer = None;
         mem::swap(&mut self.response_writer, &mut writer);
         writer.unwrap()
+    }
+
+    fn into_reader_impl(&mut self) -> AnyReader {
+        use std::mem;
+
+        assert!(self.data_reader.is_some());
+
+        let mut reader = None;
+        mem::swap(&mut self.data_reader, &mut reader);
+        reader.unwrap()
     }
 
     /// Sends a response to this request.
@@ -263,12 +291,11 @@ impl Request {
     fn respond_impl<R: Reader>(&mut self, response: Response<R>) {
         use std::io;
 
-        fn passthrough<'a>(w: &'a mut Writer) -> &'a mut Writer { w }
         let mut writer = self.into_writer_impl();
 
         let do_not_send_body = self.method.equiv(&"HEAD");
 
-        match response.raw_print(passthrough(writer),
+        match response.raw_print(writer.by_ref(),
                                 self.http_version, self.headers.as_slice(),
                                 do_not_send_body)
         {

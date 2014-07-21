@@ -329,8 +329,13 @@ impl Server {
 
         self.tasks_pool.spawn(proc() {
             let mut client = client;
-            // TODO: when the channel is being closed, immediatly notify the task
-            client.advance(|rq| requests_sender.send_opt(rq).is_ok());
+
+            for rq in client {
+                let res = requests_sender.send_opt(rq);
+                if res.is_err() {
+                    break
+                }
+            }
         });
     }
 }

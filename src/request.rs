@@ -157,28 +157,28 @@ impl Request {
     /// Returns the method requested by the client (eg. `GET`, `POST`, etc.).
     #[stable]
     #[inline]
-    pub fn get_method<'a>(&'a self) -> &'a Method {
+    pub fn get_method(&self) -> &Method {
         &self.method
     }
 
     /// Returns the resource requested by the client.
     #[unstable]
     #[inline]
-    pub fn get_url<'a>(&'a self) -> &'a ::url::Path {
+    pub fn get_url(&self) -> &::url::Path {
         &self.path
     }
 
     /// Returns a list of all headers sent by the client.
     #[stable]
     #[inline]
-    pub fn get_headers<'a>(&'a self) -> &'a [Header] {
+    pub fn get_headers(&self) -> &[Header] {
         self.headers.as_slice()
     }
 
     /// Returns the HTTP version of the request.
     #[unstable]
     #[inline]
-    pub fn get_http_version<'a>(&'a self) -> &'a HTTPVersion {
+    pub fn get_http_version(&self) -> &HTTPVersion {
         &self.http_version
     }
 
@@ -194,7 +194,7 @@ impl Request {
     /// Returns the length of the body in bytes.
     #[stable]
     #[inline]
-    pub fn get_remote_addr<'a>(&'a self) -> &'a ip::SocketAddr {
+    pub fn get_remote_addr(&self) -> &ip::SocketAddr {
         &self.remote_addr
     }
 
@@ -232,7 +232,7 @@ impl Request {
     ///  function will send back a `100 Continue` response.
     #[unstable]
     #[inline]
-    pub fn as_reader<'a>(&'a mut self) -> &'a mut Reader {
+    pub fn as_reader(&mut self) -> &mut Reader {
         if self.must_send_continue {
             let msg = Response::new_empty(StatusCode(100));
             msg.raw_print(self.response_writer.as_mut().unwrap().by_ref(),

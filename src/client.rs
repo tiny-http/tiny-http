@@ -32,6 +32,10 @@ pub struct ClientConnection {
 enum ReadError {
     WrongRequestLine,
     WrongHeader(HTTPVersion),
+
+    /// the client sent an unrecognized `Expect` header
+    ExpectationFailed(HTTPVersion),
+
     ReadIoError(IoError),
 }
 
@@ -128,8 +132,14 @@ impl ClientConnection {
 
         // building the next reader
         let request = try!(::request::new_request(method, path, version,
-            headers, self.remote_addr.clone().unwrap(), data_source, writer)
-            .map_err(|e| ReadIoError(e)));
+                headers, self.remote_addr.clone().unwrap(), data_source, writer)
+            .map_err(|e| {
+                use request;
+                match e {
+                    request::CreationIoError(e) => ReadIoError(e),
+                    request::ExpectationFailed => ExpectationFailed(version)
+                }
+            }));
 
         // return the request
         Ok(request)
@@ -148,7 +158,6 @@ impl Iterator<Request> for ClientConnection {
             return None
         }
 
-        // TODO: send back message to client in case of parsing error
         loop {
             use std::io::TimedOut;
 
@@ -175,6 +184,13 @@ impl Iterator<Request> for ClientConnection {
                     let response = Response::new_empty(StatusCode(408));
                     response.raw_print(writer, HTTPVersion(1, 1), &[], false).ok();
                     return None;    // closing the connection
+                },
+
+                Err(ExpectationFailed(ver)) => {
+                    let writer = self.sink.next().unwrap();
+                    let response = Response::new_empty(StatusCode(417));
+                    response.raw_print(writer, ver, &[], true).ok();
+                    return None;    // TODO: should be recoverable, but needs handling in case of body
                 },
 
                 Err(ReadIoError(_)) =>

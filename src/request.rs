@@ -1,4 +1,4 @@
-use std::io::IoResult;
+use std::io::IoError;
 use std::io::net::ip;
 use {Header, HTTPVersion, Method, Response, StatusCode};
 
@@ -37,6 +37,15 @@ pub struct Request {
     headers: Vec<Header>,
 
     body_length: Option<uint>,
+
+    // true if a `100 Continue` response must be sent when `as_reader()` is called
+    must_send_continue: bool,
+}
+
+/// Error that can happen when building a `Request` object.
+pub enum RequestCreationError {
+    ExpectationFailed,
+    CreationIoError(IoError),
 }
 
 // this trait is to make sure that Request implements Send
@@ -47,7 +56,7 @@ impl MustBeSendDummy for Request {}
 pub fn new_request<R: Reader + Send, W: Writer + Send>(method: Method, path: ::url::Path,
                              version: HTTPVersion, headers: Vec<Header>,
                              remote_addr: ip::SocketAddr, mut source_data: R, writer: W)
-    -> IoResult<Request>
+    -> Result<Request, RequestCreationError>
 {
     // finding the transfer-encoding header
     let transfer_encoding = headers.iter()
@@ -66,6 +75,18 @@ pub fn new_request<R: Reader + Send, W: Writer + Send>(method: Method, path: ::u
             .and_then(|h| from_str::<uint>(h.value.as_slice()))
     };
 
+    // true if the client sent a `Expect: 100-continue` header
+    let expects_continue = {
+        use std::ascii::StrAsciiExt;
+
+        match headers.iter().find(|h: &&Header| h.field.equiv(&"Expect")) {
+            None => false,
+            Some(h) if h.value.as_slice().eq_ignore_ascii_case("100-continue")
+                => true,
+            _ => return Err(ExpectationFailed)
+        }
+    };
+
     // building the reader depending on
     //  transfer-encoding and content-length
     let reader =
@@ -76,9 +97,10 @@ pub fn new_request<R: Reader + Send, W: Writer + Send>(method: Method, path: ::u
                 use std::io::util::NullReader;
                 box NullReader as Box<Reader + Send>
 
-            } else if content_length <= 1024 {
+            } else if content_length <= 1024 && !expects_continue {
                 use std::io::MemReader;
-                let data = try!(source_data.read_exact(content_length));
+                let data = try!(source_data.read_exact(content_length)
+                    .map_err(|e| CreationIoError(e)));
                 box MemReader::new(data) as Box<Reader + Send>
 
             } else {
@@ -110,6 +132,7 @@ pub fn new_request<R: Reader + Send, W: Writer + Send>(method: Method, path: ::u
         http_version: version,
         headers: headers,
         body_length: content_length,
+        must_send_continue: expects_continue,
     })
 }
 
@@ -169,9 +192,22 @@ impl Request {
     ///     let json: Json = from_str(request.as_reader().read_to_string()).unwrap();
     /// }
     /// ```
+    ///
+    /// If the client sent a `Expect: 100-continue` header with the request, calling this
+    ///  function will send back a `100 Continue` response.
     #[unstable]
     #[inline]
     pub fn as_reader<'a>(&'a mut self) -> &'a mut Reader {
+        if self.must_send_continue {
+            fn pt<'a>(w: &'a mut Writer) -> &'a mut Writer { w }
+
+            let msg = Response::new_empty(StatusCode(100));
+            msg.raw_print(pt(*self.response_writer.as_mut().unwrap()),
+                self.http_version, self.headers.as_slice(), true).ok();
+            self.response_writer.as_mut().unwrap().flush().ok();
+            self.must_send_continue = false;
+        }
+
         fn passthrough<'a>(r: &'a mut Reader) -> &'a mut Reader { r }
         passthrough(self.data_reader)
     }

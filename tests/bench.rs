@@ -2,6 +2,7 @@
 
 extern crate httpd = "tiny-http";
 extern crate test;
+extern crate time;
 
 use std::io::Command;
 

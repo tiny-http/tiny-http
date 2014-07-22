@@ -66,7 +66,9 @@ pub enum RequestCreationError {
 }
 
 // this trait is to make sure that Request implements Send
+#[doc(hidden)]
 trait MustBeSendDummy : Send {}
+#[doc(hidden)]
 impl MustBeSendDummy for Request {}
 
 /// Builds a new request

@@ -133,7 +133,9 @@ pub struct Server {
 }
 
 // this trait is to make sure that Server implements Share and Send
+#[doc(hidden)]
 trait MustBeShareDummy : Share + Send {}
+#[doc(hidden)]
 impl MustBeShareDummy for Server {}
 
 #[unstable]

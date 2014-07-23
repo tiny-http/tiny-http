@@ -3,15 +3,7 @@ env:
     - secure: V+q4PfXMjLYlYowARj1IN+pHrbBEPO7v20Xhu/8VMhMEwQIh8PgB5bfHFT7UNJa5eWf2bi5e0dM1SpblTT67lfWUpg4Gn3yf2pg/6BgM75NrZl3tK5Uh435fXO/4ne+iOHPRl7wIDKf/WRxCNor5hI8gOAziCuv7T1IE1qZzIF8=
 
 install:
-  # rustc
-  - wget http://static.rust-lang.org/dist/rust-nightly-x86_64-unknown-linux-gnu.tar.gz
-  - tar xzf rust-nightly-x86_64-unknown-linux-gnu.tar.gz
-  - export PATH=$PATH:$(pwd)/rust-nightly-x86_64-unknown-linux-gnu/bin
-  - export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$(pwd)/rust-nightly-x86_64-unknown-linux-gnu/lib
-  # cargo
-  - curl -O http://static.rust-lang.org/cargo-dist/cargo-nightly-linux.tar.gz
-  - tar xf cargo-nightly-linux.tar.gz
-  - export PATH=$PATH:$(pwd)/cargo-nightly/bin
+  - curl http://www.rust-lang.org/rustup.sh | sudo sh -
 
 script:
   - cargo test

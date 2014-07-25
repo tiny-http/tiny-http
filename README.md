@@ -13,6 +13,7 @@ What does **tiny-http** handle?
  - Turning user input (eg. POST input) into a contiguous UTF-8 string (**not implemented yet**)
  - Ranges (**not implemented yet**)
  - HTTPS (**not implemented yet**)
+ - `Connection: upgrade` (used by websockets)
 
 Tiny-http handles everything that is related to client connections and data transfers and encoding.
 

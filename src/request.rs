@@ -106,10 +106,26 @@ pub fn new_request<R: Reader + Send, W: Writer + Send>(method: Method, path: ::u
         }
     };
 
+    // true if the client sent a `Connection: upgrade` header
+    let connection_upgrade = {
+        use std::ascii::StrAsciiExt;
+
+        match headers.iter().find(|h: &&Header| h.field.equiv(&"Connection")) {
+            None => false,
+            Some(h) if h.value.as_slice().eq_ignore_ascii_case("upgrade")
+                => true,
+            _ => false
+        }
+    };
+
     // building the reader depending on
     //  transfer-encoding and content-length
     let reader =
-        if content_length.is_some() {
+        if connection_upgrade {
+            // if we have a `Connection: upgrade`, always keeping the whole reader
+            box source_data as Box<Reader + Send>
+
+        } else if content_length.is_some() {
             let content_length = content_length.as_ref().unwrap().clone();
 
             if content_length == 0 {
@@ -215,6 +231,8 @@ impl Request {
 
         response.raw_print(self.response_writer.as_mut().unwrap().by_ref(), self.http_version,
             self.headers.as_slice(), false, Some(protocol)).ok();   // TODO: unused result
+
+        self.response_writer.as_mut().unwrap().flush().ok();    // TODO: unused result
 
         let stream = CustomStream::new(self.into_reader_impl(), self.into_writer_impl());
         box stream as Box<Stream + Send>

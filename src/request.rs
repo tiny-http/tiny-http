@@ -200,19 +200,21 @@ impl Request {
         &self.remote_addr
     }
 
-    /// Turns the `Request` into a `Stream`.
+    /// Sends a response with a `Connection: upgrade` header, then turns the `Request` into a `Stream`.
     /// 
     /// The main purpose of this function is to support websockets.
     /// If you detect that the request wants to use some kind of protocol upgrade, you can
     ///  call this function to obtain full control of the socket stream.
-    /// Keep in mind that it is up to you to send the initial response.
     /// 
     /// If you call this on a non-websocket request, tiny-http will wait until this `Stream` object
     ///  is destroyed before continuing to read or write on the socket. Therefore you should always
     ///  destroy it as soon as possible.
     #[unstable]
-    pub fn into_stream(mut self) -> Box<Stream + Send> {
+    pub fn upgrade<R: Reader>(mut self, protocol: &str, response: Response<R>) -> Box<Stream + Send> {
         use util::CustomStream;
+
+        response.raw_print(self.response_writer.as_mut().unwrap().by_ref(), self.http_version,
+            self.headers.as_slice(), false, Some(protocol)).ok();   // TODO: unused result
 
         let stream = CustomStream::new(self.into_reader_impl(), self.into_writer_impl());
         box stream as Box<Stream + Send>
@@ -238,7 +240,7 @@ impl Request {
         if self.must_send_continue {
             let msg = Response::new_empty(StatusCode(100));
             msg.raw_print(self.response_writer.as_mut().unwrap().by_ref(),
-                self.http_version, self.headers.as_slice(), true).ok();
+                self.http_version, self.headers.as_slice(), true, None).ok();
             self.response_writer.as_mut().unwrap().flush().ok();
             self.must_send_continue = false;
         }
@@ -299,7 +301,7 @@ impl Request {
 
         match response.raw_print(writer.by_ref(),
                                 self.http_version, self.headers.as_slice(),
-                                do_not_send_body)
+                                do_not_send_body, None)
         {
             Ok(_) => (),
             Err(ref err) if err.kind == io::Closed => (),

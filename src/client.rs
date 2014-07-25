@@ -165,7 +165,7 @@ impl Iterator<Request> for ClientConnection {
                 Err(WrongRequestLine) => {
                     let writer = self.sink.next().unwrap();
                     let response = Response::new_empty(StatusCode(400));
-                    response.raw_print(writer, HTTPVersion(1, 1), &[], false).ok();
+                    response.raw_print(writer, HTTPVersion(1, 1), &[], false, None).ok();
                     return None;    // we don't know where the next request would start,
                                     // se we have to close
                 },
@@ -173,7 +173,7 @@ impl Iterator<Request> for ClientConnection {
                 Err(WrongHeader(ver)) => {
                     let writer = self.sink.next().unwrap();
                     let response = Response::new_empty(StatusCode(400));
-                    response.raw_print(writer, ver, &[], false).ok();
+                    response.raw_print(writer, ver, &[], false, None).ok();
                     return None;    // we don't know where the next request would start,
                                     // se we have to close
                 },
@@ -182,14 +182,14 @@ impl Iterator<Request> for ClientConnection {
                     // request timeout
                     let writer = self.sink.next().unwrap();
                     let response = Response::new_empty(StatusCode(408));
-                    response.raw_print(writer, HTTPVersion(1, 1), &[], false).ok();
+                    response.raw_print(writer, HTTPVersion(1, 1), &[], false, None).ok();
                     return None;    // closing the connection
                 },
 
                 Err(ExpectationFailed(ver)) => {
                     let writer = self.sink.next().unwrap();
                     let response = Response::new_empty(StatusCode(417));
-                    response.raw_print(writer, ver, &[], true).ok();
+                    response.raw_print(writer, ver, &[], true, None).ok();
                     return None;    // TODO: should be recoverable, but needs handling in case of body
                 },
 
@@ -205,7 +205,7 @@ impl Iterator<Request> for ClientConnection {
                 let response =
                     Response::from_string("This server only supports HTTP versions 1.0 and 1.1"
                         .to_string()).with_status_code(StatusCode(505));
-                response.raw_print(writer, HTTPVersion(1, 1), &[], false).ok();
+                response.raw_print(writer, HTTPVersion(1, 1), &[], false, None).ok();
                 continue
             }
 

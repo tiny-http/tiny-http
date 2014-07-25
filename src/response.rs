@@ -251,11 +251,12 @@ impl<R: Reader> Response<R> {
     /// Note: does not flush the writer.
     #[unstable]
     pub fn raw_print<W: Writer>(mut self, mut writer: W, http_version: HTTPVersion,
-                                request_headers: &[Header], do_not_send_body: bool)
+                                request_headers: &[Header], do_not_send_body: bool,
+                                upgrade: Option<&str>)
                                 -> IoResult<()>
     {
-        let transfer_encoding = choose_transfer_encoding(request_headers,
-                                    &http_version, &self.data_length, false /* TODO */);
+        let mut transfer_encoding = Some(choose_transfer_encoding(request_headers,
+                                    &http_version, &self.data_length, false /* TODO */));
 
         // add `Date` if not in the headers
         if self.headers.iter().find(|h| h.field.equiv(&"Date")).is_none() {
@@ -269,6 +270,14 @@ impl<R: Reader> Response<R> {
             );
         }
 
+        // handling upgrade
+        if upgrade.is_some() {
+            let upgrade = upgrade.unwrap();
+            self.headers.unshift(from_str(format!("Upgrade: {}", upgrade).as_slice()).unwrap());
+            self.headers.unshift(from_str("Connection: upgrade").unwrap());
+            transfer_encoding = None;
+        }
+
         // checking whether to ignore the body of the response
         let do_not_send_body = do_not_send_body || 
             match self.status_code.as_uint() {
@@ -279,20 +288,22 @@ impl<R: Reader> Response<R> {
 
         // preparing headers for transfer
         match transfer_encoding {
-            Chunked => {
+            Some(Chunked) => {
                 self.headers.push(
                     from_str("Transfer-Encoding: chunked").unwrap()
                 )
             },
 
-            Identity => {
+            Some(Identity) => {
                 assert!(self.data_length.is_some());
                 let data_length = self.data_length.unwrap();
                 
                 self.headers.push(
                     from_str(format!("Content-Length: {}", data_length).as_slice()).unwrap()
                 )
-            }
+            },
+
+            _ => ()
         };
 
         // sending headers
@@ -303,14 +314,14 @@ impl<R: Reader> Response<R> {
         if !do_not_send_body {
             match transfer_encoding {
 
-                Chunked => {
+                Some(Chunked) => {
                     use util::ChunksEncoder;
 
                     let mut writer = ChunksEncoder::new(writer);
                     try!(util::copy(&mut self.reader, &mut writer));
                 },
 
-                Identity => {
+                Some(Identity) => {
                     use util::EqualReader;
 
                     assert!(self.data_length.is_some());
@@ -321,7 +332,9 @@ impl<R: Reader> Response<R> {
                             EqualReader::new(self.reader.by_ref(), data_length);
                         try!(util::copy(&mut equ_reader, &mut writer));
                     }
-                }
+                },
+
+                _ => ()
 
             }
         }

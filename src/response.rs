@@ -260,12 +260,12 @@ impl<R: Reader> Response<R> {
 
         // add `Date` if not in the headers
         if self.headers.iter().find(|h| h.field.equiv(&"Date")).is_none() {
-            self.headers.unshift(build_date_header());
+            self.headers.insert(0, build_date_header());
         }
 
         // add `Server` if not in the headers
         if self.headers.iter().find(|h| h.field.equiv(&"Server")).is_none() {
-            self.headers.unshift(
+            self.headers.insert(0, 
                 from_str("Server: tiny-http (Rust)").unwrap()
             );
         }
@@ -273,8 +273,8 @@ impl<R: Reader> Response<R> {
         // handling upgrade
         if upgrade.is_some() {
             let upgrade = upgrade.unwrap();
-            self.headers.unshift(from_str(format!("Upgrade: {}", upgrade).as_slice()).unwrap());
-            self.headers.unshift(from_str("Connection: upgrade").unwrap());
+            self.headers.insert(0, from_str(format!("Upgrade: {}", upgrade).as_slice()).unwrap());
+            self.headers.insert(0, from_str("Connection: upgrade").unwrap());
             transfer_encoding = None;
         }
 

@@ -81,6 +81,7 @@ request.respond(response)
 #![feature(unsafe_destructor)]
 
 extern crate encoding;
+extern crate flate;
 extern crate time;
 extern crate url;
 

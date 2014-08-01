@@ -103,6 +103,9 @@ mod request;
 mod response;
 
 #[allow(dead_code)]     // TODO: remove when everything is implemented
+mod http2;
+
+#[allow(dead_code)]     // TODO: remove when everything is implemented
 mod util;
 
 /// The main class of this library.

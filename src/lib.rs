@@ -146,7 +146,15 @@ pub struct IncomingRequests<'a> {
 
 /// Object which allows you to build a server.
 pub struct ServerBuilder {
+    // the address to listen to
     address: ip::SocketAddr,
+
+    // number of milliseconds before client timeout
+    client_timeout_ms: u32,
+
+    // maximum number of clients before 503
+    // TODO: 
+    //max_clients: uint,
 }
 
 impl ServerBuilder {
@@ -154,6 +162,8 @@ impl ServerBuilder {
     pub fn new() -> ServerBuilder {
         ServerBuilder {
             address: ip::SocketAddr { ip: ip::Ipv4Addr(0, 0, 0, 0), port: 80 },
+            client_timeout_ms: 10 * 1000,
+            //max_clients: { use std::num::Bounded; Bounded::max_value() },
         }
     }
 
@@ -168,6 +178,12 @@ impl ServerBuilder {
     /// Call `server.get_server_addr()` to retreive it once the server is created.
     pub fn with_random_port(mut self) -> ServerBuilder {
         self.address.port = 0;
+        self
+    }
+
+    /// The server will use a precise port.
+    pub fn with_client_connections_timeout(mut self, milliseconds: u32) -> ServerBuilder {
+        self.client_timeout_ms = milliseconds;
         self
     }
 
@@ -206,10 +222,12 @@ impl Server {
                     use util::ClosableTcpStream;
 
                     let read_closable = ClosableTcpStream::new(sock.clone(),
-                        inside_close_trigger.clone(), true, false);
+                        inside_close_trigger.clone(), true, false,
+                        config.client_timeout_ms);
 
                     let write_closable = ClosableTcpStream::new(sock.clone(),
-                        inside_close_trigger.clone(), false, true);
+                        inside_close_trigger.clone(), false, true,
+                        config.client_timeout_ms);
 
                     ClientConnection::new(write_closable, read_closable)
                 });

@@ -138,7 +138,17 @@ fn responses_reordered() {
 
 #[test]
 fn connection_timeout() {
-    let (server, mut client) = support::new_one_server_one_client();
+    let (server, mut client) = {
+        use std::io::net::tcp::TcpStream;
+
+        let server = httpd::ServerBuilder::new()
+            .with_client_connections_timeout(3000)
+            .with_random_port().build().unwrap();
+        let port = server.get_server_addr().port;
+        let client = TcpStream::connect("127.0.0.1", port).unwrap();
+        (server, client)
+    };
+
     let (tx_stop, rx_stop) = channel();
 
     // executing server in parallel

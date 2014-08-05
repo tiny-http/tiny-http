@@ -10,7 +10,8 @@ use std::io::Command;
 #[ignore]
 // TODO: obtain time
 fn curl_bench() {
-    let (server, port) = httpd::Server::new_with_random_port().unwrap();
+    let server = httpd::ServerBuilder::new().with_random_port().build().unwrap();
+    let port = server.get_server_addr().port;
     let num_requests = 10u;
 
     match Command::new("curl")
@@ -29,7 +30,8 @@ fn curl_bench() {
 fn sequential_requests(bencher: &mut test::Bencher) {
     ::std::io::test::raise_fd_limit();
 
-    let (server, port) = httpd::Server::new_with_random_port().unwrap();
+    let server = httpd::ServerBuilder::new().with_random_port().build().unwrap();
+    let port = server.get_server_addr().port;
 
     let mut stream = std::io::net::tcp::TcpStream::connect("127.0.0.1", port).unwrap();
 
@@ -48,7 +50,8 @@ fn sequential_requests(bencher: &mut test::Bencher) {
 fn parallel_requests(bencher: &mut test::Bencher) {
     ::std::io::test::raise_fd_limit();
 
-    let (server, port) = httpd::Server::new_with_random_port().unwrap();
+    let server = httpd::ServerBuilder::new().with_random_port().build().unwrap();
+    let port = server.get_server_addr().port;
 
     bencher.bench_n(5, |_| {
         let mut streams = Vec::new();

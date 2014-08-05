@@ -1,7 +1,7 @@
 extern crate httpd = "tiny-http";
 
 fn main() {
-    let server = httpd::Server::new().unwrap();
+    let server = httpd::ServerBuilder::new().build().unwrap();
 
     for request in server.incoming_requests() {
         println!("received request! method: {}, url: {}, headers: {}",

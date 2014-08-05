@@ -10,7 +10,7 @@ in the case where the server creation fails (for example if the listening port i
 occupied).
 
 ```rust
-let server = httpd::Server::new().unwrap();
+let server = httpd::ServerBuilder::new().build().unwrap();
 ```
 
 A newly-created `Server` will immediatly start listening for incoming connections and HTTP
@@ -144,42 +144,49 @@ pub struct IncomingRequests<'a> {
     server: &'a Server
 }
 
+/// Object which allows you to build a server.
+pub struct ServerBuilder {
+    address: ip::SocketAddr,
+}
+
+impl ServerBuilder {
+    /// Creates a new builder.
+    pub fn new() -> ServerBuilder {
+        ServerBuilder {
+            address: ip::SocketAddr { ip: ip::Ipv4Addr(0, 0, 0, 0), port: 80 },
+        }
+    }
+
+    /// The server will use a precise port.
+    pub fn with_port(mut self, port: ip::Port) -> ServerBuilder {
+        self.address.port = port;
+        self
+    }
+
+    /// The server will use a random port.
+    ///
+    /// Call `server.get_server_addr()` to retreive it once the server is created.
+    pub fn with_random_port(mut self) -> ServerBuilder {
+        self.address.port = 0;
+        self
+    }
+
+    /// Builds the server with the given configuration.
+    pub fn build(self) -> IoResult<Server> {
+        Server::new(self)
+    }
+}
+
 impl Server {
-    /// Builds a new server on port 80 that listens to all inputs.
-    #[unstable]
-    #[inline]
-    pub fn new() -> IoResult<Server> {
-        Server::new_with_port(80)
-    }
-
-    /// Builds a new server on a given port and that listens to all inputs.
-    #[unstable]
-    #[inline]
-    pub fn new_with_port(port: ip::Port) -> IoResult<Server> {
-        Server::new_with_addr(&ip::SocketAddr{ip: ip::Ipv4Addr(0, 0, 0, 0), port: port})
-    }
-
-    /// Builds a new server on a rand port and that listens to all inputs.
-    /// Returns the server and the port it was created on.
-    /// This function is guaranteed not to fail because of a port already in use,
-    ///  and is useful for testing purposes.
-    #[unstable]
-    #[inline]
-    pub fn new_with_random_port() -> IoResult<(Server, ip::Port)> {
-        Server::new_with_addr(&ip::SocketAddr{ip: ip::Ipv4Addr(0, 0, 0, 0), port: 0})
-            .map(|s| { let port = s.get_server_addr().port; (s, port) })
-    }
-
     /// Builds a new server that listens on the specified address.
-    #[unstable]
-    pub fn new_with_addr(addr: &ip::SocketAddr) -> IoResult<Server> {
+    fn new(config: ServerBuilder) -> IoResult<Server> {
         // building the "close" variable
         let close_trigger = Arc::new(AtomicBool::new(false));
 
         // building the TcpAcceptor
         let (server, local_addr) = {
             let mut listener = try!(tcp::TcpListener::bind(
-                format!("{}", addr.ip).as_slice(), addr.port));
+                format!("{}", config.address.ip).as_slice(), config.address.port));
             let local_addr = try!(listener.socket_name());
             let server = try!(listener.listen());
             let server = util::ClosableTcpAcceptor::new(server, close_trigger.clone());

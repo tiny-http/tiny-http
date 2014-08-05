@@ -3,7 +3,8 @@ use std::io::net::tcp::TcpStream;
 
 /// Creates a server and a client connected to the server.
 pub fn new_one_server_one_client() -> (httpd::Server, TcpStream) {
-    let (server, port) = httpd::Server::new_with_random_port().unwrap();
+    let server = httpd::ServerBuilder::new().with_random_port().build().unwrap();
+    let port = server.get_server_addr().port;
     let client = TcpStream::connect("127.0.0.1", port).unwrap();
     (server, client)
 }
@@ -12,7 +13,8 @@ pub fn new_one_server_one_client() -> (httpd::Server, TcpStream) {
 /// 
 /// The server will automatically close after 3 seconds.
 pub fn new_client_to_hello_world_server() -> TcpStream {
-    let (server, port) = httpd::Server::new_with_random_port().unwrap();
+    let server = httpd::ServerBuilder::new().with_random_port().build().unwrap();
+    let port = server.get_server_addr().port;
     let client = TcpStream::connect("127.0.0.1", port).unwrap();
 
     spawn(proc() {

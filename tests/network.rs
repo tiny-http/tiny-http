@@ -91,7 +91,8 @@ fn pipelining_test() {
 fn server_crash_results_in_response() {
     use std::io::net::tcp::TcpStream;
 
-    let (server, port) = httpd::Server::new_with_random_port().unwrap();
+    let server = httpd::ServerBuilder::new().with_random_port().build().unwrap();
+    let port = server.get_server_addr().port;
     let mut client = TcpStream::connect("127.0.0.1", port).unwrap();
 
     spawn(proc() {

@@ -20,7 +20,8 @@ fn get_content_type(path: &Path) -> &'static str {
 }
 
 fn main() {
-    let (server, port) = httpd::Server::new_with_random_port().unwrap();
+    let server = httpd::ServerBuilder::new().with_random_port().build().unwrap();
+    let port = server.get_server_addr().port;
     println!("Now listening on port {}", port);
 
     loop {

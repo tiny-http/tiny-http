@@ -162,7 +162,7 @@ impl ServerBuilder {
     pub fn new() -> ServerBuilder {
         ServerBuilder {
             address: ip::SocketAddr { ip: ip::Ipv4Addr(0, 0, 0, 0), port: 80 },
-            client_timeout_ms: 10 * 1000,
+            client_timeout_ms: 60 * 1000,
             //max_clients: { use std::num::Bounded; Bounded::max_value() },
         }
     }

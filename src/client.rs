@@ -46,12 +46,12 @@ impl ClientConnection {
     {
         let remote_addr = read_socket.peer_name();
 
-        let mut source = SequentialReaderBuilder::new(BufferedReader::new(read_socket));
+        let mut source = SequentialReaderBuilder::new(BufferedReader::with_capacity(1024, read_socket));
         let first_header = source.next().unwrap();
 
         ClientConnection {
             source: source,
-            sink: SequentialWriterBuilder::new(BufferedWriter::new(write_socket)),
+            sink: SequentialWriterBuilder::new(BufferedWriter::with_capacity(1024, write_socket)),
             remote_addr: remote_addr,
             next_header_source: first_header,
             no_more_requests: false,

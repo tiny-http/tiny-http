@@ -56,12 +56,12 @@ fn main() {
     for request in server.incoming_requests() {
         // we are handling this websocket connection in a new task
         spawn(proc() {
-            use std::ascii::StrAsciiExt;
+            use std::ascii::{AsciiCast, AsciiStr};
 
             // checking the "Upgrade" header to check that it is a websocket
             match request.get_headers().iter()
                 .find(|h| h.field.equiv(&"Upgrade")) 
-                .filtered(|hdr| hdr.value.as_slice().eq_ignore_ascii_case("websocket"))
+                .filtered(|hdr| hdr.value.as_slice().eq_ignore_case(b"websocket".to_ascii()))
             {
                 None => {
                     // sending the HTML page
@@ -88,7 +88,8 @@ fn main() {
                 .with_header(from_str("Upgrade: websocket").unwrap())
                 .with_header(from_str("Connection: Upgrade").unwrap())
                 .with_header(from_str("Sec-WebSocket-Protocol: ping").unwrap())
-                .with_header(from_str(format!("Sec-WebSocket-Accept: {}", convert_key(key.as_slice())).as_slice()).unwrap());
+                .with_header(from_str(format!("Sec-WebSocket-Accept: {}",
+                    convert_key(key.as_slice().as_str_ascii())).as_slice()).unwrap());
 
             // 
             let mut stream = request.upgrade("websocket", response);

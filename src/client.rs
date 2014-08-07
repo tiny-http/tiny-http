@@ -1,3 +1,4 @@
+use std::ascii::Ascii;
 use std::io;
 use std::io::{BufferedReader, BufferedWriter, IoError, IoResult};
 use std::io::net::ip::SocketAddr;
@@ -61,28 +62,26 @@ impl ClientConnection {
     /// 
     /// Reads until `CRLF` is reached. The next read will start
     ///  at the first byte of the new line.
-    fn read_next_line(&mut self) -> IoResult<String> {
+    fn read_next_line(&mut self) -> IoResult<Vec<Ascii>> {
         use std::io;
-        use std::path::BytesContainer;
 
         let mut buf = Vec::new();
         let mut prev_byte_was_cr = false;
 
         loop {
+            use std::ascii::OwnedAsciiCast;
+
             let byte = try!(self.next_header_source.read_byte());
 
             if byte == b'\n' && prev_byte_was_cr {
-                return match buf.container_as_str() {
-                    Some(s) => Ok(s.to_string()),
+                buf.pop();  // removing the '\r'
+                return match buf.into_ascii_opt() {
+                    Some(s) => Ok(s),
                     None => Err(io::standard_error(io::InvalidInput))
                 }
             }
 
-            if byte == b'\r' {
-                prev_byte_was_cr = true;
-            } else {
-                prev_byte_was_cr = false;
-            }
+            prev_byte_was_cr = byte == b'\r';
 
             buf.push(byte);
         }
@@ -92,24 +91,28 @@ impl ClientConnection {
     /// Blocks until the header has been read.
     fn read(&mut self) -> Result<Request, ReadError> {
         let (method, path, version, headers) = {
+            use std::ascii::AsciiStr;
+
             // reading the request line
             let (method, path, version) = {
                 let line = try!(self.read_next_line().map_err(|e| ReadIoError(e)));
 
                 try!(parse_request_line(
-                    line.as_slice().trim()
+                    line.as_slice().as_str_ascii().trim()    // TODO: remove this conversion
                 ))
             };
 
             // getting all headers
             let headers = {
+                use std::ascii::AsciiStr;
+
                 let mut headers = Vec::new();
                 loop {
                     let line = try!(self.read_next_line().map_err(|e| ReadIoError(e)));
 
-                    if line.as_slice().trim().len() == 0 { break };
+                    if line.len() == 0 { break };
                     headers.push(
-                        match from_str(line.as_slice().trim()) {
+                        match from_str(line.as_slice().as_str_ascii().trim()) {    // TODO: remove this conversion
                             Some(h) => h,
                             None => return Err(WrongHeader(version))
                         }
@@ -210,19 +213,19 @@ impl Iterator<Request> for ClientConnection {
 
             // updating the status of the connection
             {
-                use std::ascii::StrAsciiExt;
+                use std::ascii::{AsciiCast, AsciiStr};
 
                 let connection_header = rq.get_headers().iter()
                     .find(|h| h.field.equiv(&"Connection")).map(|h| h.value.as_slice());
 
                 match connection_header {
-                    Some(ref val) if val.eq_ignore_ascii_case("close") => 
+                    Some(ref val) if val.eq_ignore_case(b"close".to_ascii()) => 
                         self.no_more_requests = true,
 
-                    Some(ref val) if val.eq_ignore_ascii_case("upgrade") => 
+                    Some(ref val) if val.eq_ignore_case(b"upgrade".to_ascii()) => 
                         self.no_more_requests = true,
 
-                    Some(ref val) if !val.eq_ignore_ascii_case("keep-alive") &&
+                    Some(ref val) if !val.eq_ignore_case(b"keep-alive".to_ascii()) &&
                                     *rq.get_http_version() == HTTPVersion(1, 0) =>
                         self.no_more_requests = true,
 

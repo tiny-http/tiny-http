@@ -77,7 +77,9 @@ fn write_message_header<W: Writer>(mut writer: W, http_version: &HTTPVersion,
 
     // writing headers
     for header in headers.iter() {
-        try!(write!(writer, "{}: {}\r\n", header.field, header.value));
+        use std::ascii::AsciiStr;
+        try!(write!(writer, "{}: {}\r\n", header.field.as_str().as_str_ascii(),
+            header.value.as_slice().as_str_ascii()));
     }
 
     // separator between header and data
@@ -107,8 +109,10 @@ fn choose_transfer_encoding(request_headers: &[Header], http_version: &HTTPVersi
 
         // getting the corresponding TransferEncoding
         .and_then(|value| {
+            use std::ascii::AsciiStr;
+
             // getting list of requested elements
-            let mut parse = util::parse_header_value(value);
+            let mut parse = util::parse_header_value(value.as_str_ascii());     // TODO: remove conversion
 
             // sorting elements by most priority
             parse.sort_by(|a, b| b.val1().partial_cmp(&a.val1()).unwrap_or(Equal));
@@ -199,7 +203,8 @@ impl<R: Reader> Response<R> {
 
         // if the header is Content-Length, setting the data length
         if header.field.equiv(&"Content-Length") {
-            match from_str::<uint>(header.value.as_slice()) {
+            use std::ascii::AsciiStr;
+            match from_str::<uint>(header.value.as_slice().as_str_ascii()) {
                 Some(val) => self.data_length = Some(val),
                 None => ()      // wrong value for content-length
             };

@@ -47,7 +47,7 @@ pub struct Request {
 
     method: Method,
 
-    path: ::url::Path,
+    path: String,
 
     http_version: HTTPVersion,
 
@@ -72,7 +72,7 @@ trait MustBeSendDummy : Send {}
 impl MustBeSendDummy for Request {}
 
 /// Builds a new request
-pub fn new_request<R: Reader + Send, W: Writer + Send>(method: Method, path: ::url::Path,
+pub fn new_request<R: Reader + Send, W: Writer + Send>(method: Method, path: String,
                              version: HTTPVersion, headers: Vec<Header>,
                              remote_addr: ip::SocketAddr, mut source_data: R, writer: W)
     -> Result<Request, RequestCreationError>
@@ -182,8 +182,8 @@ impl Request {
     /// Returns the resource requested by the client.
     #[unstable]
     #[inline]
-    pub fn get_url(&self) -> &::url::Path {
-        &self.path
+    pub fn get_url(&self) -> &str {
+        self.path.as_slice()
     }
 
     /// Returns a list of all headers sent by the client.

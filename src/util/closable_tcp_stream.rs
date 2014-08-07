@@ -9,17 +9,20 @@ pub struct ClosableTcpStream {
     end_trigger: Arc<AtomicBool>,
     close_read: bool,
     close_write: bool,
+    timeout_ms: u32,
 }
 
 impl ClosableTcpStream {
     pub fn new(stream: TcpStream, end_trigger: Arc<AtomicBool>,
-               close_read: bool, close_write: bool) -> ClosableTcpStream {
-
+        close_read: bool, close_write: bool, timeout_ms: u32)
+        -> ClosableTcpStream
+    {
         ClosableTcpStream {
             stream: stream,
             end_trigger: end_trigger,
             close_read: close_read,
             close_write: close_write,
+            timeout_ms: timeout_ms,
         }
     }
 
@@ -50,7 +53,7 @@ impl Reader for ClosableTcpStream {
         // getting the time when to stop the loop
         // 10 seconds timeout
         let timeout = time::precise_time_ns()
-            + 10 * 1000 * 1000 * 1000;
+            + (self.timeout_ms as u64) * 1000 * 1000;
 
         loop {
             // TODO: this makes some tests fail

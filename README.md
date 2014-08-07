@@ -40,7 +40,7 @@ extern crate httpd = "tiny-http"
 ### [Usage](http://www.rust-ci.org/tomaka/tiny-http/doc/tiny-http/index.html)
 
 ```rust
-let server = httpd::Server::new().unwrap();
+let server = httpd::ServerBuilder::new().build().unwrap();
 
 for request in server.incoming_requests() {
     println!("received request! method: {}, url: {}, headers: {}",

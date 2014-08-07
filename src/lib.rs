@@ -10,7 +10,7 @@ in the case where the server creation fails (for example if the listening port i
 occupied).
 
 ```rust
-let server = httpd::Server::new().unwrap();
+let server = httpd::ServerBuilder::new().build().unwrap();
 ```
 
 A newly-created `Server` will immediatly start listening for incoming connections and HTTP
@@ -147,42 +147,65 @@ pub struct IncomingRequests<'a> {
     server: &'a Server
 }
 
+/// Object which allows you to build a server.
+pub struct ServerBuilder {
+    // the address to listen to
+    address: ip::SocketAddr,
+
+    // number of milliseconds before client timeout
+    client_timeout_ms: u32,
+
+    // maximum number of clients before 503
+    // TODO: 
+    //max_clients: uint,
+}
+
+impl ServerBuilder {
+    /// Creates a new builder.
+    pub fn new() -> ServerBuilder {
+        ServerBuilder {
+            address: ip::SocketAddr { ip: ip::Ipv4Addr(0, 0, 0, 0), port: 80 },
+            client_timeout_ms: 60 * 1000,
+            //max_clients: { use std::num::Bounded; Bounded::max_value() },
+        }
+    }
+
+    /// The server will use a precise port.
+    pub fn with_port(mut self, port: ip::Port) -> ServerBuilder {
+        self.address.port = port;
+        self
+    }
+
+    /// The server will use a random port.
+    ///
+    /// Call `server.get_server_addr()` to retreive it once the server is created.
+    pub fn with_random_port(mut self) -> ServerBuilder {
+        self.address.port = 0;
+        self
+    }
+
+    /// The server will use a precise port.
+    pub fn with_client_connections_timeout(mut self, milliseconds: u32) -> ServerBuilder {
+        self.client_timeout_ms = milliseconds;
+        self
+    }
+
+    /// Builds the server with the given configuration.
+    pub fn build(self) -> IoResult<Server> {
+        Server::new(self)
+    }
+}
+
 impl Server {
-    /// Builds a new server on port 80 that listens to all inputs.
-    #[unstable]
-    #[inline]
-    pub fn new() -> IoResult<Server> {
-        Server::new_with_port(80)
-    }
-
-    /// Builds a new server on a given port and that listens to all inputs.
-    #[unstable]
-    #[inline]
-    pub fn new_with_port(port: ip::Port) -> IoResult<Server> {
-        Server::new_with_addr(&ip::SocketAddr{ip: ip::Ipv4Addr(0, 0, 0, 0), port: port})
-    }
-
-    /// Builds a new server on a rand port and that listens to all inputs.
-    /// Returns the server and the port it was created on.
-    /// This function is guaranteed not to fail because of a port already in use,
-    ///  and is useful for testing purposes.
-    #[unstable]
-    #[inline]
-    pub fn new_with_random_port() -> IoResult<(Server, ip::Port)> {
-        Server::new_with_addr(&ip::SocketAddr{ip: ip::Ipv4Addr(0, 0, 0, 0), port: 0})
-            .map(|s| { let port = s.get_server_addr().port; (s, port) })
-    }
-
     /// Builds a new server that listens on the specified address.
-    #[unstable]
-    pub fn new_with_addr(addr: &ip::SocketAddr) -> IoResult<Server> {
+    fn new(config: ServerBuilder) -> IoResult<Server> {
         // building the "close" variable
         let close_trigger = Arc::new(AtomicBool::new(false));
 
         // building the TcpAcceptor
         let (server, local_addr) = {
             let mut listener = try!(tcp::TcpListener::bind(
-                format!("{}", addr.ip).as_slice(), addr.port));
+                format!("{}", config.address.ip).as_slice(), config.address.port));
             let local_addr = try!(listener.socket_name());
             let server = try!(listener.listen());
             let server = util::ClosableTcpAcceptor::new(server, close_trigger.clone());
@@ -202,10 +225,12 @@ impl Server {
                     use util::ClosableTcpStream;
 
                     let read_closable = ClosableTcpStream::new(sock.clone(),
-                        inside_close_trigger.clone(), true, false);
+                        inside_close_trigger.clone(), true, false,
+                        config.client_timeout_ms);
 
                     let write_closable = ClosableTcpStream::new(sock.clone(),
-                        inside_close_trigger.clone(), false, true);
+                        inside_close_trigger.clone(), false, true,
+                        config.client_timeout_ms);
 
                     ClientConnection::new(write_closable, read_closable)
                 });

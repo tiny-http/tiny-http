@@ -1,3 +1,4 @@
+use std::ascii::AsciiStr;
 use std::io::{IoError, Stream};
 use std::io::net::ip;
 use {Header, HTTPVersion, Method, Response, StatusCode};
@@ -91,16 +92,16 @@ pub fn new_request<R: Reader + Send, W: Writer + Send>(method: Method, path: Str
     } else {
         headers.iter()
             .find(|h: &&Header| h.field.equiv(&"Content-Length"))
-            .and_then(|h| from_str::<uint>(h.value.as_slice()))
+            .and_then(|h| from_str::<uint>(h.value.as_slice().as_str_ascii()))
     };
 
     // true if the client sent a `Expect: 100-continue` header
     let expects_continue = {
-        use std::ascii::StrAsciiExt;
+        use std::ascii::{AsciiCast, AsciiStr};
 
         match headers.iter().find(|h: &&Header| h.field.equiv(&"Expect")) {
             None => false,
-            Some(h) if h.value.as_slice().eq_ignore_ascii_case("100-continue")
+            Some(h) if h.value.as_slice().eq_ignore_case(b"100-continue".to_ascii())
                 => true,
             _ => return Err(ExpectationFailed)
         }
@@ -108,11 +109,11 @@ pub fn new_request<R: Reader + Send, W: Writer + Send>(method: Method, path: Str
 
     // true if the client sent a `Connection: upgrade` header
     let connection_upgrade = {
-        use std::ascii::StrAsciiExt;
+        use std::ascii::{AsciiCast, AsciiStr};
 
         match headers.iter().find(|h: &&Header| h.field.equiv(&"Connection")) {
             None => false,
-            Some(h) if h.value.as_slice().eq_ignore_ascii_case("upgrade")
+            Some(h) if h.value.as_slice().eq_ignore_case(b"upgrade".to_ascii())
                 => true,
             _ => false
         }

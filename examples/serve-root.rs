@@ -36,12 +36,14 @@ fn main() {
         let file = std::io::File::open(&path);
 
         if file.is_ok() {
+            use std::ascii::AsciiCast;
+
             let response = httpd::Response::from_file(file.unwrap());
 
             let response = response.with_header(
-                httpd::Header{
+                httpd::Header {
                     field: from_str("Content-Type").unwrap(),
-                    value: get_content_type(&path).to_string()
+                    value: get_content_type(&path).to_ascii().to_vec()
                 }
             );
 

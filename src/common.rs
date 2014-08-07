@@ -1,4 +1,4 @@
-use std::ascii::{AsciiCast, StrAsciiExt};
+use std::ascii::{Ascii, AsciiCast, StrAsciiExt};
 use std::fmt::{Formatter, FormatError, Show};
 
 /// Status code of a request or response.
@@ -84,7 +84,7 @@ impl Equiv<uint> for StatusCode {
 #[unstable]
 pub struct Header {
     pub field: HeaderField,
-    pub value: String,
+    pub value: Vec<Ascii>,
 }
 
 impl ::std::from_str::FromStr for Header {
@@ -104,16 +104,24 @@ impl ::std::from_str::FromStr for Header {
             None => return None
         };
 
+        let value = match value.trim().to_ascii_opt() {
+            Some(v) => v.to_vec(),
+            None => return None
+        };
+
         Some(Header {
             field: field,
-            value: value.trim().to_string(),
+            value: value,
         })
     }
 }
 
 impl Show for Header {
     fn fmt(&self, formatter: &mut Formatter) -> Result<(), FormatError> {
-        (format!("{}: {}", self.field, self.value)).fmt(formatter)
+        use std::ascii::AsciiStr;
+        let value = self.value.as_slice();
+        let value = value.as_str_ascii();
+        (format!("{}: {}", self.field, value)).fmt(formatter)
     }
 }
 
@@ -125,7 +133,7 @@ impl Show for Header {
 pub struct HeaderField(Vec<Ascii>);
 
 impl HeaderField {
-    fn as_str<'a>(&'a self) -> &'a [Ascii] {
+    pub fn as_str<'a>(&'a self) -> &'a [Ascii] {
         match self { &HeaderField(ref s) => s.as_slice() }
     }
 }
@@ -244,19 +252,23 @@ mod test {
 
     #[test]
     fn test_parse_header() {
+        use std::ascii::AsciiStr;
+
         let header: Header = from_str("Content-Type: text/html").unwrap();
 
         assert!(header.field.equiv(&"content-type"));
-        assert!(header.value.as_slice() == "text/html");
+        assert!(header.value.as_slice().as_str_ascii() == "text/html");
 
         assert!(from_str::<Header>("hello world").is_none());
     }
 
     #[test]
     fn test_parse_header_with_doublecolon() {
+        use std::ascii::AsciiStr;
+
         let header: Header = from_str("Time: 20: 34").unwrap();
 
         assert!(header.field.equiv(&"time"));
-        assert!(header.value.as_slice() == "20: 34");
+        assert!(header.value.as_slice().as_str_ascii() == "20: 34");
     }
 }

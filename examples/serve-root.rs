@@ -32,7 +32,7 @@ fn main() {
 
         println!("{}", rq);
 
-        let path = Path::new(rq.get_url().path.clone());
+        let path = Path::new(rq.get_url());
         let file = std::io::File::open(&path);
 
         if file.is_ok() {

@@ -3,7 +3,6 @@ use std::io::{BufferedReader, BufferedWriter, IoError, IoResult};
 use std::io::net::ip::SocketAddr;
 use common::{HTTPVersion, Method};
 use Request;
-use url::Path;
 use util::{SequentialReader, SequentialReaderBuilder, SequentialWriterBuilder};
 use util::ClosableTcpStream;
 
@@ -262,7 +261,7 @@ fn parse_http_version(version: &str) -> Result<HTTPVersion, ReadError> {
 
 /// Parses the request line of the request.
 /// eg. GET / HTTP/1.1
-fn parse_request_line(line: &str) -> Result<(Method, Path, HTTPVersion), ReadError> {
+fn parse_request_line(line: &str) -> Result<(Method, String, HTTPVersion), ReadError> {
     let mut words = line.words();
 
     let method = words.next();
@@ -279,14 +278,9 @@ fn parse_request_line(line: &str) -> Result<(Method, Path, HTTPVersion), ReadErr
         None => return Err(WrongRequestLine)
     };
 
-    let path = match Path::parse(path) {
-        Ok(p) => p,
-        Err(_) => return Err(WrongRequestLine)
-    };
-
     let version = try!(parse_http_version(version));
 
-    Ok((method, path, version))
+    Ok((method, path.to_string(), version))
 }
 
 #[cfg(test)]
@@ -300,7 +294,7 @@ mod test {
             };
 
         assert!(method.equiv(&"get"));
-        assert!(path == from_str("/hello").unwrap());
+        assert!(path.as_slice() == "/hello");
         assert!(ver == ::common::HTTPVersion(1, 1));
 
         assert!(super::parse_request_line("GET /hello").is_err());

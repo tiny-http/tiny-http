@@ -9,8 +9,8 @@ The `new()` function returns an `IoResult<Server>` which will return an error
 in the case where the server creation fails (for example if the listening port is already
 occupied).
 
-```rust
-let server = httpd::ServerBuilder::new().build().unwrap();
+```no_run
+let server = tiny_http::ServerBuilder::new().build().unwrap();
 ```
 
 A newly-created `Server` will immediatly start listening for incoming connections and HTTP
@@ -21,7 +21,9 @@ requests.
 Calling `server.recv()` will block until the next request is available.
 This function returns an `IoResult<Request>`, so you need to handle the possible errors.
 
-```rust
+```no_run
+# let server = tiny_http::ServerBuilder::new().build().unwrap();
+
 loop {
     // blocks until the next request is received
     let request = match server.recv() {
@@ -30,14 +32,17 @@ loop {
     };
 
     // do something with the request
-    ...
+    // ...
 }
 ```
 
 In a real-case scenario, you will probably want to spawn multiple worker tasks and call
 `server.recv()` on all of them. Like this:
 
-```rust
+```no_run
+# use std::sync::Arc;
+# let server = tiny_http::ServerBuilder::new().build().unwrap();
+
 let server = Arc::new(server);
 
 for _ in range(0u, 4) {
@@ -47,7 +52,7 @@ for _ in range(0u, 4) {
         loop {
             let rq = server.recv().unwrap();
 
-            ...
+            // ...
         }
     })
 }
@@ -64,18 +69,24 @@ the requested method (`GET`, `POST`, etc.) and url.
 To handle a request, you need to create a `Response` object. See the docs of this object for
 more infos. Here is an example of creating a `Response` from a file:
 
-```rust
-let response = httpd::Response::from_file(Path::new("image.png"));
+```no_run
+# use std::io::File;
+let response = tiny_http::Response::from_file(File::open(&Path::new("image.png")).unwrap());
 ```
 
 All that remains to do is call `request.respond()`:
 
-```rust
+```no_run
+# use std::io::File;
+# let server = tiny_http::ServerBuilder::new().build().unwrap();
+# let request = server.recv().unwrap();
+# let response = tiny_http::Response::from_file(File::open(&Path::new("image.png")).unwrap());
+
 request.respond(response)
 ```
 */
 
-#![crate_name = "tiny-http"]
+#![crate_name = "tiny_http"]
 #![crate_type = "lib"]
 #![license = "Apache"]
 #![feature(unsafe_destructor)]

@@ -1,4 +1,4 @@
-extern crate httpd = "tiny-http";
+extern crate tiny_http;
 
 /**!
 
@@ -10,7 +10,7 @@ Usage: php-cgi <php-script-path>
 
 use std::os;
 
-fn handle(rq: httpd::Request, script: &str) {
+fn handle(rq: tiny_http::Request, script: &str) {
     use std::io::process::{Command, ExitStatus, ExitSignal, Ignored};
     use std::io::util;
 
@@ -67,7 +67,7 @@ fn main() {
         args[1].to_string()
     };
 
-    let server = Arc::new(httpd::ServerBuilder::new().with_port(9975).build().unwrap());
+    let server = Arc::new(tiny_http::ServerBuilder::new().with_port(9975).build().unwrap());
     println!("Now listening on port 9975");
 
     for _ in range(0, os::num_cpus()) {

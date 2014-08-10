@@ -1,11 +1,11 @@
-extern crate httpd = "tiny-http";
 extern crate crypto = "rust-crypto";
 extern crate serialize;
+extern crate tiny_http;
 
 use std::io::MemReader;
 
-fn home_page(port: u16) -> httpd::Response<MemReader> {
-    httpd::Response::from_string(format!("
+fn home_page(port: u16) -> tiny_http::Response<MemReader> {
+    tiny_http::Response::from_string(format!("
         <script type=\"text/javascript\">
         var socket = new WebSocket(\"ws://localhost:{}/\", \"ping\");
 
@@ -47,7 +47,7 @@ fn convert_key(input: &str) -> String {
 }
 
 fn main() {
-    let server = httpd::ServerBuilder::new().with_random_port().build().unwrap();
+    let server = tiny_http::ServerBuilder::new().with_random_port().build().unwrap();
     let port = server.get_server_addr().port;
 
     println!("Server started");
@@ -76,7 +76,7 @@ fn main() {
                 .find(|h| h.field.equiv(&"Sec-WebSocket-Key"))
             {
                 None => {
-                    let response = httpd::Response::new_empty(httpd::StatusCode(400));
+                    let response = tiny_http::Response::new_empty(tiny_http::StatusCode(400));
                     request.respond(response);
                     return
                 },
@@ -84,7 +84,7 @@ fn main() {
             };
 
             // building the "101 Switching Protocols" response
-            let response = httpd::Response::new_empty(httpd::StatusCode(101))
+            let response = tiny_http::Response::new_empty(tiny_http::StatusCode(101))
                 .with_header(from_str("Upgrade: websocket").unwrap())
                 .with_header(from_str("Connection: Upgrade").unwrap())
                 .with_header(from_str("Sec-WebSocket-Protocol: ping").unwrap())

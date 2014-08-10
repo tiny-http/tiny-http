@@ -1,4 +1,4 @@
-extern crate httpd = "tiny-http";
+extern crate tiny_http;
 
 fn get_content_type(path: &Path) -> &'static str {
     let extension = match path.extension_str() {
@@ -20,7 +20,7 @@ fn get_content_type(path: &Path) -> &'static str {
 }
 
 fn main() {
-    let server = httpd::ServerBuilder::new().with_random_port().build().unwrap();
+    let server = tiny_http::ServerBuilder::new().with_random_port().build().unwrap();
     let port = server.get_server_addr().port;
     println!("Now listening on port {}", port);
 
@@ -38,10 +38,10 @@ fn main() {
         if file.is_ok() {
             use std::ascii::AsciiCast;
 
-            let response = httpd::Response::from_file(file.unwrap());
+            let response = tiny_http::Response::from_file(file.unwrap());
 
             let response = response.with_header(
-                httpd::Header {
+                tiny_http::Header {
                     field: from_str("Content-Type").unwrap(),
                     value: get_content_type(&path).to_ascii().to_vec()
                 }
@@ -50,7 +50,7 @@ fn main() {
             rq.respond(response);
 
         } else {
-            let rep = httpd::Response::new_empty(httpd::StatusCode(404));
+            let rep = tiny_http::Response::new_empty(tiny_http::StatusCode(404));
             rq.respond(rep);
         }
     }

@@ -1,4 +1,4 @@
-extern crate httpd = "tiny-http";
+extern crate tiny_http;
 extern crate time;
 
 use std::io::timer;
@@ -91,7 +91,7 @@ fn pipelining_test() {
 fn server_crash_results_in_response() {
     use std::io::net::tcp::TcpStream;
 
-    let server = httpd::ServerBuilder::new().with_random_port().build().unwrap();
+    let server = tiny_http::ServerBuilder::new().with_random_port().build().unwrap();
     let port = server.get_server_addr().port;
     let mut client = TcpStream::connect("127.0.0.1", port).unwrap();
 
@@ -121,13 +121,13 @@ fn responses_reordered() {
         let rq2 = server.recv().unwrap();
 
         spawn(proc() {  
-            rq2.respond(httpd::Response::from_string(format!("second request")));
+            rq2.respond(tiny_http::Response::from_string(format!("second request")));
         });
 
         timer::sleep(100);
 
         spawn(proc() {  
-            rq1.respond(httpd::Response::from_string(format!("first request")));
+            rq1.respond(tiny_http::Response::from_string(format!("first request")));
         });
     });
 
@@ -141,7 +141,7 @@ fn connection_timeout() {
     let (server, mut client) = {
         use std::io::net::tcp::TcpStream;
 
-        let server = httpd::ServerBuilder::new()
+        let server = tiny_http::ServerBuilder::new()
             .with_client_connections_timeout(3000)
             .with_random_port().build().unwrap();
         let port = server.get_server_addr().port;

@@ -78,7 +78,7 @@ impl Equiv<uint> for StatusCode {
 /// The easiest way to create a `Header` object is to call `from_str`.
 /// 
 /// ```
-/// let header: Header = from_str("Content-Type: text/plain").unwrap();
+/// let header: tiny_http::Header = from_str("Content-Type: text/plain").unwrap();
 /// ```
 #[deriving(Clone)]
 #[unstable]

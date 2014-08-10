@@ -1,4 +1,4 @@
-extern crate httpd = "tiny-http";
+extern crate tiny_http;
 extern crate time;
 
 #[allow(dead_code)]
@@ -12,7 +12,7 @@ fn basic_handling() {
     let request = server.recv().unwrap();
     assert!(request.get_method().equiv(&"get"));
     //assert!(request.get_url() == "/");
-    request.respond(httpd::Response::from_string(format!("hello world")));
+    request.respond(tiny_http::Response::from_string(format!("hello world")));
 
     server.try_recv().unwrap();
 

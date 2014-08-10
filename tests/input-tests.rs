@@ -1,4 +1,4 @@
-extern crate httpd = "tiny-http";
+extern crate tiny_http;
 extern crate time;
 
 #[allow(dead_code)]

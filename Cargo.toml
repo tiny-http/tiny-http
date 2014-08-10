@@ -1,6 +1,6 @@
 [package]
 
-name = "tiny-http"
+name = "tiny_http"
 version = "0.0.1"
 authors = [ "pierre.krieger1708@gmail.com" ]
 

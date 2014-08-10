@@ -1,7 +1,7 @@
-extern crate httpd = "tiny-http";
+extern crate tiny_http;
 
 fn main() {
-    let server = httpd::ServerBuilder::new().build().unwrap();
+    let server = tiny_http::ServerBuilder::new().build().unwrap();
 
     for request in server.incoming_requests() {
         println!("received request! method: {}, url: {}, headers: {}",
@@ -10,7 +10,7 @@ fn main() {
             request.get_headers()
         );
 
-        let response = httpd::Response::from_string("hello world".to_string());
+        let response = tiny_http::Response::from_string("hello world".to_string());
         request.respond(response);
     }
 }

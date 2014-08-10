@@ -27,20 +27,20 @@ If you want to create a website in Rust, I strongly recommend using a framework 
 Add this to the `Cargo.toml` file of your project:
 
 ```toml
-[dependencies.tiny-http]
+[dependencies.tiny_http]
 git = "https://github.com/tomaka/tiny-http"
 ```
 
 Don't forget to add the external crate:
 
 ```rust
-extern crate httpd = "tiny-http"
+extern crate tiny_http;
 ```
 
 ### [Usage](http://www.rust-ci.org/tomaka/tiny-http/doc/tiny-http/index.html)
 
 ```rust
-let server = httpd::ServerBuilder::new().build().unwrap();
+let server = tiny_http::ServerBuilder::new().build().unwrap();
 
 for request in server.incoming_requests() {
     println!("received request! method: {}, url: {}, headers: {}",
@@ -49,7 +49,7 @@ for request in server.incoming_requests() {
         request.get_headers()
     );
 
-    let response = httpd::Response::from_string("hello world".to_string());
+    let response = tiny_http::Response::from_string("hello world".to_string());
     request.respond(response);
 }
 ```

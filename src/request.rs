@@ -243,12 +243,23 @@ impl Request {
     /// 
     /// # Example
     /// 
-    /// ```
-    /// let request = server.recv();
+    /// ```no_run
+    /// # extern crate serialize;
+    /// # extern crate tiny_http;
+    /// # use serialize::json::Json;
+    /// # fn get_content_type(_: &tiny_http::Request) -> &'static str { "" }
+    ///
+    /// # fn main() {
+    /// # let server = tiny_http::ServerBuilder::new().build().unwrap();
+    /// 
+    /// let mut request = server.recv().unwrap();
     /// 
     /// if get_content_type(&request) == "application/json" {
-    ///     let json: Json = from_str(request.as_reader().read_to_string()).unwrap();
+    ///     let content = request.as_reader().read_to_string().unwrap();
+    ///     let json: Json = from_str(content.as_slice()).unwrap();
     /// }
+    ///
+    /// # }
     /// ```
     ///
     /// If the client sent a `Expect: 100-continue` header with the request, calling this

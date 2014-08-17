@@ -1,4 +1,5 @@
 use std::io::net::tcp::TcpStream;
+use std::time::duration::Duration;
 use tiny_http;
 
 /// Creates a server and a client connected to the server.
@@ -33,7 +34,7 @@ pub fn new_client_to_hello_world_server() -> TcpStream {
                 _ => ()
             };
 
-            timer::sleep(20);
+            timer::sleep(Duration::milliseconds(20));
 
             if timeout <= time::precise_time_ns() {
                 break

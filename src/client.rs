@@ -244,12 +244,12 @@ impl Iterator<Request> for ClientConnection {
 
 /// Parses a "HTTP/1.1" string.
 fn parse_http_version(version: &str) -> Result<HTTPVersion, ReadError> {
-    let elems = version.splitn('/', 1).map(|e| e.to_string()).collect::<Vec<String>>();
+    let elems = version.splitn(1, '/').map(|e| e.to_string()).collect::<Vec<String>>();
     if elems.len() != 2 {
         return Err(WrongRequestLine)
     }
 
-    let elems = elems[1].as_slice().splitn('.', 1)
+    let elems = elems[1].as_slice().splitn(1, '.')
         .map(|e| e.to_string()).collect::<Vec<String>>();
     if elems.len() != 2 {
         return Err(WrongRequestLine)

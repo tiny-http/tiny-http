@@ -42,8 +42,8 @@ impl<R: Reader> Reader for DeflateReader<R> {
 
         // copying the buffer to the output
         let qty = {
-            use std::slice::MutableCloneableVector;
-            buf.copy_from(self.buffer.as_ref().unwrap().as_slice())
+            use std::slice::MutableCloneableSlice;
+            buf.clone_from_slice(self.buffer.as_ref().unwrap().as_slice())
         };
 
         self.buffer = Some(Vec::from_slice(self.buffer.as_ref().unwrap().slice_from(qty)));

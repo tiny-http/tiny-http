@@ -1,6 +1,7 @@
 use std::sync::Arc;
 use std::sync::atomics::AtomicUint;
 use std::sync::mpsc_queue::Queue;
+use std::time::duration::Duration;
 
 /// Manages a collection of threads.
 ///
@@ -10,9 +11,6 @@ pub struct TaskPool {
     free_tasks: Arc<Queue<Sender<proc():Send>>>,
     active_tasks: Arc<AtomicUint>,
 }
-
-/// Number of milliseconds after which an idle thread dies.
-static THREAD_IDLE_DIEAFTER: u64 = 5000;
 
 /// Minimum number of active threads.
 static MIN_THREADS: uint = 4;
@@ -37,6 +35,11 @@ impl Drop for Registration {
     }
 }
 
+/// Returns the duration after which an idle thread dies.
+#[inline(always)]
+fn get_idle_thread_dieafter() -> Duration {
+    Duration::seconds(5)
+}
 
 impl TaskPool {
     pub fn new() -> TaskPool {
@@ -96,7 +99,7 @@ impl TaskPool {
                 let (tx, rx) = channel();
                 queue.push(tx);
 
-                let timeout = timer.oneshot(THREAD_IDLE_DIEAFTER);
+                let timeout = timer.oneshot(get_idle_thread_dieafter());
                 select! {
                     next_fn = rx.recv() => next_fn(),
                     _ = timeout.recv() => {

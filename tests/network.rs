@@ -2,6 +2,7 @@ extern crate tiny_http;
 extern crate time;
 
 use std::io::timer;
+use std::time::duration::Duration;
 
 #[allow(dead_code)]
 mod support;
@@ -11,7 +12,7 @@ fn connection_close_header() {
     let mut client = support::new_client_to_hello_world_server();
 
     (write!(client, "GET / HTTP/1.1\r\nConnection: keep-alive\r\n\r\n")).unwrap();
-    timer::sleep(1000);
+    timer::sleep(Duration::milliseconds(1000));
 
     (write!(client, "GET / HTTP/1.1\r\nConnection: close\r\n\r\n")).unwrap();
 
@@ -36,7 +37,7 @@ fn detect_connection_closed() {
     let mut client = support::new_client_to_hello_world_server();
 
     (write!(client, "GET / HTTP/1.1\r\nConnection: keep-alive\r\n\r\n")).unwrap();
-    timer::sleep(1000);
+    timer::sleep(Duration::milliseconds(1000));
 
     client.close_write();
 
@@ -50,23 +51,23 @@ fn poor_network_test() {
     let mut client = support::new_client_to_hello_world_server();
 
     (write!(client, "G")).unwrap();
-    timer::sleep(100);
+    timer::sleep(Duration::milliseconds(100));
     (write!(client, "ET /he")).unwrap();
-    timer::sleep(100);
+    timer::sleep(Duration::milliseconds(100));
     (write!(client, "llo HT")).unwrap();
-    timer::sleep(100);
+    timer::sleep(Duration::milliseconds(100));
     (write!(client, "TP/1.")).unwrap();
-    timer::sleep(100);
+    timer::sleep(Duration::milliseconds(100));
     (write!(client, "1\r\nHo")).unwrap();
-    timer::sleep(100);
+    timer::sleep(Duration::milliseconds(100));
     (write!(client, "st: localho")).unwrap();
-    timer::sleep(100);
+    timer::sleep(Duration::milliseconds(100));
     (write!(client, "st\r\nConnec")).unwrap();
-    timer::sleep(100);
+    timer::sleep(Duration::milliseconds(100));
     (write!(client, "tion: close\r")).unwrap();
-    timer::sleep(100);
+    timer::sleep(Duration::milliseconds(100));
     (write!(client, "\n\r")).unwrap();
-    timer::sleep(100);
+    timer::sleep(Duration::milliseconds(100));
     (write!(client, "\n")).unwrap();
 
     client.set_timeout(Some(200));
@@ -124,7 +125,7 @@ fn responses_reordered() {
             rq2.respond(tiny_http::Response::from_string(format!("second request")));
         });
 
-        timer::sleep(100);
+        timer::sleep(Duration::milliseconds(100));
 
         spawn(proc() {  
             rq1.respond(tiny_http::Response::from_string(format!("first request")));
@@ -155,7 +156,7 @@ fn connection_timeout() {
     spawn(proc() {
         loop {
             server.try_recv();
-            timer::sleep(100);
+            timer::sleep(Duration::milliseconds(100));
             if rx_stop.try_recv().is_ok() { break }
         }
     });

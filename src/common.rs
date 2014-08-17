@@ -89,7 +89,7 @@ pub struct Header {
 
 impl ::std::from_str::FromStr for Header {
     fn from_str(input: &str) -> Option<Header> {
-        let mut elems = input.splitn(':', 1);
+        let mut elems = input.splitn(1, ':');
 
         let field = elems.next();
         let value = elems.next();

@@ -144,7 +144,7 @@ fn choose_transfer_encoding(request_headers: &[Header], http_version: &HTTPVersi
 
     // if we don't have a Content-Length, or if the Content-Length is too big, using chunks writer
     let chunks_threshold = 32768;
-    if entity_length.as_ref().filtered(|val| **val < chunks_threshold).is_none() {
+    if entity_length.as_ref().map_or(true, |val| *val >= chunks_threshold) {
         return Chunked;
     }
 

@@ -6,13 +6,13 @@ use encoding::{DecodeStrict, Encoding};
 #[experimental]
 pub struct EncodingDecoder<R> {
 	reader: R,
-	encoding: &'static Encoding,
+	encoding: &'static Encoding + 'static,
 	content: Option<MemReader>,
 }
 
 impl<R: Reader> EncodingDecoder<R> {
 	#[experimental]
-	pub fn new(reader: R, encoding: &'static Encoding) -> EncodingDecoder<R> {
+	pub fn new(reader: R, encoding: &'static Encoding + 'static) -> EncodingDecoder<R> {
 		EncodingDecoder {
 			reader: reader,
 			encoding: encoding,

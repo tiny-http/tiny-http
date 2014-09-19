@@ -172,7 +172,7 @@ impl<R: Reader> Response<R> {
             data_length: data_length,
         };
 
-        for h in headers.move_iter() {
+        for h in headers.into_iter() {
             response.add_header(h)
         }
 

@@ -90,7 +90,7 @@ impl<R: Reader> Reader for ChunksDecoder<R> {
 
         let remaining_chunks_size = *self.remaining_chunks_size.as_ref().unwrap();
 
-        let buf = buf.mut_slice_to(remaining_chunks_size);
+        let buf = buf.slice_to_mut(remaining_chunks_size);
         let read = try!(self.source.read(buf));
         *self.remaining_chunks_size.as_mut().unwrap() -= read;
 

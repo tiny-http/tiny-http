@@ -1,4 +1,4 @@
-extern crate crypto = "rust-crypto";
+extern crate "rust-crypto" as crypto;
 extern crate serialize;
 extern crate tiny_http;
 

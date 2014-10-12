@@ -41,7 +41,7 @@ impl<W: Writer> Writer for ChunksEncoder<W> {
             let rest = {
                 let (to_send, rest) = self.buffer.split_at_mut(self.chunks_size);
                 try!(send(&mut self.output, to_send));
-                Vec::from_slice(rest)
+                rest.to_vec()
             };
             self.buffer = rest;
         }

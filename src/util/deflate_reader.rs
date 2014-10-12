@@ -30,7 +30,7 @@ impl<R: Reader> Reader for DeflateReader<R> {
                 }
             };
 
-            self.buffer = Some(Vec::from_slice(result.as_slice()));
+            self.buffer = Some(result.as_slice().to_vec());
         }
 
         // if our buffer exists but is empty, we reached EOF
@@ -46,7 +46,7 @@ impl<R: Reader> Reader for DeflateReader<R> {
             buf.clone_from_slice(self.buffer.as_ref().unwrap().as_slice())
         };
 
-        self.buffer = Some(Vec::from_slice(self.buffer.as_ref().unwrap().slice_from(qty)));
+        self.buffer = Some(self.buffer.as_ref().unwrap().slice_from(qty).to_vec());
         Ok(qty)
     }
 }

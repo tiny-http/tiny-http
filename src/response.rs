@@ -287,7 +287,7 @@ impl<R: Reader> Response<R> {
         let do_not_send_body = do_not_send_body || 
             match self.status_code.as_uint() {
                 // sattus code 1xx, 204 and 304 MUST not include a body
-                100..199 | 204 | 304 => true,
+                100...199 | 204 | 304 => true,
                 _ => false
             };
 

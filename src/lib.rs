@@ -347,8 +347,8 @@ impl Server {
     /// Same as `recv()` but doesn't block.
     #[stable]
     pub fn try_recv(&self) -> IoResult<Option<Request>> {
-        let mut connections_receiver = self.connections_receiver.lock();
-        let mut requests_receiver = self.requests_receiver.lock();
+        let connections_receiver = self.connections_receiver.lock();
+        let requests_receiver = self.requests_receiver.lock();
 
         // processing all new clients
         loop {

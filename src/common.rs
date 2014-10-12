@@ -140,7 +140,7 @@ impl HeaderField {
 
 impl ::std::from_str::FromStr for HeaderField {
     fn from_str(s: &str) -> Option<HeaderField> {
-        s.trim().to_ascii_opt().map(|s| HeaderField(Vec::from_slice(s)))
+        s.trim().to_ascii_opt().map(|s| HeaderField(s.to_vec()))
     }
 }
 
@@ -189,7 +189,7 @@ impl Method {
 
 impl ::std::from_str::FromStr for Method {
     fn from_str(s: &str) -> Option<Method> {
-        s.to_ascii_opt().map(|s| Method(Vec::from_slice(s)))
+        s.to_ascii_opt().map(|s| Method(s.to_vec()))
     }
 }
 

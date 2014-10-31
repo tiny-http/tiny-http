@@ -1,7 +1,7 @@
 use std::io::IoResult;
 use std::io::net::tcp::TcpStream;
 use std::io::net::ip::SocketAddr;
-use std::sync::atomics::AtomicBool;
+use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 
 pub struct ClosableTcpStream {

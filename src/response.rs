@@ -1,5 +1,5 @@
 use common::{Header, HTTPVersion, StatusCode};
-use std::io::{IoResult, MemReader};
+use std::io::{IoResult, MemReader, AsRefWriter, AsRefReader};
 use std::io::fs::File;
 use std::io::util;
 use std::io::util::NullReader;
@@ -28,7 +28,7 @@ use std::io::util::NullReader;
 ///      itself may not be present in the final result.
 ///
 #[experimental]
-pub struct Response<R> {
+pub struct Response<R: Reader+AsRefReader> {
     reader: R,
     status_code: StatusCode,
     headers: Vec<Header>,
@@ -44,7 +44,7 @@ enum TransferEncoding {
 
 impl ::std::from_str::FromStr for TransferEncoding {
     fn from_str(input: &str) -> Option<TransferEncoding> {
-        use std::ascii::StrAsciiExt;
+        use std::ascii::AsciiExt;
 
         if input.eq_ignore_ascii_case("identity") {
             return Some(Identity);
@@ -255,7 +255,7 @@ impl<R: Reader> Response<R> {
     /// 
     /// Note: does not flush the writer.
     #[unstable]
-    pub fn raw_print<W: Writer>(mut self, mut writer: W, http_version: HTTPVersion,
+    pub fn raw_print<W: Writer+AsRefWriter>(mut self, mut writer: W, http_version: HTTPVersion,
                                 request_headers: &[Header], do_not_send_body: bool,
                                 upgrade: Option<&str>)
                                 -> IoResult<()>

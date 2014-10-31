@@ -1,5 +1,5 @@
 use std::ascii::AsciiStr;
-use std::io::{IoError, Stream};
+use std::io::{IoError, Stream, AsRefReader, AsRefWriter};
 use std::io::net::ip;
 use {Header, HTTPVersion, Method, Response, StatusCode};
 use util::{AnyReader, AnyWriter};
@@ -227,7 +227,7 @@ impl Request {
     ///  is destroyed before continuing to read or write on the socket. Therefore you should always
     ///  destroy it as soon as possible.
     #[unstable]
-    pub fn upgrade<R: Reader>(mut self, protocol: &str, response: Response<R>) -> Box<Stream + Send> {
+    pub fn upgrade<R: Reader+AsRefReader>(mut self, protocol: &str, response: Response<R>) -> Box<Stream + Send> {
         use util::CustomStream;
 
         response.raw_print(self.response_writer.as_mut().unwrap().by_ref(), self.http_version,

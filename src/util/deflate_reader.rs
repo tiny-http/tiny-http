@@ -46,7 +46,7 @@ impl<R: Reader> Reader for DeflateReader<R> {
             buf.clone_from_slice(self.buffer.as_ref().unwrap().as_slice())
         };
 
-        self.buffer = Some(self.buffer.as_ref().unwrap().slice_from(qty).to_vec());
+        self.buffer = Some((self.buffer.as_ref().unwrap().slice_from(qty)).to_vec());
         Ok(qty)
     }
 }

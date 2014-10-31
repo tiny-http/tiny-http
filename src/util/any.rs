@@ -1,4 +1,6 @@
 use std::io::IoResult;
+use std::io::{ Reader};
+use std::io::{ Writer};
 
 pub struct AnyReader {
     reader: Box<Reader + Send>
@@ -18,6 +20,9 @@ impl AnyReader {
     pub fn unwrap(self) -> Box<Reader + Send> {
         self.reader
     }
+
+
+
 }
 
 impl AnyWriter {
@@ -30,6 +35,9 @@ impl AnyWriter {
     pub fn unwrap(self) -> Box<Writer + Send> {
         self.writer
     }
+
+
+
 }
 
 impl Reader for AnyReader {
@@ -47,3 +55,5 @@ impl Writer for AnyWriter {
         self.writer.flush()
     }
 }
+
+

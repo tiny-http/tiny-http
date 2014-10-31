@@ -1,6 +1,6 @@
 use std::io::{Acceptor, IoResult};
 use std::io::net::tcp::{TcpAcceptor, TcpStream};
-use std::sync::atomics::AtomicBool;
+use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 
 pub struct ClosableTcpAcceptor {
@@ -20,7 +20,7 @@ impl ClosableTcpAcceptor {
 impl Acceptor<TcpStream> for ClosableTcpAcceptor {
     fn accept(&mut self) -> IoResult<TcpStream> {
         use std::io;
-        use std::sync::atomics::Relaxed;
+        use std::sync::atomic::Relaxed;
 
         loop {
             if self.end_trigger.load(Relaxed) {

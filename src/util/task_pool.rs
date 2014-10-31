@@ -1,5 +1,5 @@
 use std::sync::Arc;
-use std::sync::atomics::AtomicUint;
+use std::sync::atomic::AtomicUint;
 use std::sync::mpsc_queue::Queue;
 use std::time::duration::Duration;
 
@@ -22,7 +22,7 @@ struct Registration {
 
 impl Registration {
     fn new(nb: Arc<AtomicUint>) -> Registration {
-        use std::sync::atomics::Relaxed;
+        use std::sync::atomic::Relaxed;
         nb.fetch_add(1, Relaxed);
         Registration { nb: nb }
     }
@@ -30,7 +30,7 @@ impl Registration {
 
 impl Drop for Registration {
     fn drop(&mut self) {
-        use std::sync::atomics::Relaxed;
+        use std::sync::atomic::Relaxed;
         self.nb.fetch_sub(1, Relaxed);
     }
 }
@@ -103,7 +103,7 @@ impl TaskPool {
                 select! {
                     next_fn = rx.recv() => next_fn(),
                     _ = timeout.recv() => {
-                        use std::sync::atomics::Relaxed;
+                        use std::sync::atomic::Relaxed;
                         if active_tasks.load(Relaxed) >= MIN_THREADS {
                             break
                         }
@@ -116,7 +116,7 @@ impl TaskPool {
 
 impl Drop for TaskPool {
     fn drop(&mut self) {
-        use std::sync::atomics::Relaxed;
+        use std::sync::atomic::Relaxed;
         self.active_tasks.store(999999999, Relaxed);
     }
 }

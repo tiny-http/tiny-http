@@ -101,7 +101,7 @@ use std::io::net::ip;
 use std::io::net::tcp;
 use std::comm::Select;
 use std::sync::{Arc, Mutex};
-use std::sync::atomics::AtomicBool;
+use std::sync::atomic::AtomicBool;
 use client::ClientConnection;
 
 pub use common::{Header, HeaderField, HTTPVersion, Method, StatusCode};
@@ -347,8 +347,8 @@ impl Server {
     /// Same as `recv()` but doesn't block.
     #[stable]
     pub fn try_recv(&self) -> IoResult<Option<Request>> {
-        let connections_receiver = self.connections_receiver.lock();
-        let requests_receiver = self.requests_receiver.lock();
+        let mut connections_receiver = self.connections_receiver.lock();
+        let mut requests_receiver = self.requests_receiver.lock();
 
         // processing all new clients
         loop {
@@ -387,7 +387,7 @@ impl<'a> Iterator<Request> for IncomingRequests<'a> {
 
 impl Drop for Server {
     fn drop(&mut self) {
-        use std::sync::atomics::Relaxed;
+        use std::sync::atomic::Relaxed;
         self.close.store(true, Relaxed);
     }
 }

@@ -1,4 +1,4 @@
-use std::ascii::{Ascii, AsciiCast, StrAsciiExt};
+use std::ascii::{Ascii, AsciiCast, AsciiExt};
 use std::fmt::{Formatter, FormatError, Show};
 
 /// Status code of a request or response.
@@ -11,6 +11,10 @@ impl StatusCode {
     /// Returns the status code as a number.
     pub fn as_uint(&self) -> uint {
         match *self { StatusCode(n) => n }
+    }
+
+    pub fn from_uint(in_code: uint) -> StatusCode {
+        StatusCode(in_code)
     }
 
     #[stable]

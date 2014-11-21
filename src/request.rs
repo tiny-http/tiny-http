@@ -1,5 +1,5 @@
 use std::ascii::AsciiStr;
-use std::io::{IoError, Stream, AsRefReader, AsRefWriter};
+use std::io::{IoError, Stream, ByRefReader, ByRefWriter};
 use std::io::net::ip;
 use {Header, HTTPVersion, Method, Response, StatusCode};
 use util::{AnyReader, AnyWriter};
@@ -103,7 +103,7 @@ pub fn new_request<R: Reader + Send, W: Writer + Send>(method: Method, path: Str
             None => false,
             Some(h) if h.value.as_slice().eq_ignore_case(b"100-continue".to_ascii())
                 => true,
-            _ => return Err(ExpectationFailed)
+            _ => return Err(RequestCreationError::ExpectationFailed)
         }
     };
 
@@ -136,7 +136,7 @@ pub fn new_request<R: Reader + Send, W: Writer + Send>(method: Method, path: Str
             } else if content_length <= 1024 && !expects_continue {
                 use std::io::MemReader;
                 let data = try!(source_data.read_exact(content_length)
-                    .map_err(|e| CreationIoError(e)));
+                    .map_err(|e| RequestCreationError::CreationIoError(e)));
                 box MemReader::new(data) as Box<Reader + Send>
 
             } else {
@@ -227,7 +227,7 @@ impl Request {
     ///  is destroyed before continuing to read or write on the socket. Therefore you should always
     ///  destroy it as soon as possible.
     #[unstable]
-    pub fn upgrade<R: Reader+AsRefReader>(mut self, protocol: &str, response: Response<R>) -> Box<Stream + Send> {
+    pub fn upgrade<R: Reader+ByRefReader>(mut self, protocol: &str, response: Response<R>) -> Box<Stream + Send> {
         use util::CustomStream;
 
         response.raw_print(self.response_writer.as_mut().unwrap().by_ref(), self.http_version,
@@ -349,7 +349,7 @@ impl Request {
 
 impl ::std::fmt::Show for Request {
     fn fmt(&self, formatter: &mut ::std::fmt::Formatter)
-        -> Result<(), ::std::fmt::FormatError>
+        -> Result<(), ::std::fmt::Error>
     {
         (format!("Request({} {} from {})",
             self.method, self.path, self.remote_addr.ip)).fmt(formatter)

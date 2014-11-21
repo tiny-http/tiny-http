@@ -7,5 +7,11 @@ authors = [ "pierre.krieger1708@gmail.com" ]
 [dependencies.encoding]
 git = "http://github.com/lifthrasiir/rust-encoding"
 
+[dependencies.url]
+git = "https://github.com/servo/rust-url"
+
 [dev-dependencies.rust-crypto]
 git = "https://github.com/DaGenix/rust-crypto"
+
+[dependencies.time]
+git = "https://github.com/rust-lang/time"

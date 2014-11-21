@@ -213,7 +213,7 @@ impl Server {
         // building the TcpAcceptor
         let (server, local_addr) = {
             let mut listener = try!(tcp::TcpListener::bind(
-                format!("{}", config.address.ip).as_slice(), config.address.port));
+                format!("{}:{}", config.address.ip,config.address.port).as_slice()));
             let local_addr = try!(listener.socket_name());
             let server = try!(listener.listen());
             let server = util::ClosableTcpAcceptor::new(server, close_trigger.clone());
@@ -347,8 +347,8 @@ impl Server {
     /// Same as `recv()` but doesn't block.
     #[stable]
     pub fn try_recv(&self) -> IoResult<Option<Request>> {
-        let mut connections_receiver = self.connections_receiver.lock();
-        let mut requests_receiver = self.requests_receiver.lock();
+        let connections_receiver = self.connections_receiver.lock();
+        let requests_receiver = self.requests_receiver.lock();
 
         // processing all new clients
         loop {

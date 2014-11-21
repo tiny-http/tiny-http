@@ -95,7 +95,7 @@ impl ClientConnection {
 
             // reading the request line
             let (method, path, version) = {
-                let line = try!(self.read_next_line().map_err(|e| ReadIoError(e)));
+                let line = try!(self.read_next_line().map_err(|e| ReadError::ReadIoError(e)));
 
                 try!(parse_request_line(
                     line.as_slice().as_str_ascii().trim()    // TODO: remove this conversion
@@ -108,13 +108,13 @@ impl ClientConnection {
 
                 let mut headers = Vec::new();
                 loop {
-                    let line = try!(self.read_next_line().map_err(|e| ReadIoError(e)));
+                    let line = try!(self.read_next_line().map_err(|e| ReadError::ReadIoError(e)));
 
                     if line.len() == 0 { break };
                     headers.push(
                         match from_str(line.as_slice().as_str_ascii().trim()) {    // TODO: remove this conversion
                             Some(h) => h,
-                            None => return Err(WrongHeader(version))
+                            None => return Err(ReadError::WrongHeader(version))
                         }
                     );
                 }
@@ -138,8 +138,8 @@ impl ClientConnection {
             .map_err(|e| {
                 use request;
                 match e {
-                    request::CreationIoError(e) => ReadIoError(e),
-                    request::ExpectationFailed => ExpectationFailed(version)
+                    request::RequestCreationError::CreationIoError(e) => ReadError::ReadIoError(e),
+                    request::RequestCreationError::ExpectationFailed => ReadError::ExpectationFailed(version)
                 }
             }));
 
@@ -164,7 +164,7 @@ impl Iterator<Request> for ClientConnection {
             use std::io::TimedOut;
 
             let rq = match self.read() {
-                Err(WrongRequestLine) => {
+                Err(ReadError::WrongRequestLine) => {
                     let writer = self.sink.next().unwrap();
                     let response = Response::new_empty(StatusCode(400));
                     response.raw_print(writer, HTTPVersion(1, 1), &[], false, None).ok();
@@ -172,7 +172,7 @@ impl Iterator<Request> for ClientConnection {
                                     // se we have to close
                 },
 
-                Err(WrongHeader(ver)) => {
+                Err(ReadError::WrongHeader(ver)) => {
                     let writer = self.sink.next().unwrap();
                     let response = Response::new_empty(StatusCode(400));
                     response.raw_print(writer, ver, &[], false, None).ok();
@@ -180,7 +180,7 @@ impl Iterator<Request> for ClientConnection {
                                     // se we have to close
                 },
 
-                Err(ReadIoError(ref err)) if err.kind == TimedOut => {
+                Err(ReadError::ReadIoError(ref err)) if err.kind == TimedOut => {
                     // request timeout
                     let writer = self.sink.next().unwrap();
                     let response = Response::new_empty(StatusCode(408));
@@ -188,14 +188,14 @@ impl Iterator<Request> for ClientConnection {
                     return None;    // closing the connection
                 },
 
-                Err(ExpectationFailed(ver)) => {
+                Err(ReadError::ExpectationFailed(ver)) => {
                     let writer = self.sink.next().unwrap();
                     let response = Response::new_empty(StatusCode(417));
                     response.raw_print(writer, ver, &[], true, None).ok();
                     return None;    // TODO: should be recoverable, but needs handling in case of body
                 },
 
-                Err(ReadIoError(_)) =>
+                Err(ReadError::ReadIoError(_)) =>
                     return None,
 
                 Ok(rq) => rq
@@ -246,19 +246,19 @@ impl Iterator<Request> for ClientConnection {
 fn parse_http_version(version: &str) -> Result<HTTPVersion, ReadError> {
     let elems = version.splitn(1, '/').map(|e| e.to_string()).collect::<Vec<String>>();
     if elems.len() != 2 {
-        return Err(WrongRequestLine)
+        return Err(ReadError::WrongRequestLine)
     }
 
     let elems = elems[1].as_slice().splitn(1, '.')
         .map(|e| e.to_string()).collect::<Vec<String>>();
     if elems.len() != 2 {
-        return Err(WrongRequestLine)
+        return Err(ReadError::WrongRequestLine)
     }
 
     match (from_str(elems[0].as_slice()), from_str(elems[1].as_slice())) {
         (Some(major), Some(minor)) =>
             Ok(HTTPVersion(major, minor)),
-        _ => Err(WrongRequestLine)
+        _ => Err(ReadError::WrongRequestLine)
     }
 }
 
@@ -273,12 +273,12 @@ fn parse_request_line(line: &str) -> Result<(Method, String, HTTPVersion), ReadE
 
     let (method, path, version) = match (method, path, version) {
         (Some(m), Some(p), Some(v)) => (m, p, v),
-        _ => return Err(WrongRequestLine)
+        _ => return Err(ReadError::WrongRequestLine)
     };
 
     let method = match from_str(method) {
         Some(method) => method,
-        None => return Err(WrongRequestLine)
+        None => return Err(ReadError::WrongRequestLine)
     };
 
     let version = try!(parse_http_version(version));

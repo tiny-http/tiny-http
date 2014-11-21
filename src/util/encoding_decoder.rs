@@ -1,5 +1,5 @@
 use std::io::{IoResult, MemReader};
-use encoding::{DecodeStrict, Encoding};
+use encoding::{DecoderTrap, Encoding};
 
 // TODO: for the moment the first call to read() reads the whole
 //  underlying reader at once and decodes it
@@ -28,7 +28,7 @@ impl<R: Reader> Reader for EncodingDecoder<R> {
 
 			let data = try!(self.reader.read_to_end());
 
-			let result = match self.encoding.decode(data.as_slice(), DecodeStrict) {
+			let result = match self.encoding.decode(data.as_slice(), DecoderTrap::Strict) {
 				Ok(s) => s,
 				Err(_) => return Err(io::standard_error(io::InvalidInput))
 			};

@@ -1,5 +1,6 @@
 use std::ascii::{Ascii, AsciiCast, AsciiExt};
-use std::fmt::{Formatter, FormatError, Show};
+use std::fmt::{mod, Formatter, Show};
+use std::str::{FromStr};
 
 /// Status code of a request or response.
 #[deriving(Eq, PartialEq, Clone, Show, Ord, PartialOrd)]
@@ -91,7 +92,7 @@ pub struct Header {
     pub value: Vec<Ascii>,
 }
 
-impl ::std::from_str::FromStr for Header {
+impl FromStr for Header {
     fn from_str(input: &str) -> Option<Header> {
         let mut elems = input.splitn(1, ':');
 
@@ -121,7 +122,7 @@ impl ::std::from_str::FromStr for Header {
 }
 
 impl Show for Header {
-    fn fmt(&self, formatter: &mut Formatter) -> Result<(), FormatError> {
+    fn fmt(&self, formatter: &mut Formatter) -> Result<(), fmt::Error> {
         use std::ascii::AsciiStr;
         let value = self.value.as_slice();
         let value = value.as_str_ascii();
@@ -142,20 +143,20 @@ impl HeaderField {
     }
 }
 
-impl ::std::from_str::FromStr for HeaderField {
+impl FromStr for HeaderField {
     fn from_str(s: &str) -> Option<HeaderField> {
         s.trim().to_ascii_opt().map(|s| HeaderField(s.to_vec()))
     }
 }
 
-impl IntoStr for HeaderField {
+impl IntoString for HeaderField {
     fn into_string(self) -> String {
         match self { HeaderField(s) => s.into_string() }
     }
 }
 
 impl Show for HeaderField {
-    fn fmt(&self, formatter: &mut Formatter) -> Result<(), FormatError> {
+    fn fmt(&self, formatter: &mut Formatter) -> Result<(), fmt::Error> {
         let method = self.as_str();
         method.as_str_ascii().fmt(formatter)
     }
@@ -191,20 +192,20 @@ impl Method {
     }
 }
 
-impl ::std::from_str::FromStr for Method {
+impl FromStr for Method {
     fn from_str(s: &str) -> Option<Method> {
         s.to_ascii_opt().map(|s| Method(s.to_vec()))
     }
 }
 
-impl IntoStr for Method {
+impl IntoString for Method {
     fn into_string(self) -> String {
         match self { Method(s) => s.into_string() }
     }
 }
 
 impl Show for Method {
-    fn fmt(&self, formatter: &mut Formatter) -> Result<(), FormatError> {
+    fn fmt(&self, formatter: &mut Formatter) -> Result<(), fmt::Error> {
         let method = self.as_str();
         method.as_str_ascii().fmt(formatter)
     }
@@ -230,7 +231,7 @@ impl<S: Str> Equiv<S> for Method {
 pub struct HTTPVersion(pub uint, pub uint);
 
 impl Show for HTTPVersion {
-    fn fmt(&self, formatter: &mut Formatter) -> Result<(), FormatError> {
+    fn fmt(&self, formatter: &mut Formatter) -> Result<(), fmt::Error> {
         let (major, minor) = match self { &HTTPVersion(m, n) => (m, n) };
         (format!("{}.{}", major, minor)).fmt(formatter)
     }

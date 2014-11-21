@@ -64,7 +64,7 @@ impl<W: Writer> Writer for ChunksEncoder<W> {
 impl<W: Writer> Drop for ChunksEncoder<W> {
     fn drop(&mut self) {
         self.flush().ok();
-        send(&mut self.output, []).ok();
+        send(&mut self.output, &[]).ok();
     }
 }
 

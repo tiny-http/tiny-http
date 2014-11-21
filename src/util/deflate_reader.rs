@@ -42,7 +42,7 @@ impl<R: Reader> Reader for DeflateReader<R> {
 
         // copying the buffer to the output
         let qty = {
-            use std::slice::MutableCloneableSlice;
+            use std::slice::CloneSlicePrelude;
             buf.clone_from_slice(self.buffer.as_ref().unwrap().as_slice())
         };
 

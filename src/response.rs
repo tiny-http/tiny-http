@@ -1,8 +1,9 @@
 use common::{Header, HTTPVersion, StatusCode};
-use std::io::{IoResult, MemReader, AsRefWriter, AsRefReader};
+use std::io::{IoResult, MemReader, ByRefWriter, ByRefReader};
 use std::io::fs::File;
 use std::io::util;
 use std::io::util::NullReader;
+use std::str::FromStr;
 
 /// Object representing an HTTP response whose purpose is to be given to a `Request`.
 /// 
@@ -28,7 +29,7 @@ use std::io::util::NullReader;
 ///      itself may not be present in the final result.
 ///
 #[experimental]
-pub struct Response<R: Reader+AsRefReader> {
+pub struct Response<R: Reader+ByRefReader> {
     reader: R,
     status_code: StatusCode,
     headers: Vec<Header>,
@@ -42,14 +43,14 @@ enum TransferEncoding {
     Chunked,
 }
 
-impl ::std::from_str::FromStr for TransferEncoding {
+impl FromStr for TransferEncoding {
     fn from_str(input: &str) -> Option<TransferEncoding> {
         use std::ascii::AsciiExt;
 
         if input.eq_ignore_ascii_case("identity") {
-            return Some(Identity);
+            return Some(TransferEncoding::Identity);
         } else if input.eq_ignore_ascii_case("chunked") {
-            return Some(Chunked);
+            return Some(TransferEncoding::Chunked);
         }
 
         None
@@ -60,8 +61,9 @@ impl ::std::from_str::FromStr for TransferEncoding {
 // TODO: this is optimisable
 fn build_date_header() -> Header {
     use time;
-    let date = time::now_utc().strftime("%a, %d %b %Y %H:%M:%S GMT");
-    from_str(format!("Date: {}", date).as_slice()).unwrap()
+    let date = time::now_utc();
+    let date_string = date.strftime("%a, %d %b %Y %H:%M:%S GMT");
+    from_str(format!("Date: {}", date_string).as_slice()).unwrap()
 }
 
 fn write_message_header<W: Writer>(mut writer: W, http_version: &HTTPVersion,
@@ -69,7 +71,7 @@ fn write_message_header<W: Writer>(mut writer: W, http_version: &HTTPVersion,
     -> IoResult<()>
 {
     // writing status line
-    try!(write!(writer, "HTTP/{} {} {}\r\n",
+    try!(write!(&mut writer, "HTTP/{} {} {}\r\n",
         http_version,
         status_code.as_uint(),
         status_code.get_default_reason_phrase()
@@ -78,12 +80,12 @@ fn write_message_header<W: Writer>(mut writer: W, http_version: &HTTPVersion,
     // writing headers
     for header in headers.iter() {
         use std::ascii::AsciiStr;
-        try!(write!(writer, "{}: {}\r\n", header.field.as_str().as_str_ascii(),
+        try!(write!(&mut writer, "{}: {}\r\n", header.field.as_str().as_str_ascii(),
             header.value.as_slice().as_str_ascii()));
     }
 
     // separator between header and data
-    try!(write!(writer, "\r\n"));
+    try!(write!(&mut writer, "\r\n"));
 
     Ok(())
 }
@@ -96,7 +98,7 @@ fn choose_transfer_encoding(request_headers: &[Header], http_version: &HTTPVersi
 
     // HTTP 1.0 doesn't support other encoding
     if *http_version <= HTTPVersion(1, 0) {
-        return Identity;
+        return TransferEncoding::Identity;
     }
 
     // parsing the request's TE header
@@ -139,17 +141,17 @@ fn choose_transfer_encoding(request_headers: &[Header], http_version: &HTTPVersi
 
     // if we have additional headers, using chunked
     if has_additional_headers {
-        return Chunked;
+        return TransferEncoding::Chunked;
     }
 
     // if we don't have a Content-Length, or if the Content-Length is too big, using chunks writer
     let chunks_threshold = 32768;
     if entity_length.as_ref().map_or(true, |val| *val >= chunks_threshold) {
-        return Chunked;
+        return TransferEncoding::Chunked;
     }
 
     // Identity by default
-    Identity
+    TransferEncoding::Identity
 }
 
 impl<R: Reader> Response<R> {
@@ -255,7 +257,7 @@ impl<R: Reader> Response<R> {
     /// 
     /// Note: does not flush the writer.
     #[unstable]
-    pub fn raw_print<W: Writer+AsRefWriter>(mut self, mut writer: W, http_version: HTTPVersion,
+    pub fn raw_print<W: Writer+ByRefWriter>(mut self, mut writer: W, http_version: HTTPVersion,
                                 request_headers: &[Header], do_not_send_body: bool,
                                 upgrade: Option<&str>)
                                 -> IoResult<()>
@@ -293,13 +295,13 @@ impl<R: Reader> Response<R> {
 
         // preparing headers for transfer
         match transfer_encoding {
-            Some(Chunked) => {
+            Some(TransferEncoding::Chunked) => {
                 self.headers.push(
                     from_str("Transfer-Encoding: chunked").unwrap()
                 )
             },
 
-            Some(Identity) => {
+            Some(TransferEncoding::Identity) => {
                 assert!(self.data_length.is_some());
                 let data_length = self.data_length.unwrap();
                 
@@ -319,14 +321,14 @@ impl<R: Reader> Response<R> {
         if !do_not_send_body {
             match transfer_encoding {
 
-                Some(Chunked) => {
+                Some(TransferEncoding::Chunked) => {
                     use util::ChunksEncoder;
 
                     let mut writer = ChunksEncoder::new(writer);
                     try!(util::copy(&mut self.reader, &mut writer));
                 },
 
-                Some(Identity) => {
+                Some(TransferEncoding::Identity) => {
                     use util::EqualReader;
 
                     assert!(self.data_length.is_some());

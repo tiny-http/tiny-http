@@ -28,7 +28,7 @@ Add this to the `Cargo.toml` file of your project:
 
 ```toml
 [dependencies.tiny_http]
-git = "https://github.com/tomaka/tiny-http"
+git = "https://github.com/frewsxcv/tiny-http"
 ```
 
 Don't forget to add the external crate:
@@ -37,7 +37,7 @@ Don't forget to add the external crate:
 extern crate tiny_http;
 ```
 
-### [Usage](http://www.rust-ci.org/tomaka/tiny-http/doc/tiny-http/index.html)
+### [Usage](http://www.rust-ci.org/frewsxcv/tiny-http/doc/tiny-http/index.html)
 
 ```rust
 let server = tiny_http::ServerBuilder::new().build().unwrap();

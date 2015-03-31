@@ -1,4 +1,6 @@
-use std::io::IoResult;
+use std::old_io::IoResult;
+use std::old_io::Reader;
+use std::old_io::Writer;
 
 /// Splits the incoming data into HTTP chunks.
 pub struct ChunksEncoder<W> {
@@ -6,7 +8,7 @@ pub struct ChunksEncoder<W> {
     output: W,
 
     // size of each chunk
-    chunks_size: uint,
+    chunks_size: usize,
 
     // data waiting to be sent is stored here
     buffer: Vec<u8>,
@@ -17,7 +19,7 @@ impl<W: Writer> ChunksEncoder<W> {
         ChunksEncoder::new_with_chunks_size(output, 8192)
     }
 
-    pub fn new_with_chunks_size(output: W, chunks: uint) -> ChunksEncoder<W> {
+    pub fn new_with_chunks_size(output: W, chunks: usize) -> ChunksEncoder<W> {
         ChunksEncoder {
             output: output,
             chunks_size: chunks,

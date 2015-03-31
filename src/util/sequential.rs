@@ -1,24 +1,28 @@
-use std::io::IoResult;
+use std::old_io::IoResult;
+use std::old_io::Reader;
+use std::old_io::Writer;
+use std::sync::mpsc::{Sender, Receiver};
+use std::sync::mpsc::channel;
 use std::sync;
 use std::sync::{Arc, Mutex};
 
-pub struct SequentialReaderBuilder<R> {
+pub struct SequentialReaderBuilder<R: Send> {
     reader: Arc<Mutex<R>>,
     next_trigger: Option<sync::Future<()>>,
 }
 
-pub struct SequentialReader<R> {
+pub struct SequentialReader<R: Send> {
     trigger: Option<sync::Future<()>>,
     reader: Arc<Mutex<R>>,
     on_finish: Sender<()>,
 }
 
-pub struct SequentialWriterBuilder<W> {
+pub struct SequentialWriterBuilder<W: Send> {
     writer: Arc<Mutex<W>>,
     next_trigger: Option<sync::Future<()>>,
 }
 
-pub struct SequentialWriter<W> {
+pub struct SequentialWriter<W: Send> {
     trigger: Option<sync::Future<()>>,
     writer: Arc<Mutex<W>>,
     on_finish: Sender<()>,
@@ -42,7 +46,8 @@ impl<W: Writer + Send> SequentialWriterBuilder<W> {
     }
 }
 
-impl<R: Reader + Send> Iterator<SequentialReader<R>> for SequentialReaderBuilder<R> {
+impl<R: Reader + Send> Iterator for SequentialReaderBuilder<R> {
+    type Item = SequentialReader<R>;
     fn next(&mut self) -> Option<SequentialReader<R>> {
         let (tx, rx) = channel();
         let mut next_next_trigger = Some(sync::Future::from_receiver(rx));
@@ -56,7 +61,8 @@ impl<R: Reader + Send> Iterator<SequentialReader<R>> for SequentialReaderBuilder
     }
 }
 
-impl<W: Writer + Send> Iterator<SequentialWriter<W>> for SequentialWriterBuilder<W> {
+impl<W: Writer + Send> Iterator for SequentialWriterBuilder<W> {
+    type Item = SequentialWriter<W>;
     fn next(&mut self) -> Option<SequentialWriter<W>> {
         let (tx, rx) = channel();
         let mut next_next_trigger = Some(sync::Future::from_receiver(rx));
@@ -71,7 +77,7 @@ impl<W: Writer + Send> Iterator<SequentialWriter<W>> for SequentialWriterBuilder
 }
 
 impl<R: Reader + Send> Reader for SequentialReader<R> {
-    fn read(&mut self, buf: &mut [u8]) -> IoResult<uint> {
+    fn read(&mut self, buf: &mut [u8]) -> IoResult<usize> {
         self.trigger.as_mut().map(|v| v.get());
         self.trigger = None;
 

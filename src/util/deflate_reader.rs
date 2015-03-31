@@ -1,4 +1,4 @@
-use std::io::IoResult;
+use std::old_io::{IoResult, Reader};
 use flate;
 
 pub struct DeflateReader<R> {
@@ -16,7 +16,7 @@ impl<R: Reader> DeflateReader<R> {
 }
 
 impl<R: Reader> Reader for DeflateReader<R> {
-    fn read(&mut self, buf: &mut [u8]) -> IoResult<uint> {
+    fn read(&mut self, buf: &mut [u8]) -> IoResult<usize> {
         // filling the buffer if we don't have any
         if self.buffer.is_none() {
             let data = try!(self.reader.read_to_end());
@@ -24,9 +24,9 @@ impl<R: Reader> Reader for DeflateReader<R> {
             let result = match flate::deflate_bytes(data.as_slice()) {
                 Some(d) => d,
                 None => {
-                    use std::io;
-                    use std::io::InvalidInput;
-                    return Err(io::standard_error(InvalidInput));
+                    use std::old_io;
+                    use std::old_io::InvalidInput;
+                    return Err(old_io::standard_error(InvalidInput));
                 }
             };
 
@@ -35,14 +35,13 @@ impl<R: Reader> Reader for DeflateReader<R> {
 
         // if our buffer exists but is empty, we reached EOF
         if self.buffer.as_ref().unwrap().len() == 0 {
-            use std::io;
-            use std::io::EndOfFile;
-            return Err(io::standard_error(EndOfFile));
+            use std::old_io;
+            use std::old_io::EndOfFile;
+            return Err(old_io::standard_error(EndOfFile));
         }
 
         // copying the buffer to the output
         let qty = {
-            use std::slice::CloneSlicePrelude;
             buf.clone_from_slice(self.buffer.as_ref().unwrap().as_slice())
         };
 

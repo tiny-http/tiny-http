@@ -1,20 +1,22 @@
-use std::ascii::{Ascii, AsciiCast, AsciiExt};
-use std::fmt::{mod, Formatter, Show};
+use std::fmt::Debug;
+use ascii::{Ascii, AsciiCast};
+use std::fmt::{self, Formatter};
 use std::str::{FromStr};
+use std::cmp::Ordering;
 
 /// Status code of a request or response.
-#[deriving(Eq, PartialEq, Clone, Show, Ord, PartialOrd)]
+#[derive(Eq, PartialEq, Clone, Debug, Ord, PartialOrd)]
 #[stable]
-pub struct StatusCode(pub uint);
+pub struct StatusCode(pub u16);
 
 impl StatusCode {
     #[stable]
     /// Returns the status code as a number.
-    pub fn as_uint(&self) -> uint {
+    pub fn as_usize(&self) -> usize {
         match *self { StatusCode(n) => n }
     }
 
-    pub fn from_uint(in_code: uint) -> StatusCode {
+    pub fn from_usize(in_code: usize) -> StatusCode {
         StatusCode(in_code)
     }
 
@@ -22,7 +24,7 @@ impl StatusCode {
     /// Returns the default reason phrase for this status code.
     /// For example the status code 404 corresponds to "Not Found".
     pub fn get_default_reason_phrase(&self) -> &'static str {
-        match self.as_uint() {
+        match self.as_usize() {
             100 => "Continue",
             101 => "Switching Protocols",
             102 => "Processing",
@@ -70,13 +72,12 @@ impl StatusCode {
             _ => "Unknown"
         }
     }
-}
 
-impl Equiv<uint> for StatusCode {
-    fn equiv(&self, other: &uint) -> bool {
-        self.as_uint() == *other
+    pub fn equiv(&self, other: &usize) -> bool {
+        self.as_usize() == *other
     }
 }
+
 
 /// Represents a HTTP header.
 /// 
@@ -85,7 +86,7 @@ impl Equiv<uint> for StatusCode {
 /// ```
 /// let header: tiny_http::Header = from_str("Content-Type: text/plain").unwrap();
 /// ```
-#[deriving(Clone)]
+#[derive(Clone)]
 #[unstable]
 pub struct Header {
     pub field: HeaderField,
@@ -93,6 +94,8 @@ pub struct Header {
 }
 
 impl FromStr for Header {
+    type Err = ();
+
     fn from_str(input: &str) -> Option<Header> {
         let mut elems = input.splitn(1, ':');
 
@@ -104,9 +107,9 @@ impl FromStr for Header {
             _ => return None
         };
 
-        let field = match from_str(field) {
-            Some(f) => f,
-            None => return None
+        let field = match FromStr::from_str(field) {
+            Ok(f) => f,
+            _ => return None
         };
 
         let value = match value.trim().to_ascii_opt() {
@@ -121,9 +124,8 @@ impl FromStr for Header {
     }
 }
 
-impl Show for Header {
+impl Debug for Header {
     fn fmt(&self, formatter: &mut Formatter) -> Result<(), fmt::Error> {
-        use std::ascii::AsciiStr;
         let value = self.value.as_slice();
         let value = value.as_str_ascii();
         (format!("{}: {}", self.field, value)).fmt(formatter)
@@ -134,28 +136,34 @@ impl Show for Header {
 /// 
 /// Comparaison between two `HeaderField`s ignores case.
 #[unstable]
-#[deriving(Clone)]
+#[derive(Clone)]
 pub struct HeaderField(Vec<Ascii>);
 
 impl HeaderField {
     pub fn as_str<'a>(&'a self) -> &'a [Ascii] {
         match self { &HeaderField(ref s) => s.as_slice() }
     }
+
+    pub fn equiv(&self, other: &'static str) -> bool {
+        other.as_slice().eq_ignore_ascii_case(self.as_str().as_str_ascii())
+    }
 }
 
 impl FromStr for HeaderField {
+    type Err = ();
+
     fn from_str(s: &str) -> Option<HeaderField> {
         s.trim().to_ascii_opt().map(|s| HeaderField(s.to_vec()))
     }
 }
 
-impl IntoString for HeaderField {
-    fn into_string(self) -> String {
-        match self { HeaderField(s) => s.into_string() }
+impl ToString for HeaderField {
+    fn to_string(self) -> String {
+        match self { HeaderField(s) => s.to_string() }
     }
 }
 
-impl Show for HeaderField {
+impl Debug for HeaderField {
     fn fmt(&self, formatter: &mut Formatter) -> Result<(), fmt::Error> {
         let method = self.as_str();
         method.as_str_ascii().fmt(formatter)
@@ -170,12 +178,6 @@ impl PartialEq for HeaderField {
 
 impl Eq for HeaderField {}
 
-impl<S: Str> Equiv<S> for HeaderField {
-    fn equiv(&self, other: &S) -> bool {
-        other.as_slice().eq_ignore_ascii_case(self.as_str().as_str_ascii())
-    }
-}
-
 
 /// HTTP method (eg. `GET`, `POST`, etc.)
 /// 
@@ -183,28 +185,34 @@ impl<S: Str> Equiv<S> for HeaderField {
 /// 
 /// Comparaison between two `Method`s ignores case.
 #[unstable]
-#[deriving(Clone)]
+#[derive(Clone)]
 pub struct Method(Vec<Ascii>);
 
 impl Method {
     fn as_str<'a>(&'a self) -> &'a [Ascii] {
         match self { &Method(ref s) => s.as_slice() }
     }
+
+    pub fn equiv(&self, other: &'static str) -> bool {
+        other.as_slice().eq_ignore_ascii_case(self.as_str().as_str_ascii())
+    }
 }
 
 impl FromStr for Method {
+    type Err = ();
+
     fn from_str(s: &str) -> Option<Method> {
         s.to_ascii_opt().map(|s| Method(s.to_vec()))
     }
 }
 
-impl IntoString for Method {
-    fn into_string(self) -> String {
-        match self { Method(s) => s.into_string() }
+impl ToString for Method {
+    fn to_string(self) -> String {
+        match self { Method(s) => s.to_string() }
     }
 }
 
-impl Show for Method {
+impl Debug for Method {
     fn fmt(&self, formatter: &mut Formatter) -> Result<(), fmt::Error> {
         let method = self.as_str();
         method.as_str_ascii().fmt(formatter)
@@ -219,18 +227,13 @@ impl PartialEq for Method {
 
 impl Eq for Method {}
 
-impl<S: Str> Equiv<S> for Method {
-    fn equiv(&self, other: &S) -> bool {
-        other.as_slice().eq_ignore_ascii_case(self.as_str().as_str_ascii())
-    }
-}
 
 /// HTTP version (usually 1.0 or 1.1).
 #[unstable]
-#[deriving(Clone, PartialEq, Eq, Ord)]
-pub struct HTTPVersion(pub uint, pub uint);
+#[derive(Clone, PartialEq, Eq, Ord)]
+pub struct HTTPVersion(pub usize, pub usize);
 
-impl Show for HTTPVersion {
+impl Debug for HTTPVersion {
     fn fmt(&self, formatter: &mut Formatter) -> Result<(), fmt::Error> {
         let (major, minor) = match self { &HTTPVersion(m, n) => (m, n) };
         (format!("{}.{}", major, minor)).fmt(formatter)
@@ -257,21 +260,21 @@ mod test {
 
     #[test]
     fn test_parse_header() {
-        use std::ascii::AsciiStr;
+        use ascii::AsciiStr;
 
-        let header: Header = from_str("Content-Type: text/html").unwrap();
+        let header: Header = FromStr::from_str("Content-Type: text/html").unwrap();
 
         assert!(header.field.equiv(&"content-type"));
         assert!(header.value.as_slice().as_str_ascii() == "text/html");
 
-        assert!(from_str::<Header>("hello world").is_none());
+        assert!(FromStr::from_str::<Header>("hello world").is_none());
     }
 
     #[test]
     fn test_parse_header_with_doublecolon() {
-        use std::ascii::AsciiStr;
+        use ascii::AsciiStr;
 
-        let header: Header = from_str("Time: 20: 34").unwrap();
+        let header: Header = FromStr::from_str("Time: 20: 34").unwrap();
 
         assert!(header.field.equiv(&"time"));
         assert!(header.value.as_slice().as_str_ascii() == "20: 34");

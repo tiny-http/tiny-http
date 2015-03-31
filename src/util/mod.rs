@@ -10,6 +10,7 @@ pub use self::equal_reader::EqualReader;
 pub use self::sequential::{SequentialReaderBuilder, SequentialReader};
 pub use self::sequential::{SequentialWriterBuilder, SequentialWriter};
 pub use self::task_pool::TaskPool;
+use std::str::FromStr;
 
 mod any;
 mod chunks_decoder;
@@ -41,8 +42,8 @@ pub fn parse_header_value<'a>(input: &'a str) -> Vec<(&'a str, f32)> {
 
         for p in params {
             if p.trim_left().starts_with("q=") {
-                match from_str(p.trim_left().slice_from(2).trim()) {
-                    Some(val) => { value = val; break },
+                match FromStr::from_str(p.trim_left().slice_from(2).trim()) {
+                    Ok(val) => { value = val; break },
                     _ => ()
                 }
             }

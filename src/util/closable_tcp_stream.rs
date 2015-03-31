@@ -1,6 +1,9 @@
-use std::io::IoResult;
-use std::io::net::tcp::TcpStream;
-use std::io::net::ip::SocketAddr;
+use std::old_io;
+use std::old_io::Reader;
+use std::old_io::Writer;
+use std::old_io::IoResult;
+use std::old_io::net::tcp::TcpStream;
+use std::old_io::net::ip::SocketAddr;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 
@@ -45,7 +48,7 @@ impl Drop for ClosableTcpStream {
 impl Reader for ClosableTcpStream {
     /// Reads to this stream is similar to a regular read,
     ///  except that the timeout is predefined.
-    fn read(&mut self, buf: &mut [u8]) -> IoResult<uint> {
+    fn read(&mut self, buf: &mut [u8]) -> IoResult<usize> {
         use std::io;
         use time;
         //use std::sync::atomics::Relaxed;
@@ -58,20 +61,20 @@ impl Reader for ClosableTcpStream {
         loop {
             // TODO: this makes some tests fail
             /*if self.end_trigger.load(Relaxed) {
-                return Err(io::standard_error(io::Closed));
+                return Err(old_io::standard_error(old_io::Closed));
             }*/
 
             self.stream.set_read_timeout(Some(100));
 
             match self.stream.read(buf) {
-                Err(ref err) if err.kind == io::TimedOut
+                Err(ref err) if err.kind == old_io::TimedOut
                     => (),
                 a => return a
             };
 
             // checking timeout
             if timeout <= time::precise_time_ns() {
-                return Err(io::standard_error(io::TimedOut));
+                return Err(old_io::standard_error(old_io::TimedOut));
             }
         }
     }
@@ -85,17 +88,17 @@ impl Writer for ClosableTcpStream {
         loop {
             // TODO: this makes some tests fail
             /*if self.end_trigger.load(Relaxed) {
-                return Err(io::standard_error(io::Closed));
+                return Err(old_io::standard_error(old_io::Closed));
             }*/
 
             self.stream.set_write_timeout(Some(100));
 
             match self.stream.write(buf) {
-                Err(ref err) if err.kind == io::TimedOut
+                Err(ref err) if err.kind == old_io::TimedOut
                     => continue,
                 Err(err) => {
                     match err.kind {
-                        io::ShortWrite(nb) =>
+                        old_io::ShortWrite(nb) =>
                             return self.write(buf.slice_from(nb)),
                         _ => return Err(err)
                     };

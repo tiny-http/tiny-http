@@ -1,6 +1,6 @@
-use std::io::IoResult;
-use std::io::{ Reader};
-use std::io::{ Writer};
+use std::old_io::IoResult;
+use std::old_io::{ Reader};
+use std::old_io::{ Writer};
 
 pub struct AnyReader {
     reader: Box<Reader + Send>
@@ -41,7 +41,7 @@ impl AnyWriter {
 }
 
 impl Reader for AnyReader {
-    fn read(&mut self, buf: &mut [u8]) -> IoResult<uint> {
+    fn read(&mut self, buf: &mut [u8]) -> IoResult<usize> {
         self.reader.read(buf)
     }
 }

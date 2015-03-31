@@ -1,6 +1,8 @@
-use std::ascii::AsciiStr;
-use std::io::{IoError, Stream, ByRefReader, ByRefWriter};
-use std::io::net::ip;
+use ascii::AsciiStr;
+use std::old_io::{IoError, Stream, ByRefReader, ByRefWriter, Reader};
+use std::old_io::net::ip;
+use std::old_io::Writer;
+use std::str::FromStr;
 use {Header, HTTPVersion, Method, Response, StatusCode};
 use util::{AnyReader, AnyWriter};
 
@@ -54,7 +56,7 @@ pub struct Request {
 
     headers: Vec<Header>,
 
-    body_length: Option<uint>,
+    body_length: Option<usize>,
 
     // true if a `100 Continue` response must be sent when `as_reader()` is called
     must_send_continue: bool,
@@ -92,12 +94,12 @@ pub fn new_request<R: Reader + Send, W: Writer + Send>(method: Method, path: Str
     } else {
         headers.iter()
             .find(|h: &&Header| h.field.equiv(&"Content-Length"))
-            .and_then(|h| from_str::<uint>(h.value.as_slice().as_str_ascii()))
+            .and_then(|h| FromStr::from_str(h.value.as_slice().as_str_ascii()))
     };
 
     // true if the client sent a `Expect: 100-continue` header
     let expects_continue = {
-        use std::ascii::{AsciiCast, AsciiStr};
+        use ascii::{AsciiCast, AsciiStr};
 
         match headers.iter().find(|h: &&Header| h.field.equiv(&"Expect")) {
             None => false,
@@ -109,7 +111,7 @@ pub fn new_request<R: Reader + Send, W: Writer + Send>(method: Method, path: Str
 
     // true if the client sent a `Connection: upgrade` header
     let connection_upgrade = {
-        use std::ascii::{AsciiCast, AsciiStr};
+        use ascii::{AsciiCast, AsciiStr};
 
         match headers.iter().find(|h: &&Header| h.field.equiv(&"Connection")) {
             None => false,
@@ -130,11 +132,11 @@ pub fn new_request<R: Reader + Send, W: Writer + Send>(method: Method, path: Str
             let content_length = content_length.as_ref().unwrap().clone();
 
             if content_length == 0 {
-                use std::io::util::NullReader;
+                use std::old_io::util::NullReader;
                 box NullReader as Box<Reader + Send>
 
             } else if content_length <= 1024 && !expects_continue {
-                use std::io::MemReader;
+                use std::old_io::MemReader;
                 let data = try!(source_data.read_exact(content_length)
                     .map_err(|e| RequestCreationError::CreationIoError(e)));
                 box MemReader::new(data) as Box<Reader + Send>
@@ -155,7 +157,7 @@ pub fn new_request<R: Reader + Send, W: Writer + Send>(method: Method, path: Str
             // if we have neither a Content-Length nor a Transfer-Encoding,
             //  assuming that we have no data
             // TODO: could also be multipart/byteranges
-            use std::io::util::NullReader;
+            use std::old_io::util::NullReader;
             box NullReader as Box<Reader + Send>
         };
 
@@ -206,7 +208,7 @@ impl Request {
     /// Returns `None` if the length is unknown.
     #[unstable]
     #[inline]
-    pub fn get_body_length(&self) -> Option<uint> {
+    pub fn get_body_length(&self) -> Option<usize> {
         self.body_length
     }
 
@@ -323,7 +325,7 @@ impl Request {
     }
 
     fn respond_impl<R: Reader>(&mut self, response: Response<R>) {
-        use std::io;
+        use std::old_io;
 
         let mut writer = self.into_writer_impl();
 
@@ -334,11 +336,11 @@ impl Request {
                                 do_not_send_body, None)
         {
             Ok(_) => (),
-            Err(ref err) if err.kind == io::Closed => (),
-            Err(ref err) if err.kind == io::BrokenPipe => (),
-            Err(ref err) if err.kind == io::ConnectionAborted => (),
-            Err(ref err) if err.kind == io::ConnectionRefused => (),
-            Err(ref err) if err.kind == io::ConnectionReset => (),
+            Err(ref err) if err.kind == old_io::Closed => (),
+            Err(ref err) if err.kind == old_io::BrokenPipe => (),
+            Err(ref err) if err.kind == old_io::ConnectionAborted => (),
+            Err(ref err) if err.kind == old_io::ConnectionRefused => (),
+            Err(ref err) if err.kind == old_io::ConnectionReset => (),
             Err(ref err) =>
                 println!("error while sending answer: {}", err)     // TODO: handle better?
         };
@@ -347,7 +349,7 @@ impl Request {
     }
 }
 
-impl ::std::fmt::Show for Request {
+impl ::std::fmt::Debug for Request {
     fn fmt(&self, formatter: &mut ::std::fmt::Formatter)
         -> Result<(), ::std::fmt::Error>
     {

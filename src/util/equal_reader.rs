@@ -1,5 +1,8 @@
-use std::io::IoResult;
-use std::io::util::LimitReader;
+use std::sync::mpsc::channel;
+use std::old_io::IoResult;
+use std::sync::mpsc::{Sender, Receiver};
+use std::old_io::Reader;
+use std::old_io::util::LimitReader;
 
 /// A `Reader` that reads exactly the number of bytes from a sub-reader.
 /// 
@@ -12,7 +15,7 @@ pub struct EqualReader<R> {
 }
 
 impl<R: Reader> EqualReader<R> {
-    pub fn new(reader: R, size: uint) -> (EqualReader<R>, Receiver<IoResult<()>>) {
+    pub fn new(reader: R, size: usize) -> (EqualReader<R>, Receiver<IoResult<()>>) {
         let (tx, rx) = channel();
 
         let r = EqualReader {
@@ -25,7 +28,7 @@ impl<R: Reader> EqualReader<R> {
 }
 
 impl<R: Reader> Reader for EqualReader<R> {
-    fn read(&mut self, buf: &mut [u8]) -> IoResult<uint> {
+    fn read(&mut self, buf: &mut [u8]) -> IoResult<usize> {
         self.reader.as_mut().unwrap().read(buf)
     }
 }
@@ -52,7 +55,7 @@ mod test {
 
     #[test]
     fn test_limit() {
-        use std::io::MemReader;
+        use std::old_io::MemReader;
 
         let mut org_reader = MemReader::new("hello world".to_string().into_bytes());
 
@@ -67,7 +70,7 @@ mod test {
 
     #[test]
     fn test_not_enough() {
-        use std::io::MemReader;
+        use std::old_io::MemReader;
 
         let mut org_reader = MemReader::new("hello world".to_string().into_bytes());
 

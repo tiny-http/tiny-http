@@ -1,4 +1,6 @@
-use std::io::IoResult;
+use std::old_io::IoResult;
+use std::old_io::Reader;
+use std::old_io::Writer;
 
 pub struct CustomStream<R, W> {
     reader: R,
@@ -15,7 +17,7 @@ impl<R: Reader, W: Writer> CustomStream<R, W> {
 }
 
 impl<R: Reader, W> Reader for CustomStream<R, W> {
-    fn read(&mut self, buf: &mut [u8]) -> IoResult<uint> {
+    fn read(&mut self, buf: &mut [u8]) -> IoResult<usize> {
         self.reader.read(buf)
     }
 }

@@ -88,20 +88,24 @@ request.respond(response)
 
 #![crate_name = "tiny_http"]
 #![crate_type = "lib"]
-#![license = "Apache"]
-#![feature(unsafe_destructor)]
+#![feature(unsafe_destructor,box_syntax)]
 
+extern crate ascii;
 extern crate encoding;
 extern crate flate;
 extern crate time;
 extern crate url;
 
-use std::io::{Acceptor, IoResult, Listener};
-use std::io::net::ip;
-use std::io::net::tcp;
-use std::comm::Select;
+use std::sync::mpsc::{Sender, Receiver};
+use std::old_io::{Acceptor, IoResult, Listener};
+use std::old_io::net::ip;
+use std::old_io::net::tcp;
+use std::sync::mpsc::Select;
+use std::sync::mpsc::channel;
 use std::sync::{Arc, Mutex};
 use std::sync::atomic::AtomicBool;
+use std::thread;
+use std::net;
 use client::ClientConnection;
 
 pub use common::{Header, HeaderField, HTTPVersion, Method, StatusCode};
@@ -140,8 +144,8 @@ pub struct Server {
     // channel to receive requests from
     requests_receiver: Mutex<Receiver<Request>>,
 
-    // result of TcpListener::socket_name()
-    listening_addr: ip::SocketAddr,
+    // result of TcpListener::local_addr()
+    listening_addr: net::SocketAddr,
 }
 
 // this trait is to make sure that Server implements Share and Send
@@ -158,28 +162,29 @@ pub struct IncomingRequests<'a> {
 /// Object which allows you to build a server.
 pub struct ServerBuilder {
     // the address to listen to
-    address: ip::SocketAddr,
+    address: net::SocketAddr,
 
     // number of milliseconds before client timeout
     client_timeout_ms: u32,
 
     // maximum number of clients before 503
     // TODO: 
-    //max_clients: uint,
+    //max_clients: usize,
 }
 
 impl ServerBuilder {
     /// Creates a new builder.
     pub fn new() -> ServerBuilder {
+        let socket_addr_v4 = net::SocketAddrV4::new(net::Ipv4Addr::new(0, 0, 0, 0), 80);
         ServerBuilder {
-            address: ip::SocketAddr { ip: ip::Ipv4Addr(0, 0, 0, 0), port: 80 },
+            address: net::SocketAddr::V4(socket_addr_v4),
             client_timeout_ms: 60 * 1000,
             //max_clients: { use std::num::Bounded; Bounded::max_value() },
         }
     }
 
     /// The server will use a precise port.
-    pub fn with_port(mut self, port: ip::Port) -> ServerBuilder {
+    pub fn with_port(mut self, port: u16) -> ServerBuilder {
         self.address.port = port;
         self
     }
@@ -225,7 +230,7 @@ impl Server {
         let (tx_incoming, rx_incoming) = channel();
 
         let inside_close_trigger = close_trigger.clone();
-        spawn(proc() {
+        thread::spawn(move || {
             let mut server = server;
 
             loop {
@@ -273,7 +278,7 @@ impl Server {
     }
 
     /// Returns the address the server is listening to.
-    #[experimental]
+    #[unstable]
     #[inline]
     pub fn get_server_addr(&self) -> ip::SocketAddr {
         self.listening_addr.clone()
@@ -281,7 +286,7 @@ impl Server {
 
     /// Returns the number of clients currently connected to the server.
     #[stable]
-    pub fn get_num_connections(&self) -> uint {
+    pub fn get_num_connections(&self) -> usize {
         unimplemented!()
         //self.requests_receiver.lock().len()
     }
@@ -330,12 +335,12 @@ impl Server {
                         return Err(err)
                     },
                     Err(_) => {
-                        use std::io;
+                        use std::old_io;
 
                         unsafe { request_handle.remove() };
                         unsafe { connect_handle.remove() };
 
-                        return Err(io::standard_error(io::Closed));
+                        return Err(old_io::standard_error(old_io::Closed));
                     }
                 }
             }
@@ -366,7 +371,7 @@ impl Server {
     fn add_client(&self, client: ClientConnection) {
         let requests_sender = self.requests_sender.lock().clone();
 
-        self.tasks_pool.spawn(proc() {
+        self.tasks_pool.spawn(box move || {
             let mut client = client;
 
             for rq in client {
@@ -379,7 +384,8 @@ impl Server {
     }
 }
 
-impl<'a> Iterator<Request> for IncomingRequests<'a> {
+impl<'a> Iterator for IncomingRequests<'a> {
+    type Item = Request;
     fn next(&mut self) -> Option<Request> {
         self.server.recv().ok()
     }
@@ -387,7 +393,7 @@ impl<'a> Iterator<Request> for IncomingRequests<'a> {
 
 impl Drop for Server {
     fn drop(&mut self) {
-        use std::sync::atomic::Relaxed;
+        use std::sync::atomic::Ordering::Relaxed;
         self.close.store(true, Relaxed);
     }
 }

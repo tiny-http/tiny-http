@@ -1,7 +1,9 @@
-use std::ascii::Ascii;
-use std::io;
-use std::io::{BufferedReader, BufferedWriter, IoError, IoResult};
-use std::io::net::ip::SocketAddr;
+use ascii::Ascii;
+use std::ascii::AsciiExt;
+use std::str::FromStr;
+use std::old_io;
+use std::old_io::{BufferedReader, BufferedWriter, IoError, IoResult};
+use std::old_io::net::ip::SocketAddr;
 use common::{HTTPVersion, Method};
 use Request;
 use util::{SequentialReader, SequentialReaderBuilder, SequentialWriterBuilder};
@@ -11,7 +13,7 @@ use util::ClosableTcpStream;
 /// and return Request objects.
 pub struct ClientConnection {
     // address of the client
-    remote_addr: io::IoResult<SocketAddr>,
+    remote_addr: old_io::IoResult<SocketAddr>,
 
     // sequence of Readers to the stream, so that the data is not read in
     //  the wrong order
@@ -63,13 +65,13 @@ impl ClientConnection {
     /// Reads until `CRLF` is reached. The next read will start
     ///  at the first byte of the new line.
     fn read_next_line(&mut self) -> IoResult<Vec<Ascii>> {
-        use std::io;
+        use std::old_io;
 
         let mut buf = Vec::new();
         let mut prev_byte_was_cr = false;
 
         loop {
-            use std::ascii::OwnedAsciiCast;
+            use ascii::OwnedAsciiCast;
 
             let byte = try!(self.next_header_source.read_byte());
 
@@ -77,7 +79,7 @@ impl ClientConnection {
                 buf.pop();  // removing the '\r'
                 return match buf.into_ascii_opt() {
                     Some(s) => Ok(s),
-                    None => Err(io::standard_error(io::InvalidInput))
+                    None => Err(old_io::standard_error(old_io::InvalidInput))
                 }
             }
 
@@ -91,7 +93,7 @@ impl ClientConnection {
     /// Blocks until the header has been read.
     fn read(&mut self) -> Result<Request, ReadError> {
         let (method, path, version, headers) = {
-            use std::ascii::AsciiStr;
+            use ascii::AsciiStr;
 
             // reading the request line
             let (method, path, version) = {
@@ -104,7 +106,7 @@ impl ClientConnection {
 
             // getting all headers
             let headers = {
-                use std::ascii::AsciiStr;
+                use ascii::AsciiStr;
 
                 let mut headers = Vec::new();
                 loop {
@@ -112,9 +114,9 @@ impl ClientConnection {
 
                     if line.len() == 0 { break };
                     headers.push(
-                        match from_str(line.as_slice().as_str_ascii().trim()) {    // TODO: remove this conversion
-                            Some(h) => h,
-                            None => return Err(ReadError::WrongHeader(version))
+                        match FromStr::from_str(line.as_slice().as_str_ascii().trim()) {    // TODO: remove this conversion
+                            Ok(h) => h,
+                            _ => return Err(ReadError::WrongHeader(version))
                         }
                     );
                 }
@@ -148,7 +150,8 @@ impl ClientConnection {
     }
 }
 
-impl Iterator<Request> for ClientConnection {
+impl Iterator for ClientConnection {
+    type Item = Request;
     /// Blocks until the next Request is available.
     /// Returns None when no new Requests will come from the client.
     fn next(&mut self) -> Option<Request> {
@@ -161,7 +164,7 @@ impl Iterator<Request> for ClientConnection {
         }
 
         loop {
-            use std::io::TimedOut;
+            use std::old_io::TimedOut;
 
             let rq = match self.read() {
                 Err(ReadError::WrongRequestLine) => {
@@ -213,7 +216,7 @@ impl Iterator<Request> for ClientConnection {
 
             // updating the status of the connection
             {
-                use std::ascii::{AsciiCast, AsciiStr};
+                use ascii::{AsciiCast, AsciiStr};
 
                 let connection_header = rq.get_headers().iter()
                     .find(|h| h.field.equiv(&"Connection")).map(|h| h.value.as_slice());
@@ -255,8 +258,8 @@ fn parse_http_version(version: &str) -> Result<HTTPVersion, ReadError> {
         return Err(ReadError::WrongRequestLine)
     }
 
-    match (from_str(elems[0].as_slice()), from_str(elems[1].as_slice())) {
-        (Some(major), Some(minor)) =>
+    match (FromStr::from_str(elems[0].as_slice()), FromStr::from_str(elems[1].as_slice())) {
+        (Ok(major), Ok(minor)) =>
             Ok(HTTPVersion(major, minor)),
         _ => Err(ReadError::WrongRequestLine)
     }
@@ -276,9 +279,9 @@ fn parse_request_line(line: &str) -> Result<(Method, String, HTTPVersion), ReadE
         _ => return Err(ReadError::WrongRequestLine)
     };
 
-    let method = match from_str(method) {
-        Some(method) => method,
-        None => return Err(ReadError::WrongRequestLine)
+    let method = match FromStr::from_str(method) {
+        Ok(method) => method,
+        Err(()) => return Err(ReadError::WrongRequestLine)
     };
 
     let version = try!(parse_http_version(version));

@@ -1,4 +1,5 @@
-use std::io::IoResult;
+use std::old_io::IoResult;
+use std::old_io::Reader;
 
 /// Reads HTTP chunks and sends back real data.
 pub struct ChunksDecoder<R> {
@@ -7,7 +8,7 @@ pub struct ChunksDecoder<R> {
 
     // remaining size of the chunk being read
     // none if we are not in a chunk
-    remaining_chunks_size: Option<uint>,
+    remaining_chunks_size: Option<usize>,
 
     // data from the start of the current chunk
     buffer: Vec<u8>,
@@ -24,9 +25,9 @@ impl<R: Reader> ChunksDecoder<R> {
 }
 
 impl<R: Reader> Reader for ChunksDecoder<R> {
-    fn read(&mut self, buf: &mut [u8]) -> IoResult<uint> {
-        use std::io;
-        use std::path::BytesContainer;
+    fn read(&mut self, buf: &mut [u8]) -> IoResult<usize> {
+        use std::old_io;
+        use std::old_path::BytesContainer;
 
         // first possibility: we are not in a chunk
         if self.remaining_chunks_size.is_none() {
@@ -46,28 +47,28 @@ impl<R: Reader> Reader for ChunksDecoder<R> {
             }
 
             if try!(self.source.read_byte()) != b'\n' {
-                return Err(io::standard_error(io::InvalidInput));
+                return Err(old_io::standard_error(old_io::InvalidInput));
             }
 
             let chunk_size = match chunk_size.container_as_str() {
                 Some(c) => c,
-                None => return Err(io::standard_error(io::InvalidInput))
+                None => return Err(old_io::standard_error(old_io::InvalidInput))
             };
 
-            let chunk_size: uint = match FromStrRadix::from_str_radix(chunk_size, 16) {
-                Some(c) => c,
-                None => return Err(io::standard_error(io::InvalidInput))
+            let chunk_size: usize = match FromStrRadix::from_str_radix(chunk_size, 16) {
+                Ok(c) => c,
+                Err(()) => return Err(old_io::standard_error(old_io::InvalidInput))
             };
 
             // if the chunk size is 0, we are at EOF
             if chunk_size == 0 {
                 if try!(self.source.read_byte()) != b'\r' {
-                    return Err(io::standard_error(io::InvalidInput));
+                    return Err(old_io::standard_error(old_io::InvalidInput));
                 }
                 if try!(self.source.read_byte()) != b'\n' {
-                    return Err(io::standard_error(io::InvalidInput));
+                    return Err(old_io::standard_error(old_io::InvalidInput));
                 }
-                return Err(io::standard_error(io::EndOfFile));
+                return Err(old_io::standard_error(old_io::EndOfFile));
             }
 
             // now that we now the current chunk size, calling ourselves recursively
@@ -98,10 +99,10 @@ impl<R: Reader> Reader for ChunksDecoder<R> {
             self.remaining_chunks_size = None;
 
             if try!(self.source.read_byte()) != b'\r' {
-                return Err(io::standard_error(io::InvalidInput));
+                return Err(old_io::standard_error(old_io::InvalidInput));
             }
             if try!(self.source.read_byte()) != b'\n' {
-                return Err(io::standard_error(io::InvalidInput));
+                return Err(old_io::standard_error(old_io::InvalidInput));
             }
         }
 
@@ -111,12 +112,12 @@ impl<R: Reader> Reader for ChunksDecoder<R> {
 
 #[cfg(test)]
 mod test {
-    use std::io;
+    use std::old_io;
     use super::ChunksDecoder;
 
     #[test]
     fn test() {
-        let source = io::MemReader::new("3\r\nhel\r\nb\r\nlo world!!!\r\n0\r\n".to_string().into_bytes());
+        let source = old_io::MemReader::new("3\r\nhel\r\nb\r\nlo world!!!\r\n0\r\n".to_string().into_bytes());
         let mut decoded = ChunksDecoder::new(source);
 
         let decoded = decoded.read_to_string().unwrap();
@@ -125,18 +126,18 @@ mod test {
     }
 
     #[test]
-    #[should_fail]
+    #[should_panic]
     fn invalid_input1() {
-        let source = io::MemReader::new("2\r\nhel\r\nb\r\nlo world!!!\r\n0\r\n".to_string().into_bytes());
+        let source = old_io::MemReader::new("2\r\nhel\r\nb\r\nlo world!!!\r\n0\r\n".to_string().into_bytes());
         let mut decoded = ChunksDecoder::new(source);
 
         decoded.read_to_string().unwrap();
     }
 
     #[test]
-    #[should_fail]
+    #[should_panic]
     fn invalid_input2() {
-        let source = io::MemReader::new("3\rhel\r\nb\r\nlo world!!!\r\n0\r\n".to_string().into_bytes());
+        let source = old_io::MemReader::new("3\rhel\r\nb\r\nlo world!!!\r\n0\r\n".to_string().into_bytes());
         let mut decoded = ChunksDecoder::new(source);
 
         decoded.read_to_string().unwrap();

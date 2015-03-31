@@ -1,5 +1,5 @@
-use std::io::{Acceptor, IoResult};
-use std::io::net::tcp::{TcpAcceptor, TcpStream};
+use std::old_io::{Acceptor, IoResult};
+use std::old_io::net::tcp::{TcpAcceptor, TcpStream};
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 
@@ -17,20 +17,21 @@ impl ClosableTcpAcceptor {
     }
 }
 
-impl Acceptor<TcpStream> for ClosableTcpAcceptor {
+impl Acceptor for ClosableTcpAcceptor {
+    type Connection = TcpStream;
     fn accept(&mut self) -> IoResult<TcpStream> {
-        use std::io;
-        use std::sync::atomic::Relaxed;
+        use std::old_io;
+        use std::sync::atomic::Ordering::Relaxed;
 
         loop {
             if self.end_trigger.load(Relaxed) {
-                return Err(io::standard_error(io::Closed));
+                return Err(old_io::standard_error(old_io::Closed));
             }
 
             self.acceptor.set_timeout(Some(100));
 
             match self.acceptor.accept() {
-                Err(ref err) if err.kind == io::TimedOut
+                Err(ref err) if err.kind == old_io::TimedOut
                     => continue,
                 a => return a
             };

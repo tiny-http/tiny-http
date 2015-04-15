@@ -21,14 +21,7 @@ impl<R: Reader> Reader for DeflateReader<R> {
         if self.buffer.is_none() {
             let data = try!(self.reader.read_to_end());
 
-            let result = match flate::deflate_bytes(data.as_slice()) {
-                Some(d) => d,
-                None => {
-                    use std::old_io;
-                    use std::old_io::InvalidInput;
-                    return Err(old_io::standard_error(InvalidInput));
-                }
-            };
+            let result = flate::deflate_bytes(data.as_slice());
 
             self.buffer = Some(result.as_slice().to_vec());
         }

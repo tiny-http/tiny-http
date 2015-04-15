@@ -12,7 +12,7 @@ pub struct StatusCode(pub u16);
 impl StatusCode {
     #[stable]
     /// Returns the status code as a number.
-    pub fn as_usize(&self) -> usize {
+    pub fn as_u16(&self) -> u16 {
         match *self { StatusCode(n) => n }
     }
 
@@ -24,7 +24,7 @@ impl StatusCode {
     /// Returns the default reason phrase for this status code.
     /// For example the status code 404 corresponds to "Not Found".
     pub fn get_default_reason_phrase(&self) -> &'static str {
-        match self.as_usize() {
+        match self.as_u16() {
             100 => "Continue",
             101 => "Switching Protocols",
             102 => "Processing",
@@ -73,8 +73,8 @@ impl StatusCode {
         }
     }
 
-    pub fn equiv(&self, other: &usize) -> bool {
-        self.as_usize() == *other
+    pub fn equiv(&self, other: &u16) -> bool {
+        self.as_u16() == *other
     }
 }
 

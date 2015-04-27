@@ -92,7 +92,7 @@ impl FromStr for Header {
     type Err = ();
 
     fn from_str(input: &str) -> Result<Header, ()> {
-        let mut elems = input.splitn(1, ':');
+        let mut elems = input.splitn(2, ':');
 
         let field = elems.next();
         let value = elems.next();

@@ -10,7 +10,7 @@ use std::thread;
 /// A new thread is created every time all the existing threads are full.
 /// Any idle thread will automatically die after a few seconds.
 pub struct TaskPool {
-    free_tasks: Arc<Mutex<VecDeque<Sender<Box<FnOnce() + Send>>>>>,
+    free_tasks: Arc<Mutex<VecDeque<Sender<Box<FnMut() + Send>>>>>,
     active_tasks: Arc<AtomicUsize>,
 }
 
@@ -50,14 +50,14 @@ impl TaskPool {
 
     /// Executes a function in a thread.
     /// If no thread is available, spawns a new one.
-    pub fn spawn(&self, mut code: Box<FnOnce() + Send>) {
-        let queue = self.free_tasks.lock().unwrap();
+    pub fn spawn(&self, mut code: Box<FnMut() + Send>) {
+        let mut queue = self.free_tasks.lock().unwrap();
 
         loop {
             if let Some(sender) = queue.pop_front() {
                 match sender.send(code) {
                     Ok(_) => return,
-                    Err(_) => continue
+                    Err(err) => { code = err.0; continue; }
                 };
             } else {
                 self.add_thread(Some(code));
@@ -66,7 +66,7 @@ impl TaskPool {
         }
     }
 
-    fn add_thread(&self, initial_fn: Option<Box<FnOnce() + Send>>) {
+    fn add_thread(&self, initial_fn: Option<Box<FnMut() + Send>>) {
         let queue = self.free_tasks.clone();
         let active_tasks = self.active_tasks.clone();
 
@@ -75,7 +75,7 @@ impl TaskPool {
             let _ = Registration::new(active_tasks.clone());
 
             if initial_fn.is_some() {
-                let f = initial_fn.unwrap();
+                let mut f = initial_fn.unwrap();
                 f();
             }
 
@@ -85,14 +85,14 @@ impl TaskPool {
                 let (tx, rx) = channel();
 
                 {
-                    let queue = queue.lock().unwrap();
+                    let mut queue = queue.lock().unwrap();
                     queue.push_back(tx);
                 }
 
                 thread::sleep_ms(3);
 
                 match rx.try_recv() {
-                    Ok(f) => {
+                    Ok(mut f) => {
                         f();
                         timeout_cycles = 5000 / 3;
                     },

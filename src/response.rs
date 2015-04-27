@@ -85,8 +85,8 @@ fn write_message_header<W>(mut writer: W, http_version: &HTTPVersion,
     // writing headers
     for header in headers.iter() {
         use ascii::AsciiStr;
-        try!(write!(&mut writer, "{}: {}\r\n", header.field.as_str().as_str_ascii(),
-            header.value.as_str_ascii()));
+        try!(write!(&mut writer, "{}: {}\r\n", header.field.as_str().as_str(),
+            header.value.as_str()));
     }
 
     // separator between header and data
@@ -112,14 +112,14 @@ fn choose_transfer_encoding(request_headers: &[Header], http_version: &HTTPVersi
         .find(|h| h.field.equiv(&"TE"))
 
         // getting its value
-        .map(|h| h.value)
+        .map(|h| h.value.clone())
 
         // getting the corresponding TransferEncoding
         .and_then(|value| {
             use ascii::AsciiStr;
 
             // getting list of requested elements
-            let mut parse = util::parse_header_value(value.as_str_ascii());     // TODO: remove conversion
+            let mut parse = util::parse_header_value(value.as_str());     // TODO: remove conversion
 
             // sorting elements by most priority
             parse.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(Ordering::Equal));
@@ -208,8 +208,7 @@ impl<R> Response<R> where R: Read {
 
         // if the header is Content-Length, setting the data length
         if header.field.equiv(&"Content-Length") {
-            use ascii::AsciiStr;
-            match <usize as FromStr>::from_str(header.value.as_str_ascii()) {
+            match <usize as FromStr>::from_str(header.value.as_str()) {
                 Ok(val) => self.data_length = Some(val),
                 Err(_) => ()      // wrong value for content-length
             };

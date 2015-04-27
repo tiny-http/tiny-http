@@ -85,6 +85,7 @@ All that remains to do is call `request.respond()`:
 request.respond(response)
 ```
 */
+#![feature(std_misc, str_words, collections)]
 #![crate_name = "tiny_http"]
 #![crate_type = "lib"]
 
@@ -211,7 +212,7 @@ impl Server {
 
         // building the TcpListener
         let (server, local_addr) = {
-            let mut listener = try!(net::TcpListener::bind(net::SocketAddr::V4(config.address)));
+            let listener = try!(net::TcpListener::bind(net::SocketAddr::V4(config.address)));
             let local_addr = try!(listener.local_addr());
             (listener, local_addr)
         };
@@ -222,8 +223,6 @@ impl Server {
 
         let inside_close_trigger = close_trigger.clone();
         thread::spawn(move || {
-            let mut server = server;
-
             loop {
                 let new_client = server.accept().map(|(sock, _)| {
                     use util::ClosableTcpStream;
@@ -276,8 +275,8 @@ impl Server {
 
     /// Blocks until an HTTP request has been submitted and returns it.
     pub fn recv(&self) -> IoResult<Request> {
-        /*let connections_receiver = self.connections_receiver.lock();
-        let requests_receiver = self.requests_receiver.lock();
+        let connections_receiver = self.connections_receiver.lock().unwrap();
+        let requests_receiver = self.requests_receiver.lock().unwrap();
 
         // TODO: the select! macro doesn't seem to be usable without moving
         //       out of self, so we use Select directly
@@ -294,16 +293,16 @@ impl Server {
             let id = select.wait();
 
             if id == request_handle.id() {
-                let request = request_handle.recv();
+                let request = request_handle.recv().unwrap();
 
                 unsafe { request_handle.remove() };
                 unsafe { connect_handle.remove() };
 
-                return Ok(request)
+                return Ok(request);
             }
 
             if id == connect_handle.id() {
-                let client = connect_handle.recv_opt();
+                let client = connect_handle.recv();
 
                 match client {
                     Ok(Ok(client)) => {
@@ -317,19 +316,16 @@ impl Server {
                         return Err(err)
                     },
                     Err(_) => {
-                        use std::old_io;
-
                         unsafe { request_handle.remove() };
                         unsafe { connect_handle.remove() };
 
-                        return Err(old_io::standard_error(old_io::Closed));
+                        panic!() // FIXME: return Err(old_io::standard_error(old_io::Closed));
                     }
                 }
             }
 
             unreachable!()
-        }*/
-        unimplemented!();
+        }
     }
 
     /// Same as `recv()` but doesn't block.
@@ -353,12 +349,14 @@ impl Server {
     fn add_client(&self, client: ClientConnection) {
         let requests_sender = self.requests_sender.lock().unwrap().clone();
 
-        self.tasks_pool.spawn(Box::new(move || {
-            let mut client = client;
+        let mut client = Some(client);
 
-            for rq in client {
-                if let Err(_) = requests_sender.send(rq) {
-                    break;
+        self.tasks_pool.spawn(Box::new(move || {
+            if let Some(client) = client.take() {
+                for rq in client {
+                    if let Err(_) = requests_sender.send(rq) {
+                        break;
+                    }
                 }
             }
         }));

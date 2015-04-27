@@ -2,33 +2,33 @@ use std::io::Result as IoResult;
 use std::io::{Read, Write};
 
 pub struct AnyReader {
-    reader: Box<Read + Send>,
+    reader: Box<Read + Send + 'static>,
 }
 
 pub struct AnyWriter {
-    writer: Box<Write + Send>,
+    writer: Box<Write + Send + 'static>,
 }
 
 impl AnyReader {
-    pub fn new(reader: Box<Read + Send>) -> AnyReader {
+    pub fn new(reader: Box<Read + Send + 'static>) -> AnyReader {
         AnyReader {
             reader: reader,
         }
     }
 
-    pub fn unwrap(self) -> Box<Read + Send> {
+    pub fn unwrap(self) -> Box<Read + Send + 'static> {
         self.reader
     }
 }
 
 impl AnyWriter {
-    pub fn new(writer: Box<Write + Send>) -> AnyWriter {
+    pub fn new(writer: Box<Write + Send + 'static>) -> AnyWriter {
         AnyWriter {
             writer: writer,
         }
     }
 
-    pub fn unwrap(self) -> Box<Write + Send> {
+    pub fn unwrap(self) -> Box<Write + Send + 'static> {
         self.writer
     }
 }

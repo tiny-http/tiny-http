@@ -1,4 +1,5 @@
 use ascii::{AsciiCast, AsciiStr};
+use std::ascii::AsciiExt;
 
 use std::io::Error as IoError;
 use std::io::Result as IoResult;
@@ -77,7 +78,7 @@ pub fn new_request<R, W>(method: Method, path: String,
                          version: HTTPVersion, headers: Vec<Header>,
                          remote_addr: SocketAddr, mut source_data: R, writer: W)
                          -> Result<Request, RequestCreationError>
-                         where R: Read + Send, W: Write + Send
+                         where R: Read + Send + 'static, W: Write + Send + 'static
 {
     // finding the transfer-encoding header
     let transfer_encoding = headers.iter()
@@ -93,14 +94,14 @@ pub fn new_request<R, W>(method: Method, path: String,
     } else {
         headers.iter()
                .find(|h: &&Header| h.field.equiv(&"Content-Length"))
-               .and_then(|h| FromStr::from_str(h.value.as_str_ascii()))
+               .and_then(|h| FromStr::from_str(h.value.as_str()).ok())
     };
 
     // true if the client sent a `Expect: 100-continue` header
     let expects_continue = {
         match headers.iter().find(|h: &&Header| h.field.equiv(&"Expect")) {
             None => false,
-            Some(h) if h.value.eq_ignore_case(b"100-continue".to_ascii())
+            Some(h) if h.value.eq_ignore_ascii_case(b"100-continue".to_ascii().unwrap())
                 => true,
             _ => return Err(RequestCreationError::ExpectationFailed)
         }
@@ -110,7 +111,7 @@ pub fn new_request<R, W>(method: Method, path: String,
     let connection_upgrade = {
         match headers.iter().find(|h: &&Header| h.field.equiv(&"Connection")) {
             None => false,
-            Some(h) if h.value.eq_ignore_case(b"upgrade".to_ascii())
+            Some(h) if h.value.eq_ignore_ascii_case(b"upgrade".to_ascii().unwrap())
                 => true,
             _ => false
         }
@@ -121,43 +122,57 @@ pub fn new_request<R, W>(method: Method, path: String,
     let reader =
         if connection_upgrade {
             // if we have a `Connection: upgrade`, always keeping the whole reader
-            Box::new(source_data) as Box<Read + Send>
+            Box::new(source_data) as Box<Read + Send + 'static>
 
-        } else if content_length.is_some() {
-            let content_length = content_length.as_ref().unwrap().clone();
-
+        } else if let Some(content_length) = content_length {
             if content_length == 0 {
                 use std::io;
-                Box::new(io::empty()) as Box<Read + Send>
+                Box::new(io::empty()) as Box<Read + Send + 'static>
 
             } else if content_length <= 1024 && !expects_continue {
                 use std::io::Cursor;
-                let data = try!(source_data.read_exact(content_length)
-                    .map_err(|e| RequestCreationError::CreationIoError(e)));
-                Box::new(Cursor::new(data)) as Box<Read + Send>
+
+                let mut buffer = vec![0; content_length];
+                let mut offset = 0;
+
+                loop {
+                    if offset == content_length {
+                        break;
+                    }
+
+                    let read = try!(source_data.read(&mut buffer[offset..])
+                                               .map_err(|e| RequestCreationError::CreationIoError(e)));
+                    if read == 0 {
+                        break;
+                    }
+
+                    offset += read;
+                }
+
+                Box::new(Cursor::new(buffer)) as Box<Read + Send + 'static>
 
             } else {
                 use util::EqualReader;
                 let (data_reader, _) = EqualReader::new(source_data, content_length);   // TODO:
-                Box::new(data_reader) as Box<Read + Send>
+                Box::new(data_reader) as Box<Read + Send + 'static>
             }
 
         } else if transfer_encoding.is_some() {
             // if a transfer-encoding was specified, then "chunked"
             //  is ALWAYS applied over the message (RFC2616 #3.6)
             use util::ChunksDecoder;
-            Box::new(ChunksDecoder::new(source_data)) as Box<Read + Send>
+            Box::new(ChunksDecoder::new(source_data)) as Box<Read + Send + 'static>
 
         } else {
             // if we have neither a Content-Length nor a Transfer-Encoding,
             // assuming that we have no data
             // TODO: could also be multipart/byteranges
-            Box::new(io::empty()) as Box<Read + Send>
+            Box::new(io::empty()) as Box<Read + Send + 'static>
         };
 
     Ok(Request {
         data_reader: Some(AnyReader::new(reader)),
-        response_writer: Some(AnyWriter::new(Box::new(writer) as Box<Write + Send>)),
+        response_writer: Some(AnyWriter::new(Box::new(writer) as Box<Write + Send + 'static>)),
         remote_addr: remote_addr,
         method: method,
         path: path,
@@ -259,7 +274,7 @@ impl Request {
         if self.must_send_continue {
             let msg = Response::new_empty(StatusCode(100));
             msg.raw_print(self.response_writer.as_mut().unwrap().by_ref(),
-                self.http_version, self.headers, true, None).ok();
+                          self.http_version.clone(), &self.headers, true, None).ok();
             self.response_writer.as_mut().unwrap().flush().ok();
             self.must_send_continue = false;
         }
@@ -279,7 +294,7 @@ impl Request {
     /// the writing of the next response.
     /// Therefore you should always destroy the `Writer` as soon as possible.
     #[inline]
-    pub fn into_writer(mut self) -> Box<Write + Send> {
+    pub fn into_writer(mut self) -> Box<Write + Send + 'static> {
         self.into_writer_impl().unwrap()
     }
 
@@ -315,11 +330,10 @@ impl Request {
         let do_not_send_body = self.method.equiv(&"HEAD");
 
         match response.raw_print(writer.by_ref(),
-                                self.http_version, self.headers,
-                                do_not_send_body, None)
+                                 self.http_version.clone(), &self.headers,
+                                 do_not_send_body, None)
         {
             Ok(_) => (),
-            Err(ref err) if err.kind() == ErrorKind::Closed => (),
             Err(ref err) if err.kind() == ErrorKind::BrokenPipe => (),
             Err(ref err) if err.kind() == ErrorKind::ConnectionAborted => (),
             Err(ref err) if err.kind() == ErrorKind::ConnectionRefused => (),
@@ -334,7 +348,7 @@ impl Request {
 
 impl fmt::Debug for Request {
     fn fmt(&self, formatter: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        write!(formatter, "Request({} {} from {})", self.method, self.path, self.remote_addr.ip)
+        write!(formatter, "Request({} {} from {})", self.method, self.path, self.remote_addr)
     }
 }
 

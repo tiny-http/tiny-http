@@ -22,7 +22,7 @@ impl<R, W> Read for CustomStream<R, W> where R: Read {
 }
 
 impl<R, W> Write for CustomStream<R, W> where W: Write {
-    fn write(&mut self, buf: &[u8]) -> IoResult<()> {
+    fn write(&mut self, buf: &[u8]) -> IoResult<usize> {
         self.writer.write(buf)
     }
 

@@ -91,7 +91,7 @@ pub struct Header {
 impl FromStr for Header {
     type Err = ();
 
-    fn from_str(input: &str) -> Option<Header> {
+    fn from_str(input: &str) -> Result<Header, ()> {
         let mut elems = input.splitn(1, ':');
 
         let field = elems.next();
@@ -121,7 +121,7 @@ impl FromStr for Header {
 
 impl Debug for Header {
     fn fmt(&self, formatter: &mut Formatter) -> Result<(), fmt::Error> {
-        let value = self.value.as_slice();
+        let value = self.value;
         let value = value.as_str_ascii();
         (format!("{}: {}", self.field, value)).fmt(formatter)
     }
@@ -135,25 +135,25 @@ pub struct HeaderField(Vec<Ascii>);
 
 impl HeaderField {
     pub fn as_str<'a>(&'a self) -> &'a [Ascii] {
-        match self { &HeaderField(ref s) => s.as_slice() }
+        match self { &HeaderField(ref s) => s }
     }
 
     pub fn equiv(&self, other: &'static str) -> bool {
-        other.as_slice().eq_ignore_ascii_case(self.as_str().as_str_ascii())
+        other.eq_ignore_ascii_case(self.as_str().as_str_ascii())
     }
 }
 
 impl FromStr for HeaderField {
     type Err = ();
 
-    fn from_str(s: &str) -> Option<HeaderField> {
-        s.trim().to_ascii_opt().map(|s| HeaderField(s.to_vec()))
+    fn from_str(s: &str) -> Result<HeaderField, ()> {
+        s.trim().to_ascii_opt().map(|s| HeaderField(s.to_vec())).ok_or(())
     }
 }
 
 impl ToString for HeaderField {
-    fn to_string(self) -> String {
-        match self { HeaderField(s) => s.to_string() }
+    fn to_string(&self) -> String {
+        match self { &HeaderField(s) => s.to_string() }
     }
 }
 
@@ -184,25 +184,25 @@ pub struct Method(Vec<Ascii>);
 
 impl Method {
     fn as_str<'a>(&'a self) -> &'a [Ascii] {
-        match self { &Method(ref s) => s.as_slice() }
+        match self { &Method(ref s) => s }
     }
 
     pub fn equiv(&self, other: &'static str) -> bool {
-        other.as_slice().eq_ignore_ascii_case(self.as_str().as_str_ascii())
+        other.eq_ignore_ascii_case(self.as_str().as_str_ascii())
     }
 }
 
 impl FromStr for Method {
     type Err = ();
 
-    fn from_str(s: &str) -> Option<Method> {
-        s.to_ascii_opt().map(|s| Method(s.to_vec()))
+    fn from_str(s: &str) -> Result<Method, ()> {
+        s.to_ascii_opt().map(|s| Method(s.to_vec())).ok_or(())
     }
 }
 
 impl ToString for Method {
-    fn to_string(self) -> String {
-        match self { Method(s) => s.to_string() }
+    fn to_string(&self) -> String {
+        match self { &Method(s) => s.to_string() }
     }
 }
 
@@ -259,7 +259,7 @@ mod test {
         let header: Header = FromStr::from_str("Content-Type: text/html").unwrap();
 
         assert!(header.field.equiv(&"content-type"));
-        assert!(header.value.as_slice().as_str_ascii() == "text/html");
+        assert!(header.value.as_str_ascii() == "text/html");
 
         assert!(FromStr::from_str::<Header>("hello world").is_none());
     }
@@ -271,6 +271,6 @@ mod test {
         let header: Header = FromStr::from_str("Time: 20: 34").unwrap();
 
         assert!(header.field.equiv(&"time"));
-        assert!(header.value.as_slice().as_str_ascii() == "20: 34");
+        assert!(header.value.as_str_ascii() == "20: 34");
     }
 }

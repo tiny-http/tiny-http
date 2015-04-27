@@ -36,7 +36,7 @@ impl<R: Read + Send> SequentialReaderBuilder<R> {
     }
 }
 
-impl<W: Writ + Send> SequentialWriterBuilder<W> {
+impl<W: Write + Send> SequentialWriterBuilder<W> {
     pub fn new(writer: W) -> SequentialWriterBuilder<W> {
         SequentialWriterBuilder {
             writer: Arc::new(Mutex::new(writer)),
@@ -60,7 +60,7 @@ impl<R: Read + Send> Iterator for SequentialReaderBuilder<R> {
     }
 }
 
-impl<W: Writ + Send> Iterator for SequentialWriterBuilder<W> {
+impl<W: Write + Send> Iterator for SequentialWriterBuilder<W> {
     type Item = SequentialWriter<W>;
     fn next(&mut self) -> Option<SequentialWriter<W>> {
         let (tx, rx) = channel();
@@ -80,34 +80,34 @@ impl<R: Read + Send> Read for SequentialReader<R> {
         self.trigger.as_mut().map(|v| v.get());
         self.trigger = None;
 
-        self.reader.lock().read(buf)
+        self.reader.lock().unwrap().read(buf)
     }
 }
 
 impl<W: Write + Send> Write for SequentialWriter<W> {
-    fn write(&mut self, buf: &[u8]) -> IoResult<()> {
+    fn write(&mut self, buf: &[u8]) -> IoResult<usize> {
         self.trigger.as_mut().map(|v| v.get());
         self.trigger = None;
 
-        self.writer.lock().write(buf)
+        self.writer.lock().unwrap().write(buf)
     }
 
     fn flush(&mut self) -> IoResult<()> {
         self.trigger.as_mut().map(|v| v.get());
         self.trigger = None;
 
-        self.writer.lock().flush()
+        self.writer.lock().unwrap().flush()
     }
 }
 
-impl<R> Drop for SequentialReader<R> where R: Read {
+impl<R> Drop for SequentialReader<R> where R: Read + Send {
     fn drop(&mut self) {
-        self.on_finish.send_opt(()).ok();
+        self.on_finish.send(()).ok();
     }
 }
 
-impl<W> Drop for SequentialWriter<W> where W: Write {
+impl<W> Drop for SequentialWriter<W> where W: Write + Send {
     fn drop(&mut self) {
-        self.on_finish.send_opt(()).ok();
+        self.on_finish.send(()).ok();
     }
 }

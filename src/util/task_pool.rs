@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::sync::mpsc::{Sender, Receiver};
 use std::sync::atomic::{Ordering, AtomicUsize};
 use std::sync::mpsc::channel;
@@ -66,14 +66,13 @@ impl TaskPool {
         }
     }
 
-    fn add_thread(&self, initial_fn: Option<FnOnce() + Send>) {
+    fn add_thread(&self, initial_fn: Option<Box<FnOnce() + Send>>) {
         let queue = self.free_tasks.clone();
         let active_tasks = self.active_tasks.clone();
 
         thread::spawn(move || {
             let active_tasks = active_tasks;
             let _ = Registration::new(active_tasks.clone());
-            let mut timer = Timer::new().unwrap();
 
             if initial_fn.is_some() {
                 let f = initial_fn.unwrap();

@@ -29,7 +29,7 @@ impl<R> EqualReader<R> where R: Read {
     }
 }
 
-impl<R> Read for EqualReader<R> {
+impl<R> Read for EqualReader<R> where R: Read {
     fn read(&mut self, buf: &mut [u8]) -> IoResult<usize> {
         if self.size == 0 {
             return Ok(0);
@@ -45,7 +45,7 @@ impl<R> Read for EqualReader<R> {
     }
 }
 
-impl<R> Drop for EqualReader<R> {
+impl<R> Drop for EqualReader<R> where R: Read {
     fn drop(&mut self) {
         let mut remaining_to_read = self.size;
 
@@ -53,13 +53,11 @@ impl<R> Drop for EqualReader<R> {
             let mut buf = vec![0 ; remaining_to_read];
 
             match self.reader.read(&mut buf) {
-                Err(_) => break,
-                Ok(0) => break,
+                Err(e) => { self.last_read_signal.send(Err(e)).ok(); break; }
+                Ok(0) => { self.last_read_signal.send(Ok(())).ok(); break; },
                 Ok(other) => { remaining_to_read -= other; }
             }
         }
-
-        self.last_read_signal.send_opt(res).ok();
     }
 }
 
@@ -76,10 +74,10 @@ mod tests {
         {
             let (mut equal_reader, _) = EqualReader::new(org_reader.by_ref(), 5);
 
-            assert_eq!(equal_reader.read_to_string().unwrap().as_slice(), "hello");
+            assert_eq!(equal_reader.read_to_string().unwrap(), "hello");
         }
 
-        assert_eq!(org_reader.read_to_string().unwrap().as_slice(), " world");
+        assert_eq!(org_reader.read_to_string().unwrap(), " world");
     }
 
     #[test]
@@ -94,6 +92,6 @@ mod tests {
             assert_eq!(equal_reader.read_u8().unwrap(), b'h');
         }
 
-        assert_eq!(org_reader.read_to_string().unwrap().as_slice(), " world");
+        assert_eq!(org_reader.read_to_string().unwrap(), " world");
     }
 }

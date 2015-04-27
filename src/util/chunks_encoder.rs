@@ -35,7 +35,7 @@ fn send<W>(output: &mut W, data: &[u8]) -> IoResult<()> where W: Write {
 }
 
 impl<W> Write for ChunksEncoder<W> where W: Write {
-    fn write(&mut self, buf: &[u8]) -> IoResult<()> {
+    fn write(&mut self, buf: &[u8]) -> IoResult<usize> {
         try!(self.buffer.write_all(buf));
 
         while self.buffer.len() >= self.chunks_size {
@@ -47,7 +47,7 @@ impl<W> Write for ChunksEncoder<W> where W: Write {
             self.buffer = rest;
         }
 
-        Ok(())
+        Ok(buf.len())
     }
 
     fn flush(&mut self) -> IoResult<()> {
@@ -55,7 +55,7 @@ impl<W> Write for ChunksEncoder<W> where W: Write {
             return Ok(());
         }
 
-        try!(send(&mut self.output, self.buffer.as_slice()));
+        try!(send(&mut self.output, &self.buffer));
         self.buffer.clear();
         Ok(())
     }
@@ -85,6 +85,6 @@ mod test {
 
         let output = dest.unwrap().into_ascii().into_string();
 
-        assert_eq!(output.as_slice(), "5\r\nhello\r\n5\r\n worl\r\n1\r\nd\r\n0\r\n\r\n");
+        assert_eq!(output, "5\r\nhello\r\n5\r\n worl\r\n1\r\nd\r\n0\r\n\r\n");
     }
 }

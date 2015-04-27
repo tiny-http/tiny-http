@@ -40,7 +40,7 @@ impl Read for AnyReader {
 }
 
 impl Write for AnyWriter {
-    fn write(&mut self, buf: &[u8]) -> IoResult<()> {
+    fn write(&mut self, buf: &[u8]) -> IoResult<usize> {
         self.writer.write(buf)
     }
 

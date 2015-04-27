@@ -24,7 +24,7 @@ impl<R> Read for DeflateReader<R> where R: Read {
 
             // FIXME: 
             let result = data;
-            //let result = flate::deflate_bytes(data.as_slice());
+            //let result = flate::deflate_bytes(data);
 
             self.buffer = Some(result);
         }
@@ -36,7 +36,7 @@ impl<R> Read for DeflateReader<R> where R: Read {
 
         // copying the buffer to the output
         let qty = {
-            buf.clone_from_slice(self.buffer.as_ref().unwrap().as_slice())
+            buf.clone_from_slice(self.buffer.as_ref().unwrap())
         };
 
         self.buffer = Some((&self.buffer.as_ref().unwrap()[qty..]).to_vec());

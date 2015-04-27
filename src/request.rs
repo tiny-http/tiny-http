@@ -2,7 +2,7 @@ use ascii::{AsciiCast, AsciiStr};
 
 use std::io::Error as IoError;
 use std::io::Result as IoResult;
-use std::io::{Read, Write};
+use std::io::{self, Read, Write, ErrorKind};
 
 use std::net::SocketAddr;
 use std::fmt;
@@ -93,14 +93,14 @@ pub fn new_request<R, W>(method: Method, path: String,
     } else {
         headers.iter()
                .find(|h: &&Header| h.field.equiv(&"Content-Length"))
-               .and_then(|h| FromStr::from_str(h.value.as_slice().as_str_ascii()))
+               .and_then(|h| FromStr::from_str(h.value.as_str_ascii()))
     };
 
     // true if the client sent a `Expect: 100-continue` header
     let expects_continue = {
         match headers.iter().find(|h: &&Header| h.field.equiv(&"Expect")) {
             None => false,
-            Some(h) if h.value.as_slice().eq_ignore_case(b"100-continue".to_ascii())
+            Some(h) if h.value.eq_ignore_case(b"100-continue".to_ascii())
                 => true,
             _ => return Err(RequestCreationError::ExpectationFailed)
         }
@@ -110,7 +110,7 @@ pub fn new_request<R, W>(method: Method, path: String,
     let connection_upgrade = {
         match headers.iter().find(|h: &&Header| h.field.equiv(&"Connection")) {
             None => false,
-            Some(h) if h.value.as_slice().eq_ignore_case(b"upgrade".to_ascii())
+            Some(h) if h.value.eq_ignore_case(b"upgrade".to_ascii())
                 => true,
             _ => false
         }
@@ -152,8 +152,7 @@ pub fn new_request<R, W>(method: Method, path: String,
             // if we have neither a Content-Length nor a Transfer-Encoding,
             // assuming that we have no data
             // TODO: could also be multipart/byteranges
-            use std::io::empty;
-            Box::new(Empty) as Box<Read + Send>
+            Box::new(io::empty()) as Box<Read + Send>
         };
 
     Ok(Request {
@@ -208,6 +207,7 @@ impl Request {
         &self.remote_addr
     }
 
+/*      // FIXME: reimplement this
     /// Sends a response with a `Connection: upgrade` header, then turns the `Request` into a `Stream`.
     /// 
     /// The main purpose of this function is to support websockets.
@@ -217,17 +217,17 @@ impl Request {
     /// If you call this on a non-websocket request, tiny-http will wait until this `Stream` object
     ///  is destroyed before continuing to read or write on the socket. Therefore you should always
     ///  destroy it as soon as possible.
-    pub fn upgrade<R: Reader+ByRefReader>(mut self, protocol: &str, response: Response<R>) -> Box<Stream + Send> {
+    pub fn upgrade<R: Read>(mut self, protocol: &str, response: Response<R>) -> Box<Read + Write + Send> {
         use util::CustomStream;
 
         response.raw_print(self.response_writer.as_mut().unwrap().by_ref(), self.http_version,
-                           self.headers.as_slice(), false, Some(protocol)).ok();   // TODO: unused result
+                           self.headers, false, Some(protocol)).ok();   // TODO: unused result
 
         self.response_writer.as_mut().unwrap().flush().ok();    // TODO: unused result
 
         let stream = CustomStream::new(self.into_reader_impl(), self.into_writer_impl());
-        Box::new(stream) as Box<Stream + Send>
-    }
+        Box::new(stream) as Box<Read + Write + Send>
+    }*/
 
     /// Allows to read the body of the request.
     /// 
@@ -246,7 +246,7 @@ impl Request {
     /// 
     /// if get_content_type(&request) == "application/json" {
     ///     let content = request.as_reader().read_to_string().unwrap();
-    ///     let json: Json = from_str(content.as_slice()).unwrap();
+    ///     let json: Json = from_str(content).unwrap();
     /// }
     ///
     /// # }
@@ -259,7 +259,7 @@ impl Request {
         if self.must_send_continue {
             let msg = Response::new_empty(StatusCode(100));
             msg.raw_print(self.response_writer.as_mut().unwrap().by_ref(),
-                self.http_version, self.headers.as_slice(), true, None).ok();
+                self.http_version, self.headers, true, None).ok();
             self.response_writer.as_mut().unwrap().flush().ok();
             self.must_send_continue = false;
         }
@@ -315,15 +315,15 @@ impl Request {
         let do_not_send_body = self.method.equiv(&"HEAD");
 
         match response.raw_print(writer.by_ref(),
-                                self.http_version, self.headers.as_slice(),
+                                self.http_version, self.headers,
                                 do_not_send_body, None)
         {
             Ok(_) => (),
-            Err(ref err) if err.kind == old_io::Closed => (),
-            Err(ref err) if err.kind == old_io::BrokenPipe => (),
-            Err(ref err) if err.kind == old_io::ConnectionAborted => (),
-            Err(ref err) if err.kind == old_io::ConnectionRefused => (),
-            Err(ref err) if err.kind == old_io::ConnectionReset => (),
+            Err(ref err) if err.kind() == ErrorKind::Closed => (),
+            Err(ref err) if err.kind() == ErrorKind::BrokenPipe => (),
+            Err(ref err) if err.kind() == ErrorKind::ConnectionAborted => (),
+            Err(ref err) if err.kind() == ErrorKind::ConnectionRefused => (),
+            Err(ref err) if err.kind() == ErrorKind::ConnectionReset => (),
             Err(ref err) =>
                 println!("error while sending answer: {}", err)     // TODO: handle better?
         };

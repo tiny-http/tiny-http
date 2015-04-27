@@ -3,7 +3,7 @@ use std::ascii::AsciiExt;
 
 use std::io::Error as IoError;
 use std::io::Result as IoResult;
-use std::io::{BufReader, BufWriter};
+use std::io::{ErrorKind, BufReader, BufWriter};
 
 use std::net::SocketAddr;
 use std::str::FromStr;
@@ -82,7 +82,7 @@ impl ClientConnection {
                 buf.pop();  // removing the '\r'
                 return match buf.into_ascii_opt() {
                     Some(s) => Ok(s),
-                    None => Err(old_io::standard_error(old_io::InvalidInput))
+                    None => panic!() //FIXME: Err(old_io::standard_error(old_io::InvalidInput))
                 }
             }
 
@@ -103,7 +103,7 @@ impl ClientConnection {
                 let line = try!(self.read_next_line().map_err(|e| ReadError::ReadIoError(e)));
 
                 try!(parse_request_line(
-                    line.as_slice().as_str_ascii().trim()    // TODO: remove this conversion
+                    line.as_str_ascii().trim()    // TODO: remove this conversion
                 ))
             };
 
@@ -117,7 +117,7 @@ impl ClientConnection {
 
                     if line.len() == 0 { break };
                     headers.push(
-                        match FromStr::from_str(line.as_slice().as_str_ascii().trim()) {    // TODO: remove this conversion
+                        match FromStr::from_str(line.as_str_ascii().trim()) {    // TODO: remove this conversion
                             Ok(h) => h,
                             _ => return Err(ReadError::WrongHeader(version))
                         }
@@ -167,8 +167,6 @@ impl Iterator for ClientConnection {
         }
 
         loop {
-            use std::old_io::TimedOut;
-
             let rq = match self.read() {
                 Err(ReadError::WrongRequestLine) => {
                     let writer = self.sink.next().unwrap();
@@ -186,7 +184,7 @@ impl Iterator for ClientConnection {
                                     // se we have to close
                 },
 
-                Err(ReadError::ReadIoError(ref err)) if err.kind == TimedOut => {
+                Err(ReadError::ReadIoError(ref err)) if err.kind() == ErrorKind::TimedOut => {
                     // request timeout
                     let writer = self.sink.next().unwrap();
                     let response = Response::new_empty(StatusCode(408));
@@ -222,7 +220,7 @@ impl Iterator for ClientConnection {
                 use ascii::{AsciiCast, AsciiStr};
 
                 let connection_header = rq.get_headers().iter()
-                    .find(|h| h.field.equiv(&"Connection")).map(|h| h.value.as_slice());
+                    .find(|h| h.field.equiv(&"Connection")).map(|h| h.value);
 
                 match connection_header {
                     Some(ref val) if val.eq_ignore_case(b"close".to_ascii()) => 
@@ -255,13 +253,13 @@ fn parse_http_version(version: &str) -> Result<HTTPVersion, ReadError> {
         return Err(ReadError::WrongRequestLine)
     }
 
-    let elems = elems[1].as_slice().splitn(1, '.')
+    let elems = elems[1].splitn(1, '.')
         .map(|e| e.to_string()).collect::<Vec<String>>();
     if elems.len() != 2 {
         return Err(ReadError::WrongRequestLine)
     }
 
-    match (FromStr::from_str(elems[0].as_slice()), FromStr::from_str(elems[1].as_slice())) {
+    match (FromStr::from_str(elems[0]), FromStr::from_str(elems[1])) {
         (Ok(major), Ok(minor)) =>
             Ok(HTTPVersion(major, minor)),
         _ => Err(ReadError::WrongRequestLine)
@@ -303,7 +301,7 @@ mod test {
             };
 
         assert!(method.equiv(&"get"));
-        assert!(path.as_slice() == "/hello");
+        assert!(path == "/hello");
         assert!(ver == ::common::HTTPVersion(1, 1));
 
         assert!(super::parse_request_line("GET /hello").is_err());

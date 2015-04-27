@@ -177,7 +177,8 @@ impl ServerBuilder {
 
     /// The server will use a precise port.
     pub fn with_port(mut self, port: u16) -> ServerBuilder {
-        self.address.port = port;
+        let addr = self.address.ip().clone();
+        self.address = net::SocketAddrV4::new(addr, port);
         self
     }
 
@@ -185,7 +186,8 @@ impl ServerBuilder {
     ///
     /// Call `server.get_server_addr()` to retreive it once the server is created.
     pub fn with_random_port(mut self) -> ServerBuilder {
-        self.address.port = 0;
+        let addr = self.address.ip().clone();
+        self.address = net::SocketAddrV4::new(addr, 0);
         self
     }
 
@@ -209,7 +211,7 @@ impl Server {
 
         // building the TcpListener
         let (server, local_addr) = {
-            let mut listener = try!(tcp::TcpListener::bind(net::SocketAddr::V4(self.address)));
+            let mut listener = try!(net::TcpListener::bind(net::SocketAddr::V4(config.address)));
             let local_addr = try!(listener.local_addr());
             (listener, local_addr)
         };
@@ -223,22 +225,17 @@ impl Server {
             let mut server = server;
 
             loop {
-                let new_client = server.accept().map(|sock| {
+                let new_client = server.accept().map(|(sock, _)| {
                     use util::ClosableTcpStream;
 
-                    let read_closable = ClosableTcpStream::new(sock.clone(),
-                        inside_close_trigger.clone(), true, false,
-                        config.client_timeout_ms);
-
-                    let write_closable = ClosableTcpStream::new(sock.clone(),
-                        inside_close_trigger.clone(), false, true,
-                        config.client_timeout_ms);
+                    let read_closable = ClosableTcpStream::new(sock.try_clone().unwrap(), true, false);
+                    let write_closable = ClosableTcpStream::new(sock, false, true);
 
                     ClientConnection::new(write_closable, read_closable)
                 });
 
-                if tx_incoming.send_opt(new_client).is_err() {
-                    break
+                if tx_incoming.send(new_client).is_err() {
+                    break;
                 }
             }
         });
@@ -261,7 +258,7 @@ impl Server {
     ///
     /// The iterator will return `None` if the server socket is shutdown.
     #[inline]
-    pub fn incoming_requests(&'a self) -> IncomingRequests {
+    pub fn incoming_requests(&self) -> IncomingRequests {
         IncomingRequests { server: self }
     }
 
@@ -337,8 +334,8 @@ impl Server {
 
     /// Same as `recv()` but doesn't block.
     pub fn try_recv(&self) -> IoResult<Option<Request>> {
-        let connections_receiver = self.connections_receiver.lock();
-        let requests_receiver = self.requests_receiver.lock();
+        let connections_receiver = self.connections_receiver.lock().unwrap();
+        let requests_receiver = self.requests_receiver.lock().unwrap();
 
         // processing all new clients
         loop {
@@ -354,15 +351,14 @@ impl Server {
 
     /// Adds a new client to the list.
     fn add_client(&self, client: ClientConnection) {
-        let requests_sender = self.requests_sender.lock().clone();
+        let requests_sender = self.requests_sender.lock().unwrap().clone();
 
         self.tasks_pool.spawn(Box::new(move || {
             let mut client = client;
 
             for rq in client {
-                let res = requests_sender.send_opt(rq);
-                if res.is_err() {
-                    break
+                if let Err(_) = requests_sender.send(rq) {
+                    break;
                 }
             }
         }));

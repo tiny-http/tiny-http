@@ -1,12 +1,12 @@
-use std::old_io::{IoResult, Reader};
-use flate;
+use std::io::Read;
+use std::io::Result as IoResult;
 
 pub struct DeflateReader<R> {
     reader: R,
     buffer: Option<Vec<u8>>,
 }
 
-impl<R: Reader> DeflateReader<R> {
+impl<R> DeflateReader<R> where R: Read {
     pub fn new(reader: R) -> DeflateReader<R> {
         DeflateReader {
             reader: reader,
@@ -15,22 +15,23 @@ impl<R: Reader> DeflateReader<R> {
     }
 }
 
-impl<R: Reader> Reader for DeflateReader<R> {
+impl<R> Read for DeflateReader<R> where R: Read {
     fn read(&mut self, buf: &mut [u8]) -> IoResult<usize> {
         // filling the buffer if we don't have any
         if self.buffer.is_none() {
-            let data = try!(self.reader.read_to_end());
+            let mut data = Vec::with_capacity(0);
+            try!(self.reader.read_to_end(&mut data));
 
-            let result = flate::deflate_bytes(data.as_slice());
+            // FIXME: 
+            let result = data;
+            //let result = flate::deflate_bytes(data.as_slice());
 
-            self.buffer = Some(result.as_slice().to_vec());
+            self.buffer = Some(result);
         }
 
         // if our buffer exists but is empty, we reached EOF
         if self.buffer.as_ref().unwrap().len() == 0 {
-            use std::old_io;
-            use std::old_io::EndOfFile;
-            return Err(old_io::standard_error(EndOfFile));
+            return Ok(0);
         }
 
         // copying the buffer to the output
@@ -38,7 +39,7 @@ impl<R: Reader> Reader for DeflateReader<R> {
             buf.clone_from_slice(self.buffer.as_ref().unwrap().as_slice())
         };
 
-        self.buffer = Some((self.buffer.as_ref().unwrap().slice_from(qty)).to_vec());
+        self.buffer = Some((&self.buffer.as_ref().unwrap()[qty..]).to_vec());
         Ok(qty)
     }
 }

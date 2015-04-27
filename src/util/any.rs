@@ -1,52 +1,45 @@
-use std::old_io::IoResult;
-use std::old_io::{ Reader};
-use std::old_io::{ Writer};
+use std::io::Result as IoResult;
+use std::io::{Read, Write};
 
 pub struct AnyReader {
-    reader: Box<Reader + Send>
+    reader: Box<Read + Send>,
 }
 
 pub struct AnyWriter {
-    writer: Box<Writer + Send>
+    writer: Box<Write + Send>,
 }
 
 impl AnyReader {
-    pub fn new(reader: Box<Reader + Send>) -> AnyReader {
+    pub fn new(reader: Box<Read + Send>) -> AnyReader {
         AnyReader {
             reader: reader,
         }
     }
 
-    pub fn unwrap(self) -> Box<Reader + Send> {
+    pub fn unwrap(self) -> Box<Read + Send> {
         self.reader
     }
-
-
-
 }
 
 impl AnyWriter {
-    pub fn new(writer: Box<Writer + Send>) -> AnyWriter {
+    pub fn new(writer: Box<Write + Send>) -> AnyWriter {
         AnyWriter {
             writer: writer,
         }
     }
 
-    pub fn unwrap(self) -> Box<Writer + Send> {
+    pub fn unwrap(self) -> Box<Write + Send> {
         self.writer
     }
-
-
-
 }
 
-impl Reader for AnyReader {
+impl Read for AnyReader {
     fn read(&mut self, buf: &mut [u8]) -> IoResult<usize> {
         self.reader.read(buf)
     }
 }
 
-impl Writer for AnyWriter {
+impl Write for AnyWriter {
     fn write(&mut self, buf: &[u8]) -> IoResult<()> {
         self.writer.write(buf)
     }
@@ -55,5 +48,3 @@ impl Writer for AnyWriter {
         self.writer.flush()
     }
 }
-
-

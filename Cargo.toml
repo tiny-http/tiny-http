@@ -4,17 +4,7 @@ name = "tiny_http"
 version = "0.0.1"
 authors = [ "pierre.krieger1708@gmail.com" ]
 
-[dependencies.ascii]
-git = "https://github.com/SimonSapin/rust-ascii"
-
-[dependencies.encoding]
-git = "http://github.com/lifthrasiir/rust-encoding"
-
-[dependencies.url]
-git = "https://github.com/servo/rust-url"
-
-[dev-dependencies.rust-crypto]
-git = "https://github.com/DaGenix/rust-crypto"
-
-[dependencies.time]
-git = "https://github.com/rust-lang/time"
+[dependencies]
+ascii = "0.4"
+encoding = "0.2"
+url = "0.2"

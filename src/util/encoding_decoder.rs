@@ -1,18 +1,17 @@
-use std::old_io::{IoResult, MemReader};
-use std::old_io::Reader;
+use std::io::Result as IoResult;
+use std::io::{Cursor, Read};
 use encoding::{DecoderTrap, Encoding};
 
 // TODO: for the moment the first call to read() reads the whole
 //  underlying reader at once and decodes it
-#[unstable]
+
 pub struct EncodingDecoder<R> {
 	reader: R,
 	encoding: &'static Encoding,
-	content: Option<MemReader>,
+	content: Option<Cursor>,
 }
 
-impl<R: Reader> EncodingDecoder<R> {
-	#[unstable]
+impl<R> EncodingDecoder<R> where R: Read {
 	pub fn new(reader: R, encoding: &'static Encoding) -> EncodingDecoder<R> {
 		EncodingDecoder {
 			reader: reader,
@@ -22,22 +21,24 @@ impl<R: Reader> EncodingDecoder<R> {
 	}
 }
 
-impl<R: Reader> Reader for EncodingDecoder<R> {
+impl<R> Read for EncodingDecoder<R> where R: Read {
 	fn read(&mut self, buf: &mut [u8]) -> IoResult<usize> {
 		if self.content.is_none() {
-			use std::old_io;
+			let mut data = Vec::with_capacity(0);
+			try!(self.reader.read_to_end(&mut data));
 
-			let data = try!(self.reader.read_to_end());
-
-			let result = match self.encoding.decode(data.as_slice(), DecoderTrap::Strict) {
+			let result = match self.encoding.decode(&data, DecoderTrap::Strict) {
 				Ok(s) => s,
-				Err(_) => return Err(old_io::standard_error(old_io::InvalidInput))
+				Err(_) => panic!(), // FIXME: return Err(old_io::standard_error(old_io::InvalidInput))
 			};
 
-			self.content = Some(MemReader::new(result.into_bytes()));
+			self.content = Some(Cursor::new(result.into_bytes()));
 		}
 
-		assert!(self.content.is_some());
-		self.content.as_mut().unwrap().read(buf)
+		if let Some(ref mut content) = self.content {
+			content.read(buf)
+		} else {
+			unreachable!();
+		}
 	}
 }

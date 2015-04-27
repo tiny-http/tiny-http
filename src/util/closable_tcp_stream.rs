@@ -1,7 +1,7 @@
 use std::old_io;
-use std::old_io::Reader;
+use std::io::Read;
 use std::old_io::Writer;
-use std::old_io::IoResult;
+use std::io::Result as IoResult;
 use std::old_io::net::tcp::TcpStream;
 use std::old_io::net::ip::SocketAddr;
 use std::sync::atomic::AtomicBool;
@@ -17,8 +17,8 @@ pub struct ClosableTcpStream {
 
 impl ClosableTcpStream {
     pub fn new(stream: TcpStream, end_trigger: Arc<AtomicBool>,
-        close_read: bool, close_write: bool, timeout_ms: u32)
-        -> ClosableTcpStream
+               close_read: bool, close_write: bool, timeout_ms: u32)
+               -> ClosableTcpStream
     {
         ClosableTcpStream {
             stream: stream,
@@ -45,7 +45,7 @@ impl Drop for ClosableTcpStream {
     }
 }
 
-impl Reader for ClosableTcpStream {
+impl Read for ClosableTcpStream {
     /// Reads to this stream is similar to a regular read,
     ///  except that the timeout is predefined.
     fn read(&mut self, buf: &mut [u8]) -> IoResult<usize> {
@@ -80,7 +80,7 @@ impl Reader for ClosableTcpStream {
     }
 }
 
-impl Writer for ClosableTcpStream {
+impl Write for ClosableTcpStream {
     fn write(&mut self, buf: &[u8]) -> IoResult<()> {
         use std::io;
         //use std::sync::atomics::Relaxed;

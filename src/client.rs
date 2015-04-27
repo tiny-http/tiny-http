@@ -1,30 +1,35 @@
 use ascii::Ascii;
 use std::ascii::AsciiExt;
+
+use std::io::Error as IoError;
+use std::io::Result as IoResult;
+use std::io::{BufReader, BufWriter};
+
+use std::net::SocketAddr;
 use std::str::FromStr;
-use std::old_io;
-use std::old_io::{BufferedReader, BufferedWriter, IoError, IoResult};
-use std::old_io::net::ip::SocketAddr;
+
 use common::{HTTPVersion, Method};
-use Request;
 use util::{SequentialReader, SequentialReaderBuilder, SequentialWriterBuilder};
 use util::ClosableTcpStream;
+
+use Request;
 
 /// A ClientConnection is an object that will store a socket to a client
 /// and return Request objects.
 pub struct ClientConnection {
     // address of the client
-    remote_addr: old_io::IoResult<SocketAddr>,
+    remote_addr: IoResult<SocketAddr>,
 
     // sequence of Readers to the stream, so that the data is not read in
     //  the wrong order
-    source: SequentialReaderBuilder<BufferedReader<ClosableTcpStream>>,
+    source: SequentialReaderBuilder<BufReader<ClosableTcpStream>>,
 
     // sequence of Writers to the stream, to avoid writing response #2 before
     //  response #1
-    sink: SequentialWriterBuilder<BufferedWriter<ClosableTcpStream>>,
+    sink: SequentialWriterBuilder<BufWriter<ClosableTcpStream>>,
 
     // Reader to read the next header from
-	next_header_source: SequentialReader<BufferedReader<ClosableTcpStream>>,
+	next_header_source: SequentialReader<BufReader<ClosableTcpStream>>,
 
     // set to true if we know that the previous request is the last one
     no_more_requests: bool,
@@ -44,16 +49,16 @@ enum ReadError {
 impl ClientConnection {
     /// Creates a new ClientConnection that takes ownership of the TcpStream.
     pub fn new(write_socket: ClosableTcpStream, mut read_socket: ClosableTcpStream)
-        -> ClientConnection
+               -> ClientConnection
     {
         let remote_addr = read_socket.peer_name();
 
-        let mut source = SequentialReaderBuilder::new(BufferedReader::with_capacity(1024, read_socket));
+        let mut source = SequentialReaderBuilder::new(BufReader::with_capacity(1024, read_socket));
         let first_header = source.next().unwrap();
 
         ClientConnection {
             source: source,
-            sink: SequentialWriterBuilder::new(BufferedWriter::with_capacity(1024, write_socket)),
+            sink: SequentialWriterBuilder::new(BufWriter::with_capacity(1024, write_socket)),
             remote_addr: remote_addr,
             next_header_source: first_header,
             no_more_requests: false,
@@ -65,15 +70,13 @@ impl ClientConnection {
     /// Reads until `CRLF` is reached. The next read will start
     ///  at the first byte of the new line.
     fn read_next_line(&mut self) -> IoResult<Vec<Ascii>> {
-        use std::old_io;
-
         let mut buf = Vec::new();
         let mut prev_byte_was_cr = false;
 
         loop {
             use ascii::OwnedAsciiCast;
 
-            let byte = try!(self.next_header_source.read_byte());
+            let byte = try!(self.next_header_source.bytes().next());
 
             if byte == b'\n' && prev_byte_was_cr {
                 buf.pop();  // removing the '\r'

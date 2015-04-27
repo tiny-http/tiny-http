@@ -1,18 +1,21 @@
 use common::{Header, HTTPVersion, StatusCode};
+
 use std::ascii::AsciiExt;
 use std::cmp::Ordering;
 use std::sync::mpsc::{Sender, Receiver};
-use std::old_io::{Reader, Writer};
-use std::old_io::{IoResult, MemReader, ByRefWriter, ByRefReader};
-use std::old_io::fs::File;
-use std::old_io::util;
-use std::old_io::util::NullReader;
+
+use std::io::{Read, Write};
+use std::io::Result as IoResult;
+use std::io::{self, Cursor};
+
+use std::fs::File;
+
 use std::str::FromStr;
 
 /// Object representing an HTTP response whose purpose is to be given to a `Request`.
 /// 
 /// Some headers cannot be changed. Trying to define the value
-///  of one of these will have no effect:
+/// of one of these will have no effect:
 /// 
 ///  - `Accept-Ranges`
 ///  - `Connection`
@@ -24,16 +27,15 @@ use std::str::FromStr;
 /// Some headers have special behaviors:
 /// 
 ///  - `Content-Encoding`: If you define this header, the library
-///      will assume that the data from the `Reader` has the specified encoding
-///      and will just pass-through.
+///     will assume that the data from the `Read` object has the specified encoding
+///     and will just pass-through.
 /// 
 ///  - `Content-Length`: The length of the data should be set manually
-///      using the `Reponse` object's API. Attempting to set the value of this
-///      header will be equivalent to modifying the size of the data but the header
-///      itself may not be present in the final result.
+///     using the `Reponse` object's API. Attempting to set the value of this
+///     header will be equivalent to modifying the size of the data but the header
+///     itself may not be present in the final result.
 ///
-#[unstable]
-pub struct Response<R: Reader+ByRefReader> {
+pub struct Response<R> where R: Read {
     reader: R,
     status_code: StatusCode,
     headers: Vec<Header>,
@@ -66,10 +68,8 @@ impl FromStr for TransferEncoding {
 /// Builds a Date: header with the current date.
 // TODO: this is optimisable
 fn build_date_header() -> Header {
-    use time;
-    let date = time::now_utc();
-    let date_string = date.strftime("%a, %d %b %Y %H:%M:%S GMT").unwrap();
-    FromStr::from_str(format!("Date: {}", date_string).as_slice()).unwrap()
+    // FIXME: right date
+    FromStr::from_str(format!("Date: Wed, 15 Nov 1995 06:25:24 GMT")).unwrap()
 }
 
 fn write_message_header<W: Writer>(mut writer: W, http_version: &HTTPVersion,
@@ -167,7 +167,7 @@ impl<R: Reader> Response<R> {
     ///  may provide headers even after the response has been sent.
     ///
     /// All the other arguments are straight-forward.
-    #[unstable]
+    
     pub fn new(status_code: StatusCode, headers: Vec<Header>,
                data: R, data_length: Option<usize>,
                additional_headers: Option<Receiver<Header>>)
@@ -196,7 +196,7 @@ impl<R: Reader> Response<R> {
 
     /// Adds a header to the list.
     /// Does all the checks.
-    #[unstable]
+    
     pub fn add_header(&mut self, header: Header) {
         // ignoring forbidden headers
         if header.field.equiv(&"Accept-Ranges") ||
@@ -227,7 +227,7 @@ impl<R: Reader> Response<R> {
     ///
     /// Some headers cannot be modified and some other have a
     ///  special behavior. See the documentation above.
-    #[unstable]
+    
     #[inline]
     pub fn with_header(mut self, header: Header) -> Response<R> {
         self.add_header(header);
@@ -235,7 +235,7 @@ impl<R: Reader> Response<R> {
     }
 
     /// Returns the same request, but with a different status code.
-    #[unstable]
+    
     #[inline]
     pub fn with_status_code(mut self, code: StatusCode) -> Response<R> {
         self.status_code = code;
@@ -243,7 +243,7 @@ impl<R: Reader> Response<R> {
     }
 
     /// Returns the same request, but with different data.
-    #[unstable]
+    
     pub fn with_data<S: Reader>(self, reader: S, data_length: Option<usize>) -> Response<S> {
         Response {
             reader: reader,
@@ -262,7 +262,7 @@ impl<R: Reader> Response<R> {
     ///  decide which features (most notably, encoding) to use.
     /// 
     /// Note: does not flush the writer.
-    #[unstable]
+    
     pub fn raw_print<W: Writer+ByRefWriter>(mut self, mut writer: W, http_version: HTTPVersion,
                                 request_headers: &[Header], do_not_send_body: bool,
                                 upgrade: Option<&str>)
@@ -361,7 +361,7 @@ impl Response<File> {
     ///
     /// The `Content-Type` will **not** be automatically detected,
     ///  you must set it yourself.
-    #[unstable]
+    
     pub fn from_file(mut file: File) -> Response<File> {
         let file_size = file.stat().ok().map(|v| v.size as usize);
 
@@ -375,22 +375,22 @@ impl Response<File> {
     }
 }
 
-impl Response<MemReader> {
-    #[unstable]
-    pub fn from_data(data: Vec<u8>) -> Response<MemReader> {
+impl Response<Cursor> {
+    
+    pub fn from_data(data: Vec<u8>) -> Response<Cursor> {
         let data_len = data.len();
 
         Response::new(
             StatusCode(200),
             Vec::new(),
-            MemReader::new(data),
+            Cursor::new(data),
             Some(data_len),
             None,
         )
     }
 
-    #[unstable]
-    pub fn from_string(data: String) -> Response<MemReader> {
+    
+    pub fn from_string(data: String) -> Response<Cursor> {
         let data_len = data.len();
 
         Response::new(
@@ -398,31 +398,31 @@ impl Response<MemReader> {
             vec!(
                 FromStr::from_str("Content-Type: text/plain; charset=UTF-8").unwrap()
             ),
-            MemReader::new(data.into_bytes()),
+            Cursor::new(data.into_bytes()),
             Some(data_len),
             None,
         )        
     }
 }
 
-impl Response<NullReader> {
+impl Response<io::Empty> {
     /// Builds an empty `Response` with the given status code.
-    #[unstable]
-    pub fn new_empty(status_code: StatusCode) -> Response<NullReader> {
+    
+    pub fn new_empty(status_code: StatusCode) -> Response<io::Empty> {
         Response::new(
             status_code,
             Vec::new(),
-            NullReader,
+            io::empty(),
             Some(0),
             None,
         )
     }
 }
 
-impl Clone for Response<NullReader> {
-    fn clone(&self) -> Response<NullReader> {
+impl Clone for Response<io::Empty> {
+    fn clone(&self) -> Response<io::Empty> {
         Response {
-            reader: NullReader,
+            reader: io::Empty,
             status_code: self.status_code.clone(),
             headers: self.headers.clone(),
             data_length: self.data_length.clone(),

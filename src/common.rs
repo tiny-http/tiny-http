@@ -6,11 +6,9 @@ use std::cmp::Ordering;
 
 /// Status code of a request or response.
 #[derive(Eq, PartialEq, Clone, Debug, Ord, PartialOrd)]
-#[stable]
 pub struct StatusCode(pub u16);
 
 impl StatusCode {
-    #[stable]
     /// Returns the status code as a number.
     pub fn as_u16(&self) -> u16 {
         match *self { StatusCode(n) => n }
@@ -20,7 +18,6 @@ impl StatusCode {
         StatusCode(in_code)
     }
 
-    #[stable]
     /// Returns the default reason phrase for this status code.
     /// For example the status code 404 corresponds to "Not Found".
     pub fn get_default_reason_phrase(&self) -> &'static str {
@@ -78,7 +75,6 @@ impl StatusCode {
     }
 }
 
-
 /// Represents a HTTP header.
 /// 
 /// The easiest way to create a `Header` object is to call `from_str`.
@@ -87,7 +83,6 @@ impl StatusCode {
 /// let header: tiny_http::Header = from_str("Content-Type: text/plain").unwrap();
 /// ```
 #[derive(Clone)]
-#[unstable]
 pub struct Header {
     pub field: HeaderField,
     pub value: Vec<Ascii>,
@@ -135,7 +130,6 @@ impl Debug for Header {
 /// Field of a header (eg. `Content-Type`, `Content-Length`, etc.)
 /// 
 /// Comparaison between two `HeaderField`s ignores case.
-#[unstable]
 #[derive(Clone)]
 pub struct HeaderField(Vec<Ascii>);
 
@@ -184,7 +178,7 @@ impl Eq for HeaderField {}
 /// The user chooses the method he wants.
 /// 
 /// Comparaison between two `Method`s ignores case.
-#[unstable]
+
 #[derive(Clone)]
 pub struct Method(Vec<Ascii>);
 
@@ -229,7 +223,7 @@ impl Eq for Method {}
 
 
 /// HTTP version (usually 1.0 or 1.1).
-#[unstable]
+
 #[derive(Clone, PartialEq, Eq, Ord)]
 pub struct HTTPVersion(pub usize, pub usize);
 

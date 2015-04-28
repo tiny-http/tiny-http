@@ -1,11 +1,12 @@
-use std::io::IoResult;
+use std::io::Result as IoResult;
+use std::io::{Read, Write};
 
 pub struct CustomStream<R, W> {
     reader: R,
     writer: W,
 }
 
-impl<R: Reader, W: Writer> CustomStream<R, W> {
+impl<R, W> CustomStream<R, W> where R: Read, W: Write {
     pub fn new(reader: R, writer: W) -> CustomStream<R, W> {
         CustomStream {
             reader: reader,
@@ -14,14 +15,14 @@ impl<R: Reader, W: Writer> CustomStream<R, W> {
     }
 }
 
-impl<R: Reader, W> Reader for CustomStream<R, W> {
-    fn read(&mut self, buf: &mut [u8]) -> IoResult<uint> {
+impl<R, W> Read for CustomStream<R, W> where R: Read {
+    fn read(&mut self, buf: &mut [u8]) -> IoResult<usize> {
         self.reader.read(buf)
     }
 }
 
-impl<R, W: Writer> Writer for CustomStream<R, W> {
-    fn write(&mut self, buf: &[u8]) -> IoResult<()> {
+impl<R, W> Write for CustomStream<R, W> where W: Write {
+    fn write(&mut self, buf: &[u8]) -> IoResult<usize> {
         self.writer.write(buf)
     }
 

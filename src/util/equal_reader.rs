@@ -1,22 +1,27 @@
-use std::io::IoResult;
-use std::io::util::LimitReader;
+use std::sync::mpsc::channel;
+use std::io::Result as IoResult;
+use std::sync::mpsc::{Sender, Receiver};
+use std::io::Read;
+use std::mem;
 
 /// A `Reader` that reads exactly the number of bytes from a sub-reader.
 /// 
 /// If the limit is reached, it returns EOF. If the limit is not reached
-///  when the destructor is called, the remaining bytes will be read and
-///  thrown away.
-pub struct EqualReader<R> {
-    reader: Option<LimitReader<R>>,
+/// when the destructor is called, the remaining bytes will be read and
+/// thrown away.
+pub struct EqualReader<R> where R: Read {
+    reader: R,
+    size: usize,
     last_read_signal: Sender<IoResult<()>>,
 }
 
-impl<R: Reader> EqualReader<R> {
-    pub fn new(reader: R, size: uint) -> (EqualReader<R>, Receiver<IoResult<()>>) {
+impl<R> EqualReader<R> where R: Read {
+    pub fn new(reader: R, size: usize) -> (EqualReader<R>, Receiver<IoResult<()>>) {
         let (tx, rx) = channel();
 
         let r = EqualReader {
-            reader: Some(LimitReader::new(reader, size)),
+            reader: reader,
+            size: size,
             last_read_signal: tx,
         };
 
@@ -24,52 +29,62 @@ impl<R: Reader> EqualReader<R> {
     }
 }
 
-impl<R: Reader> Reader for EqualReader<R> {
-    fn read(&mut self, buf: &mut [u8]) -> IoResult<uint> {
-        self.reader.as_mut().unwrap().read(buf)
+impl<R> Read for EqualReader<R> where R: Read {
+    fn read(&mut self, buf: &mut [u8]) -> IoResult<usize> {
+        if self.size == 0 {
+            return Ok(0);
+        }
+
+        let buf = if buf.len() < self.size {
+            buf
+        } else {
+            &mut buf[.. self.size]
+        };
+
+        self.reader.read(buf)
     }
 }
 
-#[unsafe_destructor]
-impl<R: Reader> Drop for EqualReader<R> {
+impl<R> Drop for EqualReader<R> where R: Read {
     fn drop(&mut self) {
-        let remaining_to_read = self.reader.as_ref().unwrap().limit();
+        let mut remaining_to_read = self.size;
 
-        let mut stored = None;
-        ::std::mem::swap(&mut stored, &mut self.reader);
+        while remaining_to_read > 0 {
+            let mut buf = vec![0 ; remaining_to_read];
 
-        let mut subreader = stored.unwrap().unwrap();
-        let res = subreader.read_exact(remaining_to_read).map(|_| ());
-
-        self.last_read_signal.send_opt(res).ok();
+            match self.reader.read(&mut buf) {
+                Err(e) => { self.last_read_signal.send(Err(e)).ok(); break; }
+                Ok(0) => { self.last_read_signal.send(Ok(())).ok(); break; },
+                Ok(other) => { remaining_to_read -= other; }
+            }
+        }
     }
 }
-
 
 #[cfg(test)]
-mod test {
+mod tests {
     use super::EqualReader;
 
     #[test]
     fn test_limit() {
-        use std::io::MemReader;
+        use std::io::Cursor;
 
-        let mut org_reader = MemReader::new("hello world".to_string().into_bytes());
+        let mut org_reader = Cursor::new("hello world".to_string().into_bytes());
 
         {
             let (mut equal_reader, _) = EqualReader::new(org_reader.by_ref(), 5);
 
-            assert_eq!(equal_reader.read_to_string().unwrap().as_slice(), "hello");
+            assert_eq!(equal_reader.read_to_string().unwrap(), "hello");
         }
 
-        assert_eq!(org_reader.read_to_string().unwrap().as_slice(), " world");
+        assert_eq!(org_reader.read_to_string().unwrap(), " world");
     }
 
     #[test]
     fn test_not_enough() {
-        use std::io::MemReader;
+        use std::io::Cursor;
 
-        let mut org_reader = MemReader::new("hello world".to_string().into_bytes());
+        let mut org_reader = Cursor::new("hello world".to_string().into_bytes());
 
         {
             let (mut equal_reader, _) = EqualReader::new(org_reader.by_ref(), 5);
@@ -77,6 +92,6 @@ mod test {
             assert_eq!(equal_reader.read_u8().unwrap(), b'h');
         }
 
-        assert_eq!(org_reader.read_to_string().unwrap().as_slice(), " world");
+        assert_eq!(org_reader.read_to_string().unwrap(), " world");
     }
 }

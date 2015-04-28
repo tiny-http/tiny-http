@@ -74,7 +74,7 @@ fn main() {
         let server = server.clone();
         let php_script = php_script.clone();
 
-        spawn(proc() {
+        spawn(move || {
             for rq in server.incoming_requests() {
                 handle(rq, php_script.as_slice());
             }

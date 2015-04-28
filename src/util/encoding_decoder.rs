@@ -1,42 +1,46 @@
-use std::io::{IoResult, MemReader};
+use std::io::Result as IoResult;
+use std::io::{Cursor, Read};
+use std::mem;
 use encoding::{DecoderTrap, Encoding};
 
 // TODO: for the moment the first call to read() reads the whole
 //  underlying reader at once and decodes it
-#[experimental]
+
 pub struct EncodingDecoder<R> {
-	reader: R,
-	encoding: &'static Encoding + 'static,
-	content: Option<MemReader>,
+    reader: R,
+    encoding: &'static Encoding,
+    content: Option<Cursor<Vec<u8>>>,
 }
 
-impl<R: Reader> EncodingDecoder<R> {
-	#[experimental]
-	pub fn new(reader: R, encoding: &'static Encoding + 'static) -> EncodingDecoder<R> {
-		EncodingDecoder {
-			reader: reader,
-			encoding: encoding,
-			content: None,
-		}
-	}
+impl<R> EncodingDecoder<R> where R: Read {
+    pub fn new(reader: R, encoding: &'static Encoding) -> EncodingDecoder<R> {
+        EncodingDecoder {
+            reader: reader,
+            encoding: encoding,
+            content: None,
+        }
+    }
 }
 
-impl<R: Reader> Reader for EncodingDecoder<R> {
-	fn read(&mut self, buf: &mut [u8]) -> IoResult<uint> {
-		if self.content.is_none() {
-			use std::io;
+impl<R> Read for EncodingDecoder<R> where R: Read {
+    fn read(&mut self, buf: &mut [u8]) -> IoResult<usize> {
+        if self.content.is_none() {
+            let mut data = Vec::with_capacity(0);
+            try!(self.reader.read_to_end(&mut data));
 
-			let data = try!(self.reader.read_to_end());
+            let result = match self.encoding.decode(&data, DecoderTrap::Strict) {
+                Ok(s) => s,
+                Err(_) => panic!(), // FIXME: return Err(old_io::standard_error(old_io::InvalidInput))
+            };
 
-			let result = match self.encoding.decode(data.as_slice(), DecoderTrap::Strict) {
-				Ok(s) => s,
-				Err(_) => return Err(io::standard_error(io::InvalidInput))
-			};
+            self.content = Some(Cursor::new(result.into_bytes()));
+        }
 
-			self.content = Some(MemReader::new(result.into_bytes()));
-		}
+        if let Some(ref mut content) = self.content {
+            content.read(buf)
 
-		assert!(self.content.is_some());
-		self.content.as_mut().unwrap().read(buf)
-	}
+        } else {
+            unreachable!();
+        }
+    }
 }

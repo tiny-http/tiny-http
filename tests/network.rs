@@ -96,7 +96,7 @@ fn server_crash_results_in_response() {
     let port = server.get_server_addr().port;
     let mut client = TcpStream::connect("127.0.0.1", port).unwrap();
 
-    spawn(proc() {
+    spawn(move || {
         server.recv().unwrap();
         // oops, server crash
     });
@@ -117,17 +117,17 @@ fn responses_reordered() {
     (write!(client, "GET / HTTP/1.1\r\nHost: localhost\r\n\r\n")).unwrap();
     (write!(client, "GET / HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n")).unwrap();
 
-    spawn(proc() {
+    spawn(move || {
         let rq1 = server.recv().unwrap();
         let rq2 = server.recv().unwrap();
 
-        spawn(proc() {  
+        spawn(move || {
             rq2.respond(tiny_http::Response::from_string(format!("second request")));
         });
 
         timer::sleep(Duration::milliseconds(100));
 
-        spawn(proc() {  
+        spawn(move || {
             rq1.respond(tiny_http::Response::from_string(format!("first request")));
         });
     });
@@ -153,7 +153,7 @@ fn connection_timeout() {
     let (tx_stop, rx_stop) = channel();
 
     // executing server in parallel
-    spawn(proc() {
+    spawn(move || {
         loop {
             server.try_recv();
             timer::sleep(Duration::milliseconds(100));

@@ -1,42 +1,49 @@
-use std::ascii::AsciiStr;
-use std::io::{IoError, Stream, ByRefReader, ByRefWriter};
-use std::io::net::ip;
+use ascii::{AsciiCast, AsciiStr};
+use std::ascii::AsciiExt;
+
+use std::io::Error as IoError;
+use std::io::Result as IoResult;
+use std::io::{self, Read, Write, ErrorKind};
+
+use std::net::SocketAddr;
+use std::fmt;
+use std::str::FromStr;
+
 use {Header, HTTPVersion, Method, Response, StatusCode};
 use util::{AnyReader, AnyWriter};
 
 /// Represents an HTTP request made by a client.
 ///
 /// A `Request` object is what is produced by the server, and is your what
-///  your code must analyse and answer.
+/// your code must analyse and answer.
 ///
 /// This object implements the `Send` trait, therefore you can dispatch your requests to
-///  worker threads.
+/// worker threads.
 ///
 /// # Pipelining
 /// 
 /// If a client sends multiple requests in a row (without waiting for the response), then you will
-///  get multiple `Request` objects simultaneously. This is called *requests pipelining*.
+/// get multiple `Request` objects simultaneously. This is called *requests pipelining*.
 /// Tiny-http automatically reorders the responses so that you don't need to worry about the order
-///  in which you call `respond` or `into_writer`.
+/// in which you call `respond` or `into_writer`.
 ///
 /// This mechanic is disabled if:
-/// 
+///
 ///  - The body of a request is large enough (handling requires pipelining requires storing the
-///     body of the request in a buffer ; if the body is too big, tiny-http will avoid doing that)
+///    body of the request in a buffer ; if the body is too big, tiny-http will avoid doing that)
 ///  - A request sends a `Expect: 100-continue` header (which means that the client waits to
-///     know whether its body will be processed before sending it)
+///    know whether its body will be processed before sending it)
 ///  - A request sends a `Connection: close` header or `Connection: upgrade` header (used for
-///     websockets), which indicates that this is the last request that will be received on this
-///     connection
+///    websockets), which indicates that this is the last request that will be received on this
+///    connection
 ///
 /// # Automatic cleanup
-/// 
+///
 /// If a `Request` object is destroyed without `into_writer` or `respond` being called,
-///  an empty response with a 500 status code (internal server error) will automatically be
-///  sent back to the client.
+/// an empty response with a 500 status code (internal server error) will automatically be
+/// sent back to the client.
 /// This means that if your code fails during the handling of a request, this "internal server
-///  error" response will automatically be sent during the stack unwinding.
-#[unstable]
+/// error" response will automatically be sent during the stack unwinding.
 pub struct Request {
     // where to read the body from
     data_reader: Option<AnyReader>,
@@ -44,7 +51,7 @@ pub struct Request {
     // if this writer is empty, then the request has been answered
     response_writer: Option<AnyWriter>,
 
-    remote_addr: ip::SocketAddr,
+    remote_addr: SocketAddr,
 
     method: Method,
 
@@ -54,7 +61,7 @@ pub struct Request {
 
     headers: Vec<Header>,
 
-    body_length: Option<uint>,
+    body_length: Option<usize>,
 
     // true if a `100 Continue` response must be sent when `as_reader()` is called
     must_send_continue: bool,
@@ -66,17 +73,12 @@ pub enum RequestCreationError {
     CreationIoError(IoError),
 }
 
-// this trait is to make sure that Request implements Send
-#[doc(hidden)]
-trait MustBeSendDummy : Send {}
-#[doc(hidden)]
-impl MustBeSendDummy for Request {}
-
 /// Builds a new request
-pub fn new_request<R: Reader + Send, W: Writer + Send>(method: Method, path: String,
-                             version: HTTPVersion, headers: Vec<Header>,
-                             remote_addr: ip::SocketAddr, mut source_data: R, writer: W)
-    -> Result<Request, RequestCreationError>
+pub fn new_request<R, W>(method: Method, path: String,
+                         version: HTTPVersion, headers: Vec<Header>,
+                         remote_addr: SocketAddr, mut source_data: R, writer: W)
+                         -> Result<Request, RequestCreationError>
+                         where R: Read + Send + 'static, W: Write + Send + 'static
 {
     // finding the transfer-encoding header
     let transfer_encoding = headers.iter()
@@ -86,22 +88,20 @@ pub fn new_request<R: Reader + Send, W: Writer + Send>(method: Method, path: Str
     // finding the content-length header
     let content_length = if transfer_encoding.is_some() {
         // if transfer-encoding is specified, the Content-Length
-        //  header must be ignored (RFC2616 #4.4)
+        // header must be ignored (RFC2616 #4.4)
         None
 
     } else {
         headers.iter()
-            .find(|h: &&Header| h.field.equiv(&"Content-Length"))
-            .and_then(|h| from_str::<uint>(h.value.as_slice().as_str_ascii()))
+               .find(|h: &&Header| h.field.equiv(&"Content-Length"))
+               .and_then(|h| FromStr::from_str(h.value.as_str()).ok())
     };
 
     // true if the client sent a `Expect: 100-continue` header
     let expects_continue = {
-        use std::ascii::{AsciiCast, AsciiStr};
-
         match headers.iter().find(|h: &&Header| h.field.equiv(&"Expect")) {
             None => false,
-            Some(h) if h.value.as_slice().eq_ignore_case(b"100-continue".to_ascii())
+            Some(h) if h.value.eq_ignore_ascii_case(b"100-continue".to_ascii().unwrap())
                 => true,
             _ => return Err(RequestCreationError::ExpectationFailed)
         }
@@ -109,11 +109,9 @@ pub fn new_request<R: Reader + Send, W: Writer + Send>(method: Method, path: Str
 
     // true if the client sent a `Connection: upgrade` header
     let connection_upgrade = {
-        use std::ascii::{AsciiCast, AsciiStr};
-
         match headers.iter().find(|h: &&Header| h.field.equiv(&"Connection")) {
             None => false,
-            Some(h) if h.value.as_slice().eq_ignore_case(b"upgrade".to_ascii())
+            Some(h) if h.value.eq_ignore_ascii_case(b"upgrade".to_ascii().unwrap())
                 => true,
             _ => false
         }
@@ -124,44 +122,57 @@ pub fn new_request<R: Reader + Send, W: Writer + Send>(method: Method, path: Str
     let reader =
         if connection_upgrade {
             // if we have a `Connection: upgrade`, always keeping the whole reader
-            box source_data as Box<Reader + Send>
+            Box::new(source_data) as Box<Read + Send + 'static>
 
-        } else if content_length.is_some() {
-            let content_length = content_length.as_ref().unwrap().clone();
-
+        } else if let Some(content_length) = content_length {
             if content_length == 0 {
-                use std::io::util::NullReader;
-                box NullReader as Box<Reader + Send>
+                use std::io;
+                Box::new(io::empty()) as Box<Read + Send + 'static>
 
             } else if content_length <= 1024 && !expects_continue {
-                use std::io::MemReader;
-                let data = try!(source_data.read_exact(content_length)
-                    .map_err(|e| RequestCreationError::CreationIoError(e)));
-                box MemReader::new(data) as Box<Reader + Send>
+                use std::io::Cursor;
+
+                let mut buffer = vec![0; content_length];
+                let mut offset = 0;
+
+                loop {
+                    if offset == content_length {
+                        break;
+                    }
+
+                    let read = try!(source_data.read(&mut buffer[offset..])
+                                               .map_err(|e| RequestCreationError::CreationIoError(e)));
+                    if read == 0 {
+                        break;
+                    }
+
+                    offset += read;
+                }
+
+                Box::new(Cursor::new(buffer)) as Box<Read + Send + 'static>
 
             } else {
                 use util::EqualReader;
                 let (data_reader, _) = EqualReader::new(source_data, content_length);   // TODO:
-                box data_reader as Box<Reader + Send>
+                Box::new(data_reader) as Box<Read + Send + 'static>
             }
 
         } else if transfer_encoding.is_some() {
             // if a transfer-encoding was specified, then "chunked"
             //  is ALWAYS applied over the message (RFC2616 #3.6)
             use util::ChunksDecoder;
-            box ChunksDecoder::new(source_data) as Box<Reader + Send>
+            Box::new(ChunksDecoder::new(source_data)) as Box<Read + Send + 'static>
 
         } else {
             // if we have neither a Content-Length nor a Transfer-Encoding,
-            //  assuming that we have no data
+            // assuming that we have no data
             // TODO: could also be multipart/byteranges
-            use std::io::util::NullReader;
-            box NullReader as Box<Reader + Send>
+            Box::new(io::empty()) as Box<Read + Send + 'static>
         };
 
     Ok(Request {
         data_reader: Some(AnyReader::new(reader)),
-        response_writer: Some(AnyWriter::new(box writer as Box<Writer + Send>)),
+        response_writer: Some(AnyWriter::new(Box::new(writer) as Box<Write + Send + 'static>)),
         remote_addr: remote_addr,
         method: method,
         path: path,
@@ -174,28 +185,24 @@ pub fn new_request<R: Reader + Send, W: Writer + Send>(method: Method, path: Str
 
 impl Request {
     /// Returns the method requested by the client (eg. `GET`, `POST`, etc.).
-    #[stable]
     #[inline]
     pub fn get_method(&self) -> &Method {
         &self.method
     }
 
     /// Returns the resource requested by the client.
-    #[unstable]
     #[inline]
     pub fn get_url(&self) -> &str {
-        self.path.as_slice()
+        &self.path
     }
 
     /// Returns a list of all headers sent by the client.
-    #[stable]
     #[inline]
     pub fn get_headers(&self) -> &[Header] {
-        self.headers.as_slice()
+        &self.headers
     }
 
     /// Returns the HTTP version of the request.
-    #[unstable]
     #[inline]
     pub fn get_http_version(&self) -> &HTTPVersion {
         &self.http_version
@@ -204,19 +211,18 @@ impl Request {
     /// Returns the length of the body in bytes.
     ///
     /// Returns `None` if the length is unknown.
-    #[unstable]
     #[inline]
-    pub fn get_body_length(&self) -> Option<uint> {
+    pub fn get_body_length(&self) -> Option<usize> {
         self.body_length
     }
 
     /// Returns the length of the body in bytes.
-    #[stable]
     #[inline]
-    pub fn get_remote_addr(&self) -> &ip::SocketAddr {
+    pub fn get_remote_addr(&self) -> &SocketAddr {
         &self.remote_addr
     }
 
+/*      // FIXME: reimplement this
     /// Sends a response with a `Connection: upgrade` header, then turns the `Request` into a `Stream`.
     /// 
     /// The main purpose of this function is to support websockets.
@@ -226,18 +232,17 @@ impl Request {
     /// If you call this on a non-websocket request, tiny-http will wait until this `Stream` object
     ///  is destroyed before continuing to read or write on the socket. Therefore you should always
     ///  destroy it as soon as possible.
-    #[unstable]
-    pub fn upgrade<R: Reader+ByRefReader>(mut self, protocol: &str, response: Response<R>) -> Box<Stream + Send> {
+    pub fn upgrade<R: Read>(mut self, protocol: &str, response: Response<R>) -> Box<Read + Write + Send> {
         use util::CustomStream;
 
         response.raw_print(self.response_writer.as_mut().unwrap().by_ref(), self.http_version,
-            self.headers.as_slice(), false, Some(protocol)).ok();   // TODO: unused result
+                           self.headers, false, Some(protocol)).ok();   // TODO: unused result
 
         self.response_writer.as_mut().unwrap().flush().ok();    // TODO: unused result
 
         let stream = CustomStream::new(self.into_reader_impl(), self.into_writer_impl());
-        box stream as Box<Stream + Send>
-    }
+        Box::new(stream) as Box<Read + Write + Send>
+    }*/
 
     /// Allows to read the body of the request.
     /// 
@@ -256,7 +261,7 @@ impl Request {
     /// 
     /// if get_content_type(&request) == "application/json" {
     ///     let content = request.as_reader().read_to_string().unwrap();
-    ///     let json: Json = from_str(content.as_slice()).unwrap();
+    ///     let json: Json = from_str(content).unwrap();
     /// }
     ///
     /// # }
@@ -264,18 +269,17 @@ impl Request {
     ///
     /// If the client sent a `Expect: 100-continue` header with the request, calling this
     ///  function will send back a `100 Continue` response.
-    #[unstable]
     #[inline]
-    pub fn as_reader(&mut self) -> &mut Reader {
+    pub fn as_reader(&mut self) -> &mut Read {
         if self.must_send_continue {
             let msg = Response::new_empty(StatusCode(100));
             msg.raw_print(self.response_writer.as_mut().unwrap().by_ref(),
-                self.http_version, self.headers.as_slice(), true, None).ok();
+                          self.http_version.clone(), &self.headers, true, None).ok();
             self.response_writer.as_mut().unwrap().flush().ok();
             self.must_send_continue = false;
         }
 
-        fn passthrough<'a>(r: &'a mut Reader) -> &'a mut Reader { r }
+        fn passthrough<'a>(r: &'a mut Read) -> &'a mut Read { r }
         passthrough(self.data_reader.as_mut().unwrap())
     }
 
@@ -285,13 +289,12 @@ impl Request {
     /// This function is useful for things like CGI.
     ///
     /// Note that the destruction of the `Writer` object may trigger
-    ///  some events. For exemple if a client has sent multiple requests and the requests
-    ///  have been processed in parallel, the destruction of a writer will trigger
-    ///  the writing of the next response.
+    /// some events. For exemple if a client has sent multiple requests and the requests
+    /// have been processed in parallel, the destruction of a writer will trigger
+    /// the writing of the next response.
     /// Therefore you should always destroy the `Writer` as soon as possible.
-    #[stable]
     #[inline]
-    pub fn into_writer(mut self) -> Box<Writer + Send> {
+    pub fn into_writer(mut self) -> Box<Write + Send + 'static> {
         self.into_writer_impl().unwrap()
     }
 
@@ -316,29 +319,25 @@ impl Request {
     }
 
     /// Sends a response to this request.
-    #[unstable]
     #[inline]
-    pub fn respond<R: Reader>(mut self, response: Response<R>) {
+    pub fn respond<R>(mut self, response: Response<R>) where R: Read {
         self.respond_impl(response)
     }
 
-    fn respond_impl<R: Reader>(&mut self, response: Response<R>) {
-        use std::io;
-
+    fn respond_impl<R>(&mut self, response: Response<R>) where R: Read {
         let mut writer = self.into_writer_impl();
 
         let do_not_send_body = self.method.equiv(&"HEAD");
 
         match response.raw_print(writer.by_ref(),
-                                self.http_version, self.headers.as_slice(),
-                                do_not_send_body, None)
+                                 self.http_version.clone(), &self.headers,
+                                 do_not_send_body, None)
         {
             Ok(_) => (),
-            Err(ref err) if err.kind == io::Closed => (),
-            Err(ref err) if err.kind == io::BrokenPipe => (),
-            Err(ref err) if err.kind == io::ConnectionAborted => (),
-            Err(ref err) if err.kind == io::ConnectionRefused => (),
-            Err(ref err) if err.kind == io::ConnectionReset => (),
+            Err(ref err) if err.kind() == ErrorKind::BrokenPipe => (),
+            Err(ref err) if err.kind() == ErrorKind::ConnectionAborted => (),
+            Err(ref err) if err.kind() == ErrorKind::ConnectionRefused => (),
+            Err(ref err) if err.kind() == ErrorKind::ConnectionReset => (),
             Err(ref err) =>
                 println!("error while sending answer: {}", err)     // TODO: handle better?
         };
@@ -347,12 +346,9 @@ impl Request {
     }
 }
 
-impl ::std::fmt::Show for Request {
-    fn fmt(&self, formatter: &mut ::std::fmt::Formatter)
-        -> Result<(), ::std::fmt::Error>
-    {
-        (format!("Request({} {} from {})",
-            self.method, self.path, self.remote_addr.ip)).fmt(formatter)
+impl fmt::Debug for Request {
+    fn fmt(&self, formatter: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        write!(formatter, "Request({} {} from {})", self.method, self.path, self.remote_addr)
     }
 }
 
@@ -362,5 +358,16 @@ impl Drop for Request {
             let response = Response::new_empty(StatusCode(500));
             self.respond_impl(response);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Request;
+
+    #[test]
+    fn must_be_send() {
+        fn f<T: Send>(_: &T) {}
+        fn bar(rq: &Request) { f(rq); }
     }
 }

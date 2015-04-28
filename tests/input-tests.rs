@@ -42,7 +42,7 @@ fn expect_100_continue() {
 
     let (tx, rx) = channel();
 
-    spawn(proc() {
+    spawn(move || {
         let mut request = server.recv().unwrap();
         assert_eq!(request.as_reader().read_to_string().unwrap().as_slice(), "hello");
         tx.send(());

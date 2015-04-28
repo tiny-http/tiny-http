@@ -18,7 +18,7 @@ pub fn new_client_to_hello_world_server() -> TcpStream {
     let port = server.get_server_addr().port;
     let client = TcpStream::connect("127.0.0.1", port).unwrap();
 
-    spawn(proc() {
+    spawn(move || {
         use std::io::timer;
         use time;
 

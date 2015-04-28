@@ -1,3 +1,6 @@
+use std::path::Path;
+use std::io;
+
 extern crate tiny_http;
 
 fn get_content_type(path: &Path) -> &'static str {
@@ -33,11 +36,9 @@ fn main() {
         println!("{}", rq);
 
         let path = Path::new(rq.get_url());
-        let file = std::io::File::open(&path);
+        let file = io::File::open(&path);
 
         if file.is_ok() {
-            use std::ascii::AsciiCast;
-
             let response = tiny_http::Response::from_file(file.unwrap());
 
             let response = response.with_header(

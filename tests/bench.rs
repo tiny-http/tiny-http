@@ -12,7 +12,7 @@ use std::io::Command;
 fn curl_bench() {
     let server = tiny_http::ServerBuilder::new().with_random_port().build().unwrap();
     let port = server.get_server_addr().port;
-    let num_requests = 10u;
+    let num_requests = 10usize;
 
     match Command::new("curl")
         .arg("-s")
@@ -56,7 +56,7 @@ fn parallel_requests(bencher: &mut test::Bencher) {
     bencher.bench_n(5, |_| {
         let mut streams = Vec::new();
 
-        for _ in range(0u, 1000) {
+        for _ in 0..1000usize {
             let mut stream = std::io::net::tcp::TcpStream::connect("127.0.0.1", port).unwrap();
             (write!(stream, "GET / HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n")).unwrap();
             streams.push(stream);

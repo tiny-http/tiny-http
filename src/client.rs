@@ -296,7 +296,7 @@ mod test {
     fn test_parse_request_line() {
         let (method, path, ver) =
             match super::parse_request_line("GET /hello HTTP/1.1") {
-                Err(_) => fail!(),
+                Err(_) => panic!(),
                 Ok(v) => v
             };
 

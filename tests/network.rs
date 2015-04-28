@@ -1,8 +1,11 @@
-extern crate tiny_http;
-extern crate time;
+#![feature(tcp)]
 
-use std::io::timer;
-use std::time::duration::Duration;
+extern crate tiny_http;
+
+use std::sync::mpsc;
+use std::net::{Shutdown, TcpStream};
+use std::io::{Read, Write};
+use std::thread;
 
 #[allow(dead_code)]
 mod support;
@@ -12,13 +15,14 @@ fn connection_close_header() {
     let mut client = support::new_client_to_hello_world_server();
 
     (write!(client, "GET / HTTP/1.1\r\nConnection: keep-alive\r\n\r\n")).unwrap();
-    timer::sleep(Duration::milliseconds(1000));
+    thread::sleep_ms(1000);
 
     (write!(client, "GET / HTTP/1.1\r\nConnection: close\r\n\r\n")).unwrap();
 
     // if the connection was not closed, this will err with timeout
-    client.set_timeout(Some(100));
-    client.read_to_end().unwrap();
+    client.set_keepalive(Some(1));
+    let mut out = Vec::new();
+    client.read_to_end(&mut out).unwrap();
 }
 
 #[test]
@@ -28,8 +32,9 @@ fn http_1_0_connection_close() {
     (write!(client, "GET / HTTP/1.0\r\nHost: localhost\r\n\r\n")).unwrap();
 
     // if the connection was not closed, this will err with timeout
-    client.set_timeout(Some(100));
-    client.read_to_end().unwrap();
+    client.set_keepalive(Some(1));
+    let mut out = Vec::new();
+    client.read_to_end(&mut out).unwrap();
 }
 
 #[test]
@@ -37,13 +42,14 @@ fn detect_connection_closed() {
     let mut client = support::new_client_to_hello_world_server();
 
     (write!(client, "GET / HTTP/1.1\r\nConnection: keep-alive\r\n\r\n")).unwrap();
-    timer::sleep(Duration::milliseconds(1000));
+    thread::sleep_ms(1000);
 
-    client.close_write();
+    client.shutdown(Shutdown::Write);
 
     // if the connection was not closed, this will err with timeout
-    client.set_timeout(Some(100));
-    client.read_to_end().unwrap();
+    client.set_keepalive(Some(1));
+    let mut out = Vec::new();
+    client.read_to_end(&mut out).unwrap();
 }
 
 #[test]
@@ -51,28 +57,29 @@ fn poor_network_test() {
     let mut client = support::new_client_to_hello_world_server();
 
     (write!(client, "G")).unwrap();
-    timer::sleep(Duration::milliseconds(100));
+    thread::sleep_ms(100);
     (write!(client, "ET /he")).unwrap();
-    timer::sleep(Duration::milliseconds(100));
+    thread::sleep_ms(100);
     (write!(client, "llo HT")).unwrap();
-    timer::sleep(Duration::milliseconds(100));
+    thread::sleep_ms(100);
     (write!(client, "TP/1.")).unwrap();
-    timer::sleep(Duration::milliseconds(100));
+    thread::sleep_ms(100);
     (write!(client, "1\r\nHo")).unwrap();
-    timer::sleep(Duration::milliseconds(100));
+    thread::sleep_ms(100);
     (write!(client, "st: localho")).unwrap();
-    timer::sleep(Duration::milliseconds(100));
+    thread::sleep_ms(100);
     (write!(client, "st\r\nConnec")).unwrap();
-    timer::sleep(Duration::milliseconds(100));
+    thread::sleep_ms(100);
     (write!(client, "tion: close\r")).unwrap();
-    timer::sleep(Duration::milliseconds(100));
+    thread::sleep_ms(100);
     (write!(client, "\n\r")).unwrap();
-    timer::sleep(Duration::milliseconds(100));
+    thread::sleep_ms(100);
     (write!(client, "\n")).unwrap();
 
-    client.set_timeout(Some(200));
-    let data = client.read_to_string().unwrap();
-    assert!(data.as_slice().ends_with("hello world"));
+    client.set_keepalive(Some(2));
+    let mut data = String::new();
+    client.read_to_string(&mut data).unwrap();
+    assert!(data.ends_with("hello world"));
 }
 
 #[test]
@@ -83,87 +90,85 @@ fn pipelining_test() {
     (write!(client, "GET /hello HTTP/1.1\r\nHost: localhost\r\n\r\n")).unwrap();
     (write!(client, "GET /world HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n")).unwrap();
 
-    client.set_timeout(Some(200));
-    let data = client.read_to_string().unwrap();
-    assert_eq!(data.as_slice().split_str("hello world").count(), 4);
+    client.set_keepalive(Some(2));
+    let mut data = String::new();
+    client.read_to_string(&mut data).unwrap();
+    assert_eq!(data.split("hello world").count(), 4);
 }
 
 #[test]
 fn server_crash_results_in_response() {
-    use std::io::net::tcp::TcpStream;
-
     let server = tiny_http::ServerBuilder::new().with_random_port().build().unwrap();
-    let port = server.get_server_addr().port;
-    let mut client = TcpStream::connect("127.0.0.1", port).unwrap();
+    let port = server.get_server_addr().port();
+    let mut client = TcpStream::connect(("127.0.0.1", port)).unwrap();
 
-    spawn(move || {
+    thread::spawn(move || {
         server.recv().unwrap();
         // oops, server crash
     });
 
     (write!(client, "GET / HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n")).unwrap();
 
-    client.set_timeout(Some(200));
-    let content = client.read_to_string().unwrap();
-    assert!(content.as_slice().slice_from(9).starts_with("5"));   // 5xx status code
+    client.set_keepalive(Some(2));
+    let mut content = String::new();
+    client.read_to_string(&mut content).unwrap();
+    assert!(&content[9..].starts_with("5"));   // 5xx status code
 }
 
 #[test]
 fn responses_reordered() {
-    use std::io::timer;
-
     let (server, mut client) = support::new_one_server_one_client();
 
     (write!(client, "GET / HTTP/1.1\r\nHost: localhost\r\n\r\n")).unwrap();
     (write!(client, "GET / HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n")).unwrap();
 
-    spawn(move || {
+    thread::spawn(move || {
         let rq1 = server.recv().unwrap();
         let rq2 = server.recv().unwrap();
 
-        spawn(move || {
+        thread::spawn(move || {
             rq2.respond(tiny_http::Response::from_string(format!("second request")));
         });
 
-        timer::sleep(Duration::milliseconds(100));
+        thread::sleep_ms(100);
 
-        spawn(move || {
+        thread::spawn(move || {
             rq1.respond(tiny_http::Response::from_string(format!("first request")));
         });
     });
 
-    client.set_timeout(Some(200));
-    let content = client.read_to_string().unwrap();
-    assert!(content.as_slice().ends_with("second request"));
+    client.set_keepalive(Some(2));
+    let mut content = String::new();
+    client.read_to_string(&mut content).unwrap();
+    assert!(content.ends_with("second request"));
 }
 
 #[test]
 fn connection_timeout() {
     let (server, mut client) = {
-        use std::io::net::tcp::TcpStream;
-
         let server = tiny_http::ServerBuilder::new()
             .with_client_connections_timeout(3000)
             .with_random_port().build().unwrap();
-        let port = server.get_server_addr().port;
-        let client = TcpStream::connect("127.0.0.1", port).unwrap();
+        let port = server.get_server_addr().port();
+        let client = TcpStream::connect(("127.0.0.1", port)).unwrap();
         (server, client)
     };
 
-    let (tx_stop, rx_stop) = channel();
+    let (tx_stop, rx_stop) = mpsc::channel();
 
     // executing server in parallel
-    spawn(move || {
+    thread::spawn(move || {
         loop {
             server.try_recv();
-            timer::sleep(Duration::milliseconds(100));
+            thread::sleep_ms(100);
             if rx_stop.try_recv().is_ok() { break }
         }
     });
 
     // waiting for the 408 response
-    let content = client.read_to_string().unwrap();
-    assert!(content.as_slice().slice_from(9).starts_with("408"));
+    let mut content = String::new();
+    client.read_to_string(&mut content).unwrap();
+    assert!(&content[9..].starts_with("408"));
 
     // stopping server
     tx_stop.send(());

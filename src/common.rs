@@ -1,26 +1,23 @@
-use std::fmt::Debug;
-use ascii::{Ascii, AsciiCast};
-use std::fmt::{self, Formatter};
+use ascii::{Ascii, AsciiString, AsciiStr, AsciiCast};
+use std::ascii::AsciiExt;
+use std::fmt::{self, Debug, Display, Formatter};
 use std::str::{FromStr};
 use std::cmp::Ordering;
 
 /// Status code of a request or response.
 #[derive(Eq, PartialEq, Clone, Debug, Ord, PartialOrd)]
-#[stable]
 pub struct StatusCode(pub u16);
 
 impl StatusCode {
-    #[stable]
     /// Returns the status code as a number.
     pub fn as_u16(&self) -> u16 {
         match *self { StatusCode(n) => n }
     }
 
-    pub fn from_usize(in_code: usize) -> StatusCode {
+    pub fn from_u16(in_code: u16) -> StatusCode {
         StatusCode(in_code)
     }
 
-    #[stable]
     /// Returns the default reason phrase for this status code.
     /// For example the status code 404 corresponds to "Not Found".
     pub fn get_default_reason_phrase(&self) -> &'static str {
@@ -78,7 +75,6 @@ impl StatusCode {
     }
 }
 
-
 /// Represents a HTTP header.
 /// 
 /// The easiest way to create a `Header` object is to call `from_str`.
@@ -86,93 +82,83 @@ impl StatusCode {
 /// ```
 /// let header: tiny_http::Header = from_str("Content-Type: text/plain").unwrap();
 /// ```
-#[derive(Clone)]
-#[unstable]
+#[derive(Debug, Clone)]
 pub struct Header {
     pub field: HeaderField,
-    pub value: Vec<Ascii>,
+    pub value: AsciiString,
 }
 
 impl FromStr for Header {
     type Err = ();
 
-    fn from_str(input: &str) -> Option<Header> {
-        let mut elems = input.splitn(1, ':');
+    fn from_str(input: &str) -> Result<Header, ()> {
+        let mut elems = input.splitn(2, ':');
 
         let field = elems.next();
         let value = elems.next();
 
         let (field, value) = match (field, value) {
             (Some(f), Some(v)) => (f, v),
-            _ => return None
+            _ => return Err(())
         };
 
         let field = match FromStr::from_str(field) {
             Ok(f) => f,
-            _ => return None
+            _ => return Err(())
         };
 
-        let value = match value.trim().to_ascii_opt() {
-            Some(v) => v.to_vec(),
-            None => return None
+        let value = match AsciiStr::from_str(value.trim()) {
+            Some(v) => v.to_ascii_string(),
+            None => return Err(())
         };
 
-        Some(Header {
+        Ok(Header {
             field: field,
             value: value,
         })
     }
 }
 
-impl Debug for Header {
+impl Display for Header {
     fn fmt(&self, formatter: &mut Formatter) -> Result<(), fmt::Error> {
-        let value = self.value.as_slice();
-        let value = value.as_str_ascii();
-        (format!("{}: {}", self.field, value)).fmt(formatter)
+        write!(formatter, "{}: {}", self.field, self.value.as_str())
     }
 }
 
 /// Field of a header (eg. `Content-Type`, `Content-Length`, etc.)
 /// 
 /// Comparaison between two `HeaderField`s ignores case.
-#[unstable]
-#[derive(Clone)]
-pub struct HeaderField(Vec<Ascii>);
+#[derive(Debug, Clone)]
+pub struct HeaderField(AsciiString);
 
 impl HeaderField {
-    pub fn as_str<'a>(&'a self) -> &'a [Ascii] {
-        match self { &HeaderField(ref s) => s.as_slice() }
+    pub fn as_str<'a>(&'a self) -> &'a AsciiStr {
+        match self { &HeaderField(ref s) => s }
     }
 
     pub fn equiv(&self, other: &'static str) -> bool {
-        other.as_slice().eq_ignore_ascii_case(self.as_str().as_str_ascii())
+        other.eq_ignore_ascii_case(self.as_str().as_str())
     }
 }
 
 impl FromStr for HeaderField {
     type Err = ();
 
-    fn from_str(s: &str) -> Option<HeaderField> {
-        s.trim().to_ascii_opt().map(|s| HeaderField(s.to_vec()))
+    fn from_str(s: &str) -> Result<HeaderField, ()> {
+        AsciiStr::from_str(s.trim()).map(|s| HeaderField(s.to_ascii_string())).ok_or(())
     }
 }
 
-impl ToString for HeaderField {
-    fn to_string(self) -> String {
-        match self { HeaderField(s) => s.to_string() }
-    }
-}
-
-impl Debug for HeaderField {
+impl Display for HeaderField {
     fn fmt(&self, formatter: &mut Formatter) -> Result<(), fmt::Error> {
         let method = self.as_str();
-        method.as_str_ascii().fmt(formatter)
+        write!(formatter, "{}", method.as_str())
     }
 }
 
 impl PartialEq for HeaderField {
     fn eq(&self, other: &HeaderField) -> bool {
-        self.as_str().eq_ignore_case(other.as_str())
+        self.as_str().eq_ignore_ascii_case(other.as_str())
     }
 }
 
@@ -184,44 +170,36 @@ impl Eq for HeaderField {}
 /// The user chooses the method he wants.
 /// 
 /// Comparaison between two `Method`s ignores case.
-#[unstable]
-#[derive(Clone)]
-pub struct Method(Vec<Ascii>);
+#[derive(Debug, Clone)]
+pub struct Method(AsciiString);
 
 impl Method {
-    fn as_str<'a>(&'a self) -> &'a [Ascii] {
-        match self { &Method(ref s) => s.as_slice() }
+    fn as_str(&self) -> &AsciiStr {
+        match self { &Method(ref s) => s }
     }
 
     pub fn equiv(&self, other: &'static str) -> bool {
-        other.as_slice().eq_ignore_ascii_case(self.as_str().as_str_ascii())
+        other.eq_ignore_ascii_case(self.as_str().as_str())
     }
 }
 
 impl FromStr for Method {
     type Err = ();
 
-    fn from_str(s: &str) -> Option<Method> {
-        s.to_ascii_opt().map(|s| Method(s.to_vec()))
+    fn from_str(s: &str) -> Result<Method, ()> {
+        <AsciiString as FromStr>::from_str(s).map(|s| Method(s))
     }
 }
 
-impl ToString for Method {
-    fn to_string(self) -> String {
-        match self { Method(s) => s.to_string() }
-    }
-}
-
-impl Debug for Method {
+impl Display for Method {
     fn fmt(&self, formatter: &mut Formatter) -> Result<(), fmt::Error> {
-        let method = self.as_str();
-        method.as_str_ascii().fmt(formatter)
+        write!(formatter, "{}", self.0)
     }
 }
 
 impl PartialEq for Method {
     fn eq(&self, other: &Method) -> bool {
-        self.as_str().eq_ignore_case(other.as_str())
+        self.0.eq_ignore_ascii_case(&other.0)
     }
 }
 
@@ -229,14 +207,13 @@ impl Eq for Method {}
 
 
 /// HTTP version (usually 1.0 or 1.1).
-#[unstable]
-#[derive(Clone, PartialEq, Eq, Ord)]
+#[derive(Debug, Clone, PartialEq, Eq, Ord)]
 pub struct HTTPVersion(pub usize, pub usize);
 
-impl Debug for HTTPVersion {
+impl Display for HTTPVersion {
     fn fmt(&self, formatter: &mut Formatter) -> Result<(), fmt::Error> {
         let (major, minor) = match self { &HTTPVersion(m, n) => (m, n) };
-        (format!("{}.{}", major, minor)).fmt(formatter)
+        write!(formatter, "{}.{}", major, minor)
     }
 }
 
@@ -265,7 +242,7 @@ mod test {
         let header: Header = FromStr::from_str("Content-Type: text/html").unwrap();
 
         assert!(header.field.equiv(&"content-type"));
-        assert!(header.value.as_slice().as_str_ascii() == "text/html");
+        assert!(header.value.as_str() == "text/html");
 
         assert!(FromStr::from_str::<Header>("hello world").is_none());
     }
@@ -277,6 +254,6 @@ mod test {
         let header: Header = FromStr::from_str("Time: 20: 34").unwrap();
 
         assert!(header.field.equiv(&"time"));
-        assert!(header.value.as_slice().as_str_ascii() == "20: 34");
+        assert!(header.value.as_str() == "20: 34");
     }
 }

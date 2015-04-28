@@ -85,21 +85,16 @@ All that remains to do is call `request.respond()`:
 request.respond(response)
 ```
 */
-
+#![feature(std_misc, str_words, collections)]
 #![crate_name = "tiny_http"]
 #![crate_type = "lib"]
-#![feature(unsafe_destructor,box_syntax)]
 
 extern crate ascii;
 extern crate encoding;
-extern crate flate;
-extern crate time;
 extern crate url;
 
 use std::sync::mpsc::{Sender, Receiver};
-use std::old_io::{Acceptor, IoResult, Listener};
-use std::old_io::net::ip;
-use std::old_io::net::tcp;
+use std::io::Result as IoResult;
 use std::sync::mpsc::Select;
 use std::sync::mpsc::channel;
 use std::sync::{Arc, Mutex};
@@ -125,7 +120,6 @@ mod util;
 /// Destroying this object will immediatly close the listening socket annd the reading
 ///  part of all the client's connections. Requests that have already been returned by
 ///  the `recv()` function will not close and the responses will be transferred to the client.
-#[unstable]
 pub struct Server {
     // tasks where the client connections are dispatched
     tasks_pool: util::TaskPool,
@@ -154,7 +148,7 @@ trait MustBeShareDummy : Sync + Send {}
 #[doc(hidden)]
 impl MustBeShareDummy for Server {}
 
-#[unstable]
+
 pub struct IncomingRequests<'a> {
     server: &'a Server
 }
@@ -162,7 +156,7 @@ pub struct IncomingRequests<'a> {
 /// Object which allows you to build a server.
 pub struct ServerBuilder {
     // the address to listen to
-    address: net::SocketAddr,
+    address: net::SocketAddrV4,
 
     // number of milliseconds before client timeout
     client_timeout_ms: u32,
@@ -175,9 +169,8 @@ pub struct ServerBuilder {
 impl ServerBuilder {
     /// Creates a new builder.
     pub fn new() -> ServerBuilder {
-        let socket_addr_v4 = net::SocketAddrV4::new(net::Ipv4Addr::new(0, 0, 0, 0), 80);
         ServerBuilder {
-            address: net::SocketAddr::V4(socket_addr_v4),
+            address: net::SocketAddrV4::new(net::Ipv4Addr::new(0, 0, 0, 0), 80),
             client_timeout_ms: 60 * 1000,
             //max_clients: { use std::num::Bounded; Bounded::max_value() },
         }
@@ -185,7 +178,8 @@ impl ServerBuilder {
 
     /// The server will use a precise port.
     pub fn with_port(mut self, port: u16) -> ServerBuilder {
-        self.address.port = port;
+        let addr = self.address.ip().clone();
+        self.address = net::SocketAddrV4::new(addr, port);
         self
     }
 
@@ -193,7 +187,8 @@ impl ServerBuilder {
     ///
     /// Call `server.get_server_addr()` to retreive it once the server is created.
     pub fn with_random_port(mut self) -> ServerBuilder {
-        self.address.port = 0;
+        let addr = self.address.ip().clone();
+        self.address = net::SocketAddrV4::new(addr, 0);
         self
     }
 
@@ -215,14 +210,11 @@ impl Server {
         // building the "close" variable
         let close_trigger = Arc::new(AtomicBool::new(false));
 
-        // building the TcpAcceptor
+        // building the TcpListener
         let (server, local_addr) = {
-            let mut listener = try!(tcp::TcpListener::bind(
-                format!("{}:{}", config.address.ip,config.address.port).as_slice()));
-            let local_addr = try!(listener.socket_name());
-            let server = try!(listener.listen());
-            let server = util::ClosableTcpAcceptor::new(server, close_trigger.clone());
-            (server, local_addr)
+            let listener = try!(net::TcpListener::bind(net::SocketAddr::V4(config.address)));
+            let local_addr = try!(listener.local_addr());
+            (listener, local_addr)
         };
 
         // creating a task where server.accept() is continuously called
@@ -231,25 +223,18 @@ impl Server {
 
         let inside_close_trigger = close_trigger.clone();
         thread::spawn(move || {
-            let mut server = server;
-
             loop {
-                let new_client = server.accept().map(|sock| {
+                let new_client = server.accept().map(|(sock, _)| {
                     use util::ClosableTcpStream;
 
-                    let read_closable = ClosableTcpStream::new(sock.clone(),
-                        inside_close_trigger.clone(), true, false,
-                        config.client_timeout_ms);
-
-                    let write_closable = ClosableTcpStream::new(sock.clone(),
-                        inside_close_trigger.clone(), false, true,
-                        config.client_timeout_ms);
+                    let read_closable = ClosableTcpStream::new(sock.try_clone().unwrap(), true, false);
+                    let write_closable = ClosableTcpStream::new(sock, false, true);
 
                     ClientConnection::new(write_closable, read_closable)
                 });
 
-                if tx_incoming.send_opt(new_client).is_err() {
-                    break
+                if tx_incoming.send(new_client).is_err() {
+                    break;
                 }
             }
         });
@@ -271,31 +256,27 @@ impl Server {
     /// Returns an iterator for all the incoming requests.
     ///
     /// The iterator will return `None` if the server socket is shutdown.
-    #[unstable]
     #[inline]
-    pub fn incoming_requests<'a>(&'a self) -> IncomingRequests<'a> {
+    pub fn incoming_requests(&self) -> IncomingRequests {
         IncomingRequests { server: self }
     }
 
     /// Returns the address the server is listening to.
-    #[unstable]
     #[inline]
-    pub fn get_server_addr(&self) -> ip::SocketAddr {
+    pub fn get_server_addr(&self) -> net::SocketAddr {
         self.listening_addr.clone()
     }
 
     /// Returns the number of clients currently connected to the server.
-    #[stable]
     pub fn get_num_connections(&self) -> usize {
         unimplemented!()
         //self.requests_receiver.lock().len()
     }
 
     /// Blocks until an HTTP request has been submitted and returns it.
-    #[stable]
     pub fn recv(&self) -> IoResult<Request> {
-        let connections_receiver = self.connections_receiver.lock();
-        let requests_receiver = self.requests_receiver.lock();
+        let connections_receiver = self.connections_receiver.lock().unwrap();
+        let requests_receiver = self.requests_receiver.lock().unwrap();
 
         // TODO: the select! macro doesn't seem to be usable without moving
         //       out of self, so we use Select directly
@@ -312,16 +293,16 @@ impl Server {
             let id = select.wait();
 
             if id == request_handle.id() {
-                let request = request_handle.recv();
+                let request = request_handle.recv().unwrap();
 
                 unsafe { request_handle.remove() };
                 unsafe { connect_handle.remove() };
 
-                return Ok(request)
+                return Ok(request);
             }
 
             if id == connect_handle.id() {
-                let client = connect_handle.recv_opt();
+                let client = connect_handle.recv();
 
                 match client {
                     Ok(Ok(client)) => {
@@ -335,12 +316,10 @@ impl Server {
                         return Err(err)
                     },
                     Err(_) => {
-                        use std::old_io;
-
                         unsafe { request_handle.remove() };
                         unsafe { connect_handle.remove() };
 
-                        return Err(old_io::standard_error(old_io::Closed));
+                        panic!() // FIXME: return Err(old_io::standard_error(old_io::Closed));
                     }
                 }
             }
@@ -350,10 +329,9 @@ impl Server {
     }
 
     /// Same as `recv()` but doesn't block.
-    #[stable]
     pub fn try_recv(&self) -> IoResult<Option<Request>> {
-        let connections_receiver = self.connections_receiver.lock();
-        let requests_receiver = self.requests_receiver.lock();
+        let connections_receiver = self.connections_receiver.lock().unwrap();
+        let requests_receiver = self.requests_receiver.lock().unwrap();
 
         // processing all new clients
         loop {
@@ -369,18 +347,19 @@ impl Server {
 
     /// Adds a new client to the list.
     fn add_client(&self, client: ClientConnection) {
-        let requests_sender = self.requests_sender.lock().clone();
+        let requests_sender = self.requests_sender.lock().unwrap().clone();
 
-        self.tasks_pool.spawn(box move || {
-            let mut client = client;
+        let mut client = Some(client);
 
-            for rq in client {
-                let res = requests_sender.send_opt(rq);
-                if res.is_err() {
-                    break
+        self.tasks_pool.spawn(Box::new(move || {
+            if let Some(client) = client.take() {
+                for rq in client {
+                    if let Err(_) = requests_sender.send(rq) {
+                        break;
+                    }
                 }
             }
-        });
+        }));
     }
 }
 

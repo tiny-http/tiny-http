@@ -1,9 +1,8 @@
-use std::old_io::IoResult;
-use std::old_io::Reader;
-use std::old_io::Writer;
+use std::io::Result as IoResult;
+use std::io::{Read, Write};
 
 /// Splits the incoming data into HTTP chunks.
-pub struct ChunksEncoder<W> {
+pub struct ChunksEncoder<W> where W: Write {
     // where to send the result
     output: W,
 
@@ -14,7 +13,7 @@ pub struct ChunksEncoder<W> {
     buffer: Vec<u8>,
 }
 
-impl<W: Writer> ChunksEncoder<W> {
+impl<W> ChunksEncoder<W> where W: Write {
     pub fn new(output: W) -> ChunksEncoder<W> {
         ChunksEncoder::new_with_chunks_size(output, 8192)
     }
@@ -23,21 +22,21 @@ impl<W: Writer> ChunksEncoder<W> {
         ChunksEncoder {
             output: output,
             chunks_size: chunks,
-            buffer: Vec::new(),
+            buffer: Vec::with_capacity(0),
         }
     }
 }
 
-fn send<W: Writer>(output: &mut W, data: &[u8]) -> IoResult<()> {
+fn send<W>(output: &mut W, data: &[u8]) -> IoResult<()> where W: Write {
     try!(write!(output, "{:x}\r\n", data.len()));
-    try!(output.write(data));
+    try!(output.write_all(data));
     try!(write!(output, "\r\n"));
     Ok(())
 }
 
-impl<W: Writer> Writer for ChunksEncoder<W> {
-    fn write(&mut self, buf: &[u8]) -> IoResult<()> {
-        self.buffer.push_all(buf);
+impl<W> Write for ChunksEncoder<W> where W: Write {
+    fn write(&mut self, buf: &[u8]) -> IoResult<usize> {
+        try!(self.buffer.write_all(buf));
 
         while self.buffer.len() >= self.chunks_size {
             let rest = {
@@ -48,7 +47,7 @@ impl<W: Writer> Writer for ChunksEncoder<W> {
             self.buffer = rest;
         }
 
-        Ok(())
+        Ok(buf.len())
     }
 
     fn flush(&mut self) -> IoResult<()> {
@@ -56,14 +55,13 @@ impl<W: Writer> Writer for ChunksEncoder<W> {
             return Ok(());
         }
 
-        try!(send(&mut self.output, self.buffer.as_slice()));
+        try!(send(&mut self.output, &self.buffer));
         self.buffer.clear();
         Ok(())
     }
 }
 
-#[unsafe_destructor]
-impl<W: Writer> Drop for ChunksEncoder<W> {
+impl<W> Drop for ChunksEncoder<W> where W: Write {
     fn drop(&mut self) {
         self.flush().ok();
         send(&mut self.output, &[]).ok();
@@ -77,7 +75,7 @@ mod test {
 
     #[test]
     fn test() {
-        let mut source = io::MemReader::new("hello world".to_string().into_bytes());
+        let mut source = io::Cursor::new("hello world".to_string().into_bytes());
         let mut dest = io::MemWriter::new();
 
         {
@@ -87,6 +85,6 @@ mod test {
 
         let output = dest.unwrap().into_ascii().into_string();
 
-        assert_eq!(output.as_slice(), "5\r\nhello\r\n5\r\n worl\r\n1\r\nd\r\n0\r\n\r\n");
+        assert_eq!(output, "5\r\nhello\r\n5\r\n worl\r\n1\r\nd\r\n0\r\n\r\n");
     }
 }

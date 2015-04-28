@@ -1,30 +1,35 @@
-use ascii::Ascii;
+use ascii::{Ascii, AsciiString};
 use std::ascii::AsciiExt;
+
+use std::io::Error as IoError;
+use std::io::Result as IoResult;
+use std::io::{ErrorKind, Read, BufReader, BufWriter};
+
+use std::net::SocketAddr;
 use std::str::FromStr;
-use std::old_io;
-use std::old_io::{BufferedReader, BufferedWriter, IoError, IoResult};
-use std::old_io::net::ip::SocketAddr;
+
 use common::{HTTPVersion, Method};
-use Request;
 use util::{SequentialReader, SequentialReaderBuilder, SequentialWriterBuilder};
 use util::ClosableTcpStream;
+
+use Request;
 
 /// A ClientConnection is an object that will store a socket to a client
 /// and return Request objects.
 pub struct ClientConnection {
     // address of the client
-    remote_addr: old_io::IoResult<SocketAddr>,
+    remote_addr: IoResult<SocketAddr>,
 
     // sequence of Readers to the stream, so that the data is not read in
     //  the wrong order
-    source: SequentialReaderBuilder<BufferedReader<ClosableTcpStream>>,
+    source: SequentialReaderBuilder<BufReader<ClosableTcpStream>>,
 
     // sequence of Writers to the stream, to avoid writing response #2 before
     //  response #1
-    sink: SequentialWriterBuilder<BufferedWriter<ClosableTcpStream>>,
+    sink: SequentialWriterBuilder<BufWriter<ClosableTcpStream>>,
 
     // Reader to read the next header from
-	next_header_source: SequentialReader<BufferedReader<ClosableTcpStream>>,
+	next_header_source: SequentialReader<BufReader<ClosableTcpStream>>,
 
     // set to true if we know that the previous request is the last one
     no_more_requests: bool,
@@ -44,16 +49,16 @@ enum ReadError {
 impl ClientConnection {
     /// Creates a new ClientConnection that takes ownership of the TcpStream.
     pub fn new(write_socket: ClosableTcpStream, mut read_socket: ClosableTcpStream)
-        -> ClientConnection
+               -> ClientConnection
     {
-        let remote_addr = read_socket.peer_name();
+        let remote_addr = read_socket.peer_addr();
 
-        let mut source = SequentialReaderBuilder::new(BufferedReader::with_capacity(1024, read_socket));
+        let mut source = SequentialReaderBuilder::new(BufReader::with_capacity(1024, read_socket));
         let first_header = source.next().unwrap();
 
         ClientConnection {
             source: source,
-            sink: SequentialWriterBuilder::new(BufferedWriter::with_capacity(1024, write_socket)),
+            sink: SequentialWriterBuilder::new(BufWriter::with_capacity(1024, write_socket)),
             remote_addr: remote_addr,
             next_header_source: first_header,
             no_more_requests: false,
@@ -64,22 +69,20 @@ impl ClientConnection {
     /// 
     /// Reads until `CRLF` is reached. The next read will start
     ///  at the first byte of the new line.
-    fn read_next_line(&mut self) -> IoResult<Vec<Ascii>> {
-        use std::old_io;
-
+    fn read_next_line(&mut self) -> IoResult<AsciiString> {
         let mut buf = Vec::new();
         let mut prev_byte_was_cr = false;
 
         loop {
             use ascii::OwnedAsciiCast;
 
-            let byte = try!(self.next_header_source.read_byte());
+            let byte = try!(self.next_header_source.by_ref().bytes().next().unwrap_or(Ok(0)));
 
             if byte == b'\n' && prev_byte_was_cr {
                 buf.pop();  // removing the '\r'
-                return match buf.into_ascii_opt() {
-                    Some(s) => Ok(s),
-                    None => Err(old_io::standard_error(old_io::InvalidInput))
+                return match AsciiString::from_bytes(buf) {
+                    Ok(s) => Ok(s),
+                    Err(_) => panic!() //FIXME: Err(old_io::standard_error(old_io::InvalidInput))
                 }
             }
 
@@ -100,7 +103,7 @@ impl ClientConnection {
                 let line = try!(self.read_next_line().map_err(|e| ReadError::ReadIoError(e)));
 
                 try!(parse_request_line(
-                    line.as_slice().as_str_ascii().trim()    // TODO: remove this conversion
+                    line.as_str().trim()    // TODO: remove this conversion
                 ))
             };
 
@@ -114,7 +117,7 @@ impl ClientConnection {
 
                     if line.len() == 0 { break };
                     headers.push(
-                        match FromStr::from_str(line.as_slice().as_str_ascii().trim()) {    // TODO: remove this conversion
+                        match FromStr::from_str(line.as_str().trim()) {    // TODO: remove this conversion
                             Ok(h) => h,
                             _ => return Err(ReadError::WrongHeader(version))
                         }
@@ -135,8 +138,8 @@ impl ClientConnection {
         ::std::mem::swap(&mut self.next_header_source, &mut data_source);
 
         // building the next reader
-        let request = try!(::request::new_request(method, path, version,
-                headers, self.remote_addr.clone().unwrap(), data_source, writer)
+        let request = try!(::request::new_request(method, path, version.clone(),
+                headers, self.remote_addr.as_ref().unwrap().clone(), data_source, writer)
             .map_err(|e| {
                 use request;
                 match e {
@@ -164,8 +167,6 @@ impl Iterator for ClientConnection {
         }
 
         loop {
-            use std::old_io::TimedOut;
-
             let rq = match self.read() {
                 Err(ReadError::WrongRequestLine) => {
                     let writer = self.sink.next().unwrap();
@@ -183,7 +184,7 @@ impl Iterator for ClientConnection {
                                     // se we have to close
                 },
 
-                Err(ReadError::ReadIoError(ref err)) if err.kind == TimedOut => {
+                Err(ReadError::ReadIoError(ref err)) if err.kind() == ErrorKind::TimedOut => {
                     // request timeout
                     let writer = self.sink.next().unwrap();
                     let response = Response::new_empty(StatusCode(408));
@@ -219,16 +220,16 @@ impl Iterator for ClientConnection {
                 use ascii::{AsciiCast, AsciiStr};
 
                 let connection_header = rq.get_headers().iter()
-                    .find(|h| h.field.equiv(&"Connection")).map(|h| h.value.as_slice());
+                    .find(|h| h.field.equiv(&"Connection")).map(|h| &h.value);
 
                 match connection_header {
-                    Some(ref val) if val.eq_ignore_case(b"close".to_ascii()) => 
+                    Some(ref val) if val.eq_ignore_ascii_case(b"close".to_ascii().unwrap()) => 
                         self.no_more_requests = true,
 
-                    Some(ref val) if val.eq_ignore_case(b"upgrade".to_ascii()) => 
+                    Some(ref val) if val.eq_ignore_ascii_case(b"upgrade".to_ascii().unwrap()) => 
                         self.no_more_requests = true,
 
-                    Some(ref val) if !val.eq_ignore_case(b"keep-alive".to_ascii()) &&
+                    Some(ref val) if !val.eq_ignore_ascii_case(b"keep-alive".to_ascii().unwrap()) &&
                                     *rq.get_http_version() == HTTPVersion(1, 0) =>
                         self.no_more_requests = true,
 
@@ -247,18 +248,18 @@ impl Iterator for ClientConnection {
 
 /// Parses a "HTTP/1.1" string.
 fn parse_http_version(version: &str) -> Result<HTTPVersion, ReadError> {
-    let elems = version.splitn(1, '/').map(|e| e.to_string()).collect::<Vec<String>>();
+    let elems = version.splitn(2, '/').map(|e| e.to_string()).collect::<Vec<String>>();
     if elems.len() != 2 {
         return Err(ReadError::WrongRequestLine)
     }
 
-    let elems = elems[1].as_slice().splitn(1, '.')
+    let elems = elems[1].splitn(2, '.')
         .map(|e| e.to_string()).collect::<Vec<String>>();
     if elems.len() != 2 {
         return Err(ReadError::WrongRequestLine)
     }
 
-    match (FromStr::from_str(elems[0].as_slice()), FromStr::from_str(elems[1].as_slice())) {
+    match (FromStr::from_str(&elems[0]), FromStr::from_str(&elems[1])) {
         (Ok(major), Ok(minor)) =>
             Ok(HTTPVersion(major, minor)),
         _ => Err(ReadError::WrongRequestLine)
@@ -300,7 +301,7 @@ mod test {
             };
 
         assert!(method.equiv(&"get"));
-        assert!(path.as_slice() == "/hello");
+        assert!(path == "/hello");
         assert!(ver == ::common::HTTPVersion(1, 1));
 
         assert!(super::parse_request_line("GET /hello").is_err());

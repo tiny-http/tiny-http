@@ -1,34 +1,33 @@
-use std::old_io::IoResult;
-use std::old_io::Reader;
-use std::old_io::Writer;
+use std::io::Result as IoResult;
+use std::io::{Read, Write};
+
 use std::sync::mpsc::{Sender, Receiver};
 use std::sync::mpsc::channel;
-use std::sync;
-use std::sync::{Arc, Mutex};
+use std::sync::{self, Arc, Mutex};
 
-pub struct SequentialReaderBuilder<R: Send> {
+pub struct SequentialReaderBuilder<R> where R: Read + Send {
     reader: Arc<Mutex<R>>,
     next_trigger: Option<sync::Future<()>>,
 }
 
-pub struct SequentialReader<R: Send> {
+pub struct SequentialReader<R> where R: Read + Send {
     trigger: Option<sync::Future<()>>,
     reader: Arc<Mutex<R>>,
     on_finish: Sender<()>,
 }
 
-pub struct SequentialWriterBuilder<W: Send> {
+pub struct SequentialWriterBuilder<W> where W: Write + Send {
     writer: Arc<Mutex<W>>,
     next_trigger: Option<sync::Future<()>>,
 }
 
-pub struct SequentialWriter<W: Send> {
+pub struct SequentialWriter<W> where W: Write + Send {
     trigger: Option<sync::Future<()>>,
     writer: Arc<Mutex<W>>,
     on_finish: Sender<()>,
 }
 
-impl<R: Reader + Send> SequentialReaderBuilder<R> {
+impl<R: Read + Send> SequentialReaderBuilder<R> {
     pub fn new(reader: R) -> SequentialReaderBuilder<R> {
         SequentialReaderBuilder {
             reader: Arc::new(Mutex::new(reader)),
@@ -37,7 +36,7 @@ impl<R: Reader + Send> SequentialReaderBuilder<R> {
     }
 }
 
-impl<W: Writer + Send> SequentialWriterBuilder<W> {
+impl<W: Write + Send> SequentialWriterBuilder<W> {
     pub fn new(writer: W) -> SequentialWriterBuilder<W> {
         SequentialWriterBuilder {
             writer: Arc::new(Mutex::new(writer)),
@@ -46,7 +45,7 @@ impl<W: Writer + Send> SequentialWriterBuilder<W> {
     }
 }
 
-impl<R: Reader + Send> Iterator for SequentialReaderBuilder<R> {
+impl<R: Read + Send> Iterator for SequentialReaderBuilder<R> {
     type Item = SequentialReader<R>;
     fn next(&mut self) -> Option<SequentialReader<R>> {
         let (tx, rx) = channel();
@@ -61,7 +60,7 @@ impl<R: Reader + Send> Iterator for SequentialReaderBuilder<R> {
     }
 }
 
-impl<W: Writer + Send> Iterator for SequentialWriterBuilder<W> {
+impl<W: Write + Send> Iterator for SequentialWriterBuilder<W> {
     type Item = SequentialWriter<W>;
     fn next(&mut self) -> Option<SequentialWriter<W>> {
         let (tx, rx) = channel();
@@ -76,41 +75,39 @@ impl<W: Writer + Send> Iterator for SequentialWriterBuilder<W> {
     }
 }
 
-impl<R: Reader + Send> Reader for SequentialReader<R> {
+impl<R: Read + Send> Read for SequentialReader<R> {
     fn read(&mut self, buf: &mut [u8]) -> IoResult<usize> {
         self.trigger.as_mut().map(|v| v.get());
         self.trigger = None;
 
-        self.reader.lock().read(buf)
+        self.reader.lock().unwrap().read(buf)
     }
 }
 
-impl<W: Writer + Send> Writer for SequentialWriter<W> {
-    fn write(&mut self, buf: &[u8]) -> IoResult<()> {
+impl<W: Write + Send> Write for SequentialWriter<W> {
+    fn write(&mut self, buf: &[u8]) -> IoResult<usize> {
         self.trigger.as_mut().map(|v| v.get());
         self.trigger = None;
 
-        self.writer.lock().write(buf)
+        self.writer.lock().unwrap().write(buf)
     }
 
     fn flush(&mut self) -> IoResult<()> {
         self.trigger.as_mut().map(|v| v.get());
         self.trigger = None;
 
-        self.writer.lock().flush()
+        self.writer.lock().unwrap().flush()
     }
 }
 
-#[unsafe_destructor]
-impl<R> Drop for SequentialReader<R> {
+impl<R> Drop for SequentialReader<R> where R: Read + Send {
     fn drop(&mut self) {
-        self.on_finish.send_opt(()).ok();
+        self.on_finish.send(()).ok();
     }
 }
 
-#[unsafe_destructor]
-impl<W> Drop for SequentialWriter<W> {
+impl<W> Drop for SequentialWriter<W> where W: Write + Send {
     fn drop(&mut self) {
-        self.on_finish.send_opt(()).ok();
+        self.on_finish.send(()).ok();
     }
 }

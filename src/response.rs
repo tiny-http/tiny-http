@@ -226,8 +226,8 @@ impl<R> Response<R> where R: Read {
 
     /// Returns the same request, but with a different status code.
     #[inline]
-    pub fn with_status_code(mut self, code: StatusCode) -> Response<R> {
-        self.status_code = code;
+    pub fn with_status_code<S>(mut self, code: S) -> Response<R> where S: Into<StatusCode> {
+        self.status_code = code.into();
         self
     }
 

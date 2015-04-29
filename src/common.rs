@@ -75,6 +75,42 @@ impl StatusCode {
     }
 }
 
+impl From<i8> for StatusCode {
+    fn from(in_code: i8) -> StatusCode {
+        StatusCode(in_code as u16)
+    }
+}
+
+impl From<u8> for StatusCode {
+    fn from(in_code: u8) -> StatusCode {
+        StatusCode(in_code as u16)
+    }
+}
+
+impl From<i16> for StatusCode {
+    fn from(in_code: i16) -> StatusCode {
+        StatusCode(in_code as u16)
+    }
+}
+
+impl From<u16> for StatusCode {
+    fn from(in_code: u16) -> StatusCode {
+        StatusCode(in_code)
+    }
+}
+
+impl From<i32> for StatusCode {
+    fn from(in_code: i32) -> StatusCode {
+        StatusCode(in_code as u16)
+    }
+}
+
+impl From<u32> for StatusCode {
+    fn from(in_code: u32) -> StatusCode {
+        StatusCode(in_code as u16)
+    }
+}
+
 /// Represents a HTTP header.
 /// 
 /// The easiest way to create a `Header` object is to call `from_str`.

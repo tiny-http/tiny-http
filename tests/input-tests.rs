@@ -1,5 +1,11 @@
+#![feature(tcp)]
+
 extern crate tiny_http;
-extern crate time;
+
+use std::io::{Read, Write};
+use std::sync::mpsc;
+use std::net::Shutdown;
+use std::thread;
 
 #[allow(dead_code)]
 mod support;
@@ -15,7 +21,9 @@ fn basic_string_input() {
 
     let mut request = server.recv().unwrap();
 
-    assert_eq!(request.as_reader().read_to_string().unwrap().as_slice(), "hello");
+    let mut output = String::new();
+    request.as_reader().read_to_string(&mut output).unwrap();
+    assert_eq!(output, "hello");
 }
 
 #[test]
@@ -29,7 +37,9 @@ fn wrong_content_length() {
 
     let mut request = server.recv().unwrap();
 
-    assert_eq!(request.as_reader().read_to_string().unwrap().as_slice(), "hel");
+    let mut output = String::new();
+    request.as_reader().read_to_string(&mut output).unwrap();
+    assert_eq!(output, "hel");
 }
 
 #[test]
@@ -40,23 +50,26 @@ fn expect_100_continue() {
     (write!(client, "GET / HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\nExpect: 100-continue\r\nContent-Type: text/plain; charset=utf8\r\nContent-Length: 5\r\n\r\n")).unwrap();
     client.flush().unwrap();
 
-    let (tx, rx) = channel();
+    let (tx, rx) = mpsc::channel();
 
-    spawn(move || {
+    thread::spawn(move || {
         let mut request = server.recv().unwrap();
-        assert_eq!(request.as_reader().read_to_string().unwrap().as_slice(), "hello");
-        tx.send(());
+        let mut output = String::new();
+        request.as_reader().read_to_string(&mut output).unwrap();
+        assert_eq!(output, "hello");
+        tx.send(()).unwrap();
     });
 
-    client.set_timeout(Some(300));
-    let content = client.read_exact(12).unwrap();
-    assert!(content.as_slice().slice_from(9).starts_with(b"100"));   // 100 status code
+    client.set_keepalive(Some(3)).unwrap();
+    let mut content = vec![0; 12];
+    client.read(&mut content).unwrap();
+    assert!(&content[9..].starts_with(b"100"));   // 100 status code
 
     (write!(client, "hello")).unwrap();
     client.flush().unwrap();
-    client.close_write().unwrap();
+    client.shutdown(Shutdown::Write).unwrap();
 
-    rx.recv();
+    rx.recv().unwrap();
 }
 
 #[test]
@@ -65,7 +78,8 @@ fn unsupported_expect_header() {
 
     (write!(client, "GET / HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\nExpect: 189-dummy\r\nContent-Type: text/plain; charset=utf8\r\n\r\n")).unwrap();
 
-    client.set_timeout(Some(300));
-    let content = client.read_to_string().unwrap();
-    assert!(content.as_slice().slice_from(9).starts_with("417"));   // 417 status code
+    client.set_keepalive(Some(3)).unwrap();
+    let mut content = String::new();
+    client.read_to_string(&mut content).unwrap();
+    assert!(&content[9..].starts_with("417"));   // 417 status code
 }

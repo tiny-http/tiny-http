@@ -1,6 +1,6 @@
-use ascii::{Ascii, AsciiString, AsciiStr, AsciiCast};
+use ascii::{AsciiString, AsciiStr};
 use std::ascii::AsciiExt;
-use std::fmt::{self, Debug, Display, Formatter};
+use std::fmt::{self, Display, Formatter};
 use std::str::{FromStr};
 use std::cmp::Ordering;
 

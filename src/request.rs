@@ -1,8 +1,7 @@
-use ascii::{AsciiCast, AsciiStr};
+use ascii::AsciiCast;
 use std::ascii::AsciiExt;
 
 use std::io::Error as IoError;
-use std::io::Result as IoResult;
 use std::io::{self, Read, Write, ErrorKind};
 
 use std::net::SocketAddr;

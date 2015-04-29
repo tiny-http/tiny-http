@@ -2,7 +2,6 @@ use std::sync::mpsc::channel;
 use std::io::Result as IoResult;
 use std::sync::mpsc::{Sender, Receiver};
 use std::io::Read;
-use std::mem;
 
 /// A `Reader` that reads exactly the number of bytes from a sub-reader.
 /// 

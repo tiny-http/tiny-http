@@ -1,4 +1,4 @@
-use ascii::{Ascii, AsciiString};
+use ascii::{AsciiString};
 use std::ascii::AsciiExt;
 
 use std::io::Error as IoError;
@@ -74,8 +74,6 @@ impl ClientConnection {
         let mut prev_byte_was_cr = false;
 
         loop {
-            use ascii::OwnedAsciiCast;
-
             let byte = try!(self.next_header_source.by_ref().bytes().next().unwrap_or(Ok(0)));
 
             if byte == b'\n' && prev_byte_was_cr {
@@ -96,8 +94,6 @@ impl ClientConnection {
     /// Blocks until the header has been read.
     fn read(&mut self) -> Result<Request, ReadError> {
         let (method, path, version, headers) = {
-            use ascii::AsciiStr;
-
             // reading the request line
             let (method, path, version) = {
                 let line = try!(self.read_next_line().map_err(|e| ReadError::ReadIoError(e)));
@@ -109,8 +105,6 @@ impl ClientConnection {
 
             // getting all headers
             let headers = {
-                use ascii::AsciiStr;
-
                 let mut headers = Vec::new();
                 loop {
                     let line = try!(self.read_next_line().map_err(|e| ReadError::ReadIoError(e)));
@@ -217,7 +211,7 @@ impl Iterator for ClientConnection {
 
             // updating the status of the connection
             {
-                use ascii::{AsciiCast, AsciiStr};
+                use ascii::AsciiCast;
 
                 let connection_header = rq.get_headers().iter()
                     .find(|h| h.field.equiv(&"Connection")).map(|h| &h.value);

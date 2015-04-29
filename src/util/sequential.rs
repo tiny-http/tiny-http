@@ -1,7 +1,7 @@
 use std::io::Result as IoResult;
 use std::io::{Read, Write};
 
-use std::sync::mpsc::{Sender, Receiver};
+use std::sync::mpsc::Sender;
 use std::sync::mpsc::channel;
 use std::sync::{self, Arc, Mutex};
 

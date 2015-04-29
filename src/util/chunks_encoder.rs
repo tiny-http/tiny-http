@@ -1,5 +1,5 @@
 use std::io::Result as IoResult;
-use std::io::{Read, Write};
+use std::io::Write;
 
 /// Splits the incoming data into HTTP chunks.
 pub struct ChunksEncoder<W> where W: Write {

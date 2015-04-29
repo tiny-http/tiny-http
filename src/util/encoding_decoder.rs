@@ -1,6 +1,5 @@
 use std::io::Result as IoResult;
 use std::io::{Cursor, Read};
-use std::mem;
 use encoding::{DecoderTrap, Encoding};
 
 // TODO: for the moment the first call to read() reads the whole

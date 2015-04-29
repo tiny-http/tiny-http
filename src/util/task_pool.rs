@@ -1,5 +1,5 @@
 use std::sync::{Arc, Mutex};
-use std::sync::mpsc::{Sender, Receiver};
+use std::sync::mpsc::Sender;
 use std::sync::atomic::{Ordering, AtomicUsize};
 use std::sync::mpsc::channel;
 use std::collections::VecDeque;

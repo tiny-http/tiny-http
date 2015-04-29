@@ -2,7 +2,7 @@ use common::{Header, HTTPVersion, StatusCode};
 
 use std::ascii::AsciiExt;
 use std::cmp::Ordering;
-use std::sync::mpsc::{Sender, Receiver};
+use std::sync::mpsc::Receiver;
 
 use std::io::{self, Read, Write, Cursor};
 use std::io::Result as IoResult;
@@ -52,8 +52,6 @@ impl FromStr for TransferEncoding {
     type Err = ();
 
     fn from_str(input: &str) -> Result<TransferEncoding, ()> {
-        use ascii;
-
         if input.eq_ignore_ascii_case("identity") {
             Ok(TransferEncoding::Identity)
         } else if input.eq_ignore_ascii_case("chunked") {
@@ -84,7 +82,6 @@ fn write_message_header<W>(mut writer: W, http_version: &HTTPVersion,
 
     // writing headers
     for header in headers.iter() {
-        use ascii::AsciiStr;
         try!(write!(&mut writer, "{}: {}\r\n", header.field.as_str().as_str(),
             header.value.as_str()));
     }
@@ -116,8 +113,6 @@ fn choose_transfer_encoding(request_headers: &[Header], http_version: &HTTPVersi
 
         // getting the corresponding TransferEncoding
         .and_then(|value| {
-            use ascii::AsciiStr;
-
             // getting list of requested elements
             let mut parse = util::parse_header_value(value.as_str());     // TODO: remove conversion
 
@@ -353,7 +348,7 @@ impl Response<File> {
     ///
     /// The `Content-Type` will **not** be automatically detected,
     ///  you must set it yourself.
-    pub fn from_file(mut file: File) -> Response<File> {
+    pub fn from_file(file: File) -> Response<File> {
         let file_size = file.metadata().ok().map(|v| v.len() as usize);
 
         Response::new(

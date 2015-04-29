@@ -62,9 +62,10 @@ fn handle(rq: tiny_http::Request, script: &str) {
 fn main() {
     use std::sync::Arc;
     use std::thread::spawn;
+    use std::env;
 
     let php_script = {
-        let args = os::args();
+        let args = env::args();
         if args.len() < 2 { println!("Usage: php-cgi <php-script-path>"); return }
         args[1].to_string()
     };

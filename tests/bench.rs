@@ -4,7 +4,7 @@ extern crate tiny_http;
 extern crate test;
 extern crate time;
 
-use std::io::Command;
+use std::process::Command;
 
 #[test]
 #[ignore]

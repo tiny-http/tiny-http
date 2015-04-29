@@ -239,19 +239,19 @@ mod test {
     fn test_parse_header() {
         use ascii::AsciiStr;
 
-        let header: Header = FromStr::from_str("Content-Type: text/html").unwrap();
+        let header: Header = "Content-Type: text/html".parse().unwrap();
 
         assert!(header.field.equiv(&"content-type"));
         assert!(header.value.as_str() == "text/html");
 
-        assert!(FromStr::from_str::<Header>("hello world").is_none());
+        assert!("hello world".parse::<Header>().is_err());
     }
 
     #[test]
     fn test_parse_header_with_doublecolon() {
         use ascii::AsciiStr;
 
-        let header: Header = FromStr::from_str("Time: 20: 34").unwrap();
+        let header: Header = "Time: 20: 34".parse().unwrap();
 
         assert!(header.field.equiv(&"time"));
         assert!(header.value.as_str() == "20: 34");

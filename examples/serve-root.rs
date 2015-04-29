@@ -43,7 +43,7 @@ fn main() {
 
             let response = response.with_header(
                 tiny_http::Header {
-                    field: from_str("Content-Type").unwrap(),
+                    field: "Content-Type".parse().unwrap(),
                     value: get_content_type(&path).to_ascii().to_vec()
                 }
             );

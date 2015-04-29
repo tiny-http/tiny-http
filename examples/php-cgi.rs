@@ -11,7 +11,7 @@ Usage: php-cgi <php-script-path>
 use std::os;
 
 fn handle(rq: tiny_http::Request, script: &str) {
-    use std::io::process::{Command, ExitStatus, ExitSignal, Ignored};
+    use std::process::{Command, ExitStatus, ExitSignal, Ignored};
     use std::io::util;
 
     let mut php = Command::new("php-cgi")

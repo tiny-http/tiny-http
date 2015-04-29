@@ -58,11 +58,11 @@ mod test {
         let result = super::parse_header_value("text/html, text/plain; q=1.5 , image/png ; q=2.0");
 
         assert_eq!(result.len(), 3);
-        assert_eq!(result[0].ref0(), &"text/html");
-        assert_eq!(result[0].ref1(), &1.0);
-        assert_eq!(result[1].ref0(), &"text/plain");
-        assert_eq!(result[1].ref1(), &1.5);
-        assert_eq!(result[2].ref0(), &"image/png");
-        assert_eq!(result[2].ref1(), &2.0);
+        assert_eq!(result[0].0, "text/html");
+        assert_eq!(result[0].1, 1.0);
+        assert_eq!(result[1].0, "text/plain");
+        assert_eq!(result[1].1, 1.5);
+        assert_eq!(result[2].0, "image/png");
+        assert_eq!(result[2].1, 2.0);
     }
 }

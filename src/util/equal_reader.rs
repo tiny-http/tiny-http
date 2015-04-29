@@ -63,6 +63,7 @@ impl<R> Drop for EqualReader<R> where R: Read {
 #[cfg(test)]
 mod tests {
     use super::EqualReader;
+    use std::io::Read;
 
     #[test]
     fn test_limit() {
@@ -73,10 +74,14 @@ mod tests {
         {
             let (mut equal_reader, _) = EqualReader::new(org_reader.by_ref(), 5);
 
-            assert_eq!(equal_reader.read_to_string().unwrap(), "hello");
+            let mut string = String::new();
+            equal_reader.read_to_string(&mut string).unwrap();
+            assert_eq!(string, "hello");
         }
 
-        assert_eq!(org_reader.read_to_string().unwrap(), " world");
+        let mut string = String::new();
+        org_reader.read_to_string(&mut string).unwrap();
+        assert_eq!(string, " world");
     }
 
     #[test]
@@ -88,9 +93,13 @@ mod tests {
         {
             let (mut equal_reader, _) = EqualReader::new(org_reader.by_ref(), 5);
 
-            assert_eq!(equal_reader.read_u8().unwrap(), b'h');
+            let mut vec = vec![];
+            equal_reader.read(&mut vec).unwrap();
+            assert_eq!(vec[0], b'h');
         }
 
-        assert_eq!(org_reader.read_to_string().unwrap(), " world");
+        let mut string = String::new();
+        org_reader.read_to_string(&mut string).unwrap();
+        assert_eq!(string, " world");
     }
 }

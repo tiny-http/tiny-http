@@ -125,17 +125,19 @@ impl<R> Read for ChunksDecoder<R> where R: Read {
 
 #[cfg(test)]
 mod test {
-    use std::old_io;
     use super::ChunksDecoder;
+    use std::io;
+    use std::io::Read;
 
     #[test]
     fn test() {
         let source = io::Cursor::new("3\r\nhel\r\nb\r\nlo world!!!\r\n0\r\n".to_string().into_bytes());
         let mut decoded = ChunksDecoder::new(source);
 
-        let decoded = decoded.read_to_string().unwrap();
+        let mut string = String::new();
+        decoded.read_to_string(&mut string).unwrap();
 
-        assert_eq!(decoded, "hello world!!!");
+        assert_eq!(string, "hello world!!!");
     }
 
     #[test]
@@ -144,7 +146,8 @@ mod test {
         let source = io::Cursor::new("2\r\nhel\r\nb\r\nlo world!!!\r\n0\r\n".to_string().into_bytes());
         let mut decoded = ChunksDecoder::new(source);
 
-        decoded.read_to_string().unwrap();
+        let mut string = String::new();
+        decoded.read_to_string(&mut string).unwrap();
     }
 
     #[test]
@@ -153,6 +156,7 @@ mod test {
         let source = io::Cursor::new("3\rhel\r\nb\r\nlo world!!!\r\n0\r\n".to_string().into_bytes());
         let mut decoded = ChunksDecoder::new(source);
 
-        decoded.read_to_string().unwrap();
+        let mut string = String::new();
+        decoded.read_to_string(&mut string).unwrap();
     }
 }

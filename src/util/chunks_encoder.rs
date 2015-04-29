@@ -71,19 +71,21 @@ impl<W> Drop for ChunksEncoder<W> where W: Write {
 #[cfg(test)]
 mod test {
     use std::io;
+    use std::io::Write;
     use super::ChunksEncoder;
+    use ascii::OwnedAsciiCast;
 
     #[test]
     fn test() {
         let mut source = io::Cursor::new("hello world".to_string().into_bytes());
-        let mut dest = io::MemWriter::new();
+        let mut dest: Vec<u8> = vec![];
 
         {
             let mut encoder = ChunksEncoder::new_with_chunks_size(dest.by_ref(), 5);
-            io::util::copy(&mut source, &mut encoder).unwrap();
+            io::copy(&mut source, &mut encoder).unwrap();
         }
 
-        let output = dest.unwrap().into_ascii().into_string();
+        let output = dest.into_ascii().unwrap().to_string();
 
         assert_eq!(output, "5\r\nhello\r\n5\r\n worl\r\n1\r\nd\r\n0\r\n\r\n");
     }

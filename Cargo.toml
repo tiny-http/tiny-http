@@ -8,3 +8,4 @@ authors = [ "pierre.krieger1708@gmail.com", "coreyf@rwell.org"]
 ascii = "0.4"
 encoding = "0.2"
 url = "0.2"
+time = "*"

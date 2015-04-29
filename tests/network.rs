@@ -90,7 +90,7 @@ fn pipelining_test() {
 
 #[test]
 fn server_crash_results_in_response() {
-    use std::io::net::tcp::TcpStream;
+    use std::net::tcp::TcpStream;
 
     let server = tiny_http::ServerBuilder::new().with_random_port().build().unwrap();
     let port = server.get_server_addr().port;
@@ -140,7 +140,7 @@ fn responses_reordered() {
 #[test]
 fn connection_timeout() {
     let (server, mut client) = {
-        use std::io::net::tcp::TcpStream;
+        use std::net::tcp::TcpStream;
 
         let server = tiny_http::ServerBuilder::new()
             .with_client_connections_timeout(3000)

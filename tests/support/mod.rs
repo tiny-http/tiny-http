@@ -1,4 +1,4 @@
-use std::io::net::tcp::TcpStream;
+use std::net::tcp::TcpStream;
 use std::time::duration::Duration;
 use tiny_http;
 

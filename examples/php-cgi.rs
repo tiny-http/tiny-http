@@ -11,8 +11,9 @@ Usage: php-cgi <php-script-path>
 use std::os;
 
 fn handle(rq: tiny_http::Request, script: &str) {
-    use std::process::{Command, ExitStatus, ExitSignal, Ignored};
+    use std::process::{Command, ExitStatus};
     use std::io::util;
+    use std::io::Write;
 
     let mut php = Command::new("php-cgi")
         .arg(script)
@@ -45,7 +46,7 @@ fn handle(rq: tiny_http::Request, script: &str) {
     match php.status {
         status if status.success() => {
             let mut writer = rq.into_writer();
-            let mut writer: &mut Writer = &mut *writer;
+            let mut writer: &mut Write = &mut *writer;
 
             (write!(writer, "HTTP/1.1 200 OK\r\n")).unwrap();
             (write!(writer, "{}", php.output.into_ascii().into_string())).unwrap();
@@ -60,6 +61,7 @@ fn handle(rq: tiny_http::Request, script: &str) {
 
 fn main() {
     use std::sync::Arc;
+    use std::thread::spawn;
 
     let php_script = {
         let args = os::args();
@@ -70,7 +72,7 @@ fn main() {
     let server = Arc::new(tiny_http::ServerBuilder::new().with_port(9975).build().unwrap());
     println!("Now listening on port 9975");
 
-    for _ in range(0, os::num_cpus()) {
+    for _ in 0..os::num_cpus() {
         let server = server.clone();
         let php_script = php_script.clone();
 

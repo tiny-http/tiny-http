@@ -1,4 +1,4 @@
-extern crate "rust-crypto" as crypto;
+extern crate crypto;
 extern crate serialize;
 extern crate tiny_http;
 
@@ -55,7 +55,7 @@ fn main() {
 
     for request in server.incoming_requests() {
         // we are handling this websocket connection in a new task
-        spawn(proc() {
+        spawn(move || {
             use std::ascii::{AsciiCast, AsciiStr};
 
             // checking the "Upgrade" header to check that it is a websocket

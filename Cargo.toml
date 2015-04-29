@@ -6,6 +6,7 @@ authors = [ "pierre.krieger1708@gmail.com", "coreyf@rwell.org"]
 
 [dependencies]
 ascii = "0.4"
+crypto = "*"
 encoding = "0.2"
 url = "0.2"
 time = "*"

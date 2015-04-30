@@ -1,10 +1,15 @@
+/* FIXME: get this working
 extern crate crypto;
-extern crate serialize;
 extern crate tiny_http;
+extern crate rustc_serialize;
 
-use std::io::MemReader;
+use std::thread::spawn;
+use std::io::Cursor;
 
-fn home_page(port: u16) -> tiny_http::Response<MemReader> {
+use rustc_serialize::base64::{Config, Standard};
+
+
+fn home_page(port: u16) -> tiny_http::Response<Cursor<Vec<u8>>> {
     tiny_http::Response::from_string(format!("
         <script type=\"text/javascript\">
         var socket = new WebSocket(\"ws://localhost:{}/\", \"ping\");
@@ -24,23 +29,24 @@ fn home_page(port: u16) -> tiny_http::Response<MemReader> {
         <p>Received: </p>
         <p id=\"result\"></p>
     ", port))
-        .with_header(from_str("Content-type: text/html").unwrap())
+        .with_header("Content-type: text/html".parse().unwrap())
 }
 
 /// Turns a Sec-WebSocket-Key into a Sec-WebSocket-Accept.
 /// Feel free to copy-paste this function, but please use a better error handling.
 fn convert_key(input: &str) -> String {
-    use serialize::base64::{Config, Standard, ToBase64};
     use crypto::digest::Digest;
     use crypto::sha1::Sha1;
 
     let input = input.to_string().into_bytes();
-    let input = input.append("258EAFA5-E914-47DA-95CA-C5AB0DC85B11".to_string().into_bytes().as_slice());
+
+    let bytes = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11".to_string().into_bytes();
+    let input = input.append();
 
     let mut sha1 = Sha1::new();
-    sha1.input(input.as_slice());
+    sha1.input(&input);
 
-    let mut out = [0u8, ..20];
+    let mut out = [0u8; 20];
     sha1.result(out);
 
     out.as_slice().to_base64(Config{char_set: Standard, pad: true, line_length: None})
@@ -56,8 +62,6 @@ fn main() {
     for request in server.incoming_requests() {
         // we are handling this websocket connection in a new task
         spawn(move || {
-            use std::ascii::{AsciiCast, AsciiStr};
-
             // checking the "Upgrade" header to check that it is a websocket
             match request.get_headers().iter()
                 .find(|h| h.field.equiv(&"Upgrade")) 
@@ -85,11 +89,13 @@ fn main() {
 
             // building the "101 Switching Protocols" response
             let response = tiny_http::Response::new_empty(tiny_http::StatusCode(101))
-                .with_header(from_str("Upgrade: websocket").unwrap())
-                .with_header(from_str("Connection: Upgrade").unwrap())
-                .with_header(from_str("Sec-WebSocket-Protocol: ping").unwrap())
-                .with_header(from_str(format!("Sec-WebSocket-Accept: {}",
-                    convert_key(key.as_slice().as_str_ascii())).as_slice()).unwrap());
+                .with_header("Upgrade: websocket".parse().unwrap())
+                .with_header("Connection: Upgrade".parse().unwrap())
+                .with_header("Sec-WebSocket-Protocol: ping".parse().unwrap())
+                .with_header(
+                    format!("Sec-WebSocket-Accept: {}",
+                        convert_key(key.as_str_ascii())
+                    ).parse().unwrap());
 
             // 
             let mut stream = request.upgrade("websocket", response);
@@ -100,7 +106,7 @@ fn main() {
                     Ok(_) => {
                         // "Hello" frame
                         let data = [0x81, 0x05, 0x48, 0x65, 0x6c, 0x6c, 0x6f];
-                        stream.write(data.as_slice()).ok();
+                        stream.write(&data).ok();
                         stream.flush().ok();
                     },
                     Err(e) => {
@@ -112,3 +118,6 @@ fn main() {
         });
     }
 }
+*/
+
+fn main() {}

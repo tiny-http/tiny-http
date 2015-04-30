@@ -6,6 +6,7 @@ authors = [ "pierre.krieger1708@gmail.com", "coreyf@rwell.org"]
 
 [dependencies]
 ascii = "0.4"
-crypto = "*"
+rust-crypto = "*"
 encoding = "0.2"
+rustc-serialize = "*"
 url = "0.2"

@@ -1,4 +1,7 @@
+extern crate ascii;
 extern crate tiny_http;
+
+use ascii::AsciiCast;
 
 /**!
 
@@ -8,14 +11,11 @@ Usage: php-cgi <php-script-path>
 
 */
 
-use std::os;
-
 fn handle(rq: tiny_http::Request, script: &str) {
-    use std::process::{Command, ExitStatus};
-    use std::io::util;
+    use std::process::Command;
     use std::io::Write;
 
-    let mut php = Command::new("php-cgi")
+    let php = Command::new("php-cgi")
         .arg(script)
         //.stdin(Ignored)
         //.extra_io(Ignored)
@@ -26,14 +26,14 @@ fn handle(rq: tiny_http::Request, script: &str) {
         .env("PATH_INFO", "")
         .env("PATH_TRANSLATED", "")
         .env("QUERY_STRING", format!("{}", rq.get_url()))
-        .env("REMOTE_ADDR", format!("{}", rq.get_remote_addr().ip))
+        .env("REMOTE_ADDR", format!("{}", rq.get_remote_addr()))
         .env("REMOTE_HOST", "")
         .env("REMOTE_IDENT", "")
         .env("REMOTE_USER", "")
         .env("REQUEST_METHOD", format!("{}", rq.get_method()))
         .env("SCRIPT_NAME", script)
         .env("SERVER_NAME", "tiny-http php-cgi example")
-        .env("SERVER_PORT", format!("{}", rq.get_remote_addr().port))
+        .env("SERVER_PORT", format!("{}", rq.get_remote_addr().port()))
         .env("SERVER_PROTOCOL", "HTTP/1.1")
         .env("SERVER_SOFTWARE", "tiny-http php-cgi example")
         .output()
@@ -49,12 +49,12 @@ fn handle(rq: tiny_http::Request, script: &str) {
             let mut writer: &mut Write = &mut *writer;
 
             (write!(writer, "HTTP/1.1 200 OK\r\n")).unwrap();
-            (write!(writer, "{}", php.output.into_ascii().into_string())).unwrap();
+            (write!(writer, "{}", php.stdout.clone().to_ascii().unwrap().to_string())).unwrap();
 
             writer.flush().unwrap();
         },
         _ => {
-            println!("Error in script execution: {}", php.error.clone().into_ascii().into_string());
+            println!("Error in script execution: {}", php.stderr.clone().to_ascii().unwrap().to_string());
         }
     }
 }
@@ -65,22 +65,23 @@ fn main() {
     use std::env;
 
     let php_script = {
-        let args = env::args();
+        let mut args = env::args();
         if args.len() < 2 { println!("Usage: php-cgi <php-script-path>"); return }
-        args[1].to_string()
+        args.nth(1).unwrap()
     };
 
     let server = Arc::new(tiny_http::ServerBuilder::new().with_port(9975).build().unwrap());
     println!("Now listening on port 9975");
 
-    for _ in 0..os::num_cpus() {
+    let num_cpus = 4;  // TODO: dynamically generate this value
+    for _ in 0..num_cpus {
         let server = server.clone();
         let php_script = php_script.clone();
 
         spawn(move || {
             for rq in server.incoming_requests() {
-                handle(rq, php_script.as_slice());
+                handle(rq, &php_script);
             }
-        })
+        });
     }
 }

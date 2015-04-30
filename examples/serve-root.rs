@@ -1,15 +1,17 @@
 use std::path::Path;
 use std::io;
+use std::fs;
 
+extern crate ascii;
 extern crate tiny_http;
 
 fn get_content_type(path: &Path) -> &'static str {
-    let extension = match path.extension_str() {
+    let extension = match path.extension() {
         None => return "text/plain",
         Some(e) => e
     };
 
-    match extension {
+    match extension.to_str().unwrap() {
         "gif" => "image/gif",
         "jpg" => "image/jpeg",
         "jpeg" => "image/jpeg",
@@ -23,8 +25,9 @@ fn get_content_type(path: &Path) -> &'static str {
 }
 
 fn main() {
+    use ascii::AsciiCast;
     let server = tiny_http::ServerBuilder::new().with_random_port().build().unwrap();
-    let port = server.get_server_addr().port;
+    let port = server.get_server_addr().port();
     println!("Now listening on port {}", port);
 
     loop {
@@ -33,10 +36,11 @@ fn main() {
             Err(_) => break
         };
 
-        println!("{}", rq);
+        println!("{:?}", rq);
 
-        let path = Path::new(rq.get_url());
-        let file = io::File::open(&path);
+        let url = rq.get_url().to_string();
+        let path = Path::new(&url);
+        let file = fs::File::open(&path);
 
         if file.is_ok() {
             let response = tiny_http::Response::from_file(file.unwrap());
@@ -44,7 +48,7 @@ fn main() {
             let response = response.with_header(
                 tiny_http::Header {
                     field: "Content-Type".parse().unwrap(),
-                    value: get_content_type(&path).to_ascii().to_vec()
+                    value: get_content_type(&path).to_ascii().unwrap().to_ascii_string()
                 }
             );
 

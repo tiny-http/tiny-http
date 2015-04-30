@@ -1,6 +1,6 @@
 ## tiny-http
 
-[![Build Status](https://travis-ci.org/tomaka/tiny-http.svg?branch=master)](https://travis-ci.org/tomaka/tiny-http)
+[![Build Status](https://travis-ci.org/frewsxcv/tiny-http.svg?branch=master)](https://travis-ci.org/frewsxcv/tiny-http)
 
 **STATUS: Code is being updated to run on beta Rust**
 

@@ -51,7 +51,11 @@ impl<R> Read for ChunksDecoder<R> where R: Read {
             let mut chunk_size = Vec::new();
 
             loop {
-                let byte = try!(self.source.by_ref().bytes().next().unwrap_or(Ok(0)));
+                let byte = match self.source.by_ref().bytes().next() {
+                    Some(b) => try!(b),
+                    None => return Err(IoError::new(ErrorKind::InvalidInput, ChunksError)),
+                };
+
                 if byte == b'\r' {
                     break;
                 }
@@ -59,8 +63,9 @@ impl<R> Read for ChunksDecoder<R> where R: Read {
                 chunk_size.push(byte);
             }
 
-            if try!(self.source.by_ref().bytes().next().unwrap_or(Ok(0))) != b'\n' {
-                return Err(IoError::new(ErrorKind::InvalidInput, ChunksError));
+            match self.source.by_ref().bytes().next() {
+                Some(Ok(b'\n')) => (),
+                _ => return Err(IoError::new(ErrorKind::InvalidInput, ChunksError)),
             }
 
             let chunk_size = match String::from_utf8(chunk_size) {

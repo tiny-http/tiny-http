@@ -80,6 +80,12 @@ impl<R> Read for ChunksDecoder<R> where R: Read {
 
             // if the chunk size is 0, we are at EOF
             if chunk_size == 0 {
+                if try!(self.source.by_ref().bytes().next().unwrap_or(Ok(0))) != b'\r' {
+                    return Err(IoError::new(ErrorKind::InvalidInput, ChunksError));
+                }
+                if try!(self.source.by_ref().bytes().next().unwrap_or(Ok(0))) != b'\n' {
+                    return Err(IoError::new(ErrorKind::InvalidInput, ChunksError));
+                }
                 return Ok(0);
             }
 
@@ -130,7 +136,7 @@ mod test {
 
     #[test]
     fn test_valid_chunk_decode() {
-        let source = io::Cursor::new("3\r\nhel\r\nb\r\nlo world!!!\r\n0\r\n".to_string().into_bytes());
+        let source = io::Cursor::new("3\r\nhel\r\nb\r\nlo world!!!\r\n0\r\n\r\n".to_string().into_bytes());
         let mut decoded = ChunksDecoder::new(source);
 
         let mut string = String::new();

@@ -135,7 +135,7 @@ mod test {
     use std::io::Read;
 
     #[test]
-    fn test() {
+    fn test_valid_chunk_decode() {
         let source = io::Cursor::new("3\r\nhel\r\nb\r\nlo world!!!\r\n0\r\n".to_string().into_bytes());
         let mut decoded = ChunksDecoder::new(source);
 

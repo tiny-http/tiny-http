@@ -20,7 +20,7 @@ use util::{AnyReader, AnyWriter};
 /// worker threads.
 ///
 /// # Pipelining
-/// 
+///
 /// If a client sends multiple requests in a row (without waiting for the response), then you will
 /// get multiple `Request` objects simultaneously. This is called *requests pipelining*.
 /// Tiny-http automatically reorders the responses so that you don't need to worry about the order
@@ -223,11 +223,11 @@ impl Request {
 
 /*      // FIXME: reimplement this
     /// Sends a response with a `Connection: upgrade` header, then turns the `Request` into a `Stream`.
-    /// 
+    ///
     /// The main purpose of this function is to support websockets.
     /// If you detect that the request wants to use some kind of protocol upgrade, you can
     ///  call this function to obtain full control of the socket stream.
-    /// 
+    ///
     /// If you call this on a non-websocket request, tiny-http will wait until this `Stream` object
     ///  is destroyed before continuing to read or write on the socket. Therefore you should always
     ///  destroy it as soon as possible.
@@ -244,9 +244,9 @@ impl Request {
     }*/
 
     /// Allows to read the body of the request.
-    /// 
+    ///
     /// # Example
-    /// 
+    ///
     /// ```no_run
     /// # extern crate serialize;
     /// # extern crate tiny_http;
@@ -255,9 +255,9 @@ impl Request {
     ///
     /// # fn main() {
     /// # let server = tiny_http::ServerBuilder::new().build().unwrap();
-    /// 
+    ///
     /// let mut request = server.recv().unwrap();
-    /// 
+    ///
     /// if get_content_type(&request) == "application/json" {
     ///     let content = request.as_reader().read_to_string().unwrap();
     ///     let json: Json = from_str(content).unwrap();
@@ -283,7 +283,7 @@ impl Request {
     }
 
     /// Turns the `Request` into a writer.
-    /// 
+    ///
     /// The writer has a raw access to the stream to the user.
     /// This function is useful for things like CGI.
     ///

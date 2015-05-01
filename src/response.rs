@@ -12,10 +12,10 @@ use std::fs::File;
 use std::str::FromStr;
 
 /// Object representing an HTTP response whose purpose is to be given to a `Request`.
-/// 
+///
 /// Some headers cannot be changed. Trying to define the value
 /// of one of these will have no effect:
-/// 
+///
 ///  - `Accept-Ranges`
 ///  - `Connection`
 ///  - `Content-Range`
@@ -24,11 +24,11 @@ use std::str::FromStr;
 ///  - `Upgrade`
 ///
 /// Some headers have special behaviors:
-/// 
+///
 ///  - `Content-Encoding`: If you define this header, the library
 ///     will assume that the data from the `Read` object has the specified encoding
 ///     and will just pass-through.
-/// 
+///
 ///  - `Content-Length`: The length of the data should be set manually
 ///     using the `Reponse` object's API. Attempting to set the value of this
 ///     header will be equivalent to modifying the size of the data but the header
@@ -134,7 +134,7 @@ fn choose_transfer_encoding(request_headers: &[Header], http_version: &HTTPVersi
             None
         });
 
-    // 
+    //
     if user_request.is_some() {
         return user_request.unwrap();
     }
@@ -248,7 +248,7 @@ impl<R> Response<R> where R: Read {
     ///
     /// The HTTP version and headers passed as arguments are used to
     ///  decide which features (most notably, encoding) to use.
-    /// 
+    ///
     /// Note: does not flush the writer.
     pub fn raw_print<W: Write>(mut self, mut writer: W, http_version: HTTPVersion,
                                request_headers: &[Header], do_not_send_body: bool,
@@ -265,7 +265,7 @@ impl<R> Response<R> where R: Read {
 
         // add `Server` if not in the headers
         if self.headers.iter().find(|h| h.field.equiv(&"Server")).is_none() {
-            self.headers.insert(0, 
+            self.headers.insert(0,
                 FromStr::from_str("Server: tiny-http (Rust)").unwrap()
             );
         }
@@ -279,7 +279,7 @@ impl<R> Response<R> where R: Read {
         }
 
         // checking whether to ignore the body of the response
-        let do_not_send_body = do_not_send_body || 
+        let do_not_send_body = do_not_send_body ||
             match self.status_code.as_u16() {
                 // sattus code 1xx, 204 and 304 MUST not include a body
                 100...199 | 204 | 304 => true,
@@ -297,7 +297,7 @@ impl<R> Response<R> where R: Read {
             Some(TransferEncoding::Identity) => {
                 assert!(self.data_length.is_some());
                 let data_length = self.data_length.unwrap();
-                
+
                 self.headers.push(
                     FromStr::from_str(&format!("Content-Length: {}", data_length)).unwrap()
                 )
@@ -385,13 +385,13 @@ impl Response<Cursor<Vec<u8>>> {
             Cursor::new(data.into_bytes()),
             Some(data_len),
             None,
-        )        
+        )
     }
 }
 
 impl Response<io::Empty> {
     /// Builds an empty `Response` with the given status code.
-    
+
     pub fn new_empty(status_code: StatusCode) -> Response<io::Empty> {
         Response::new(
             status_code,

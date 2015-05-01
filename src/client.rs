@@ -66,7 +66,7 @@ impl ClientConnection {
     }
 
     /// Reads the next line from self.next_header_source.
-    /// 
+    ///
     /// Reads until `CRLF` is reached. The next read will start
     ///  at the first byte of the new line.
     fn read_next_line(&mut self) -> IoResult<AsciiString> {
@@ -217,10 +217,10 @@ impl Iterator for ClientConnection {
                     .find(|h| h.field.equiv(&"Connection")).map(|h| &h.value);
 
                 match connection_header {
-                    Some(ref val) if val.eq_ignore_ascii_case(b"close".to_ascii().unwrap()) => 
+                    Some(ref val) if val.eq_ignore_ascii_case(b"close".to_ascii().unwrap()) =>
                         self.no_more_requests = true,
 
-                    Some(ref val) if val.eq_ignore_ascii_case(b"upgrade".to_ascii().unwrap()) => 
+                    Some(ref val) if val.eq_ignore_ascii_case(b"upgrade".to_ascii().unwrap()) =>
                         self.no_more_requests = true,
 
                     Some(ref val) if !val.eq_ignore_ascii_case(b"keep-alive".to_ascii().unwrap()) &&

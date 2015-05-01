@@ -116,7 +116,7 @@ mod response;
 mod util;
 
 /// The main class of this library.
-/// 
+///
 /// Destroying this object will immediatly close the listening socket annd the reading
 ///  part of all the client's connections. Requests that have already been returned by
 ///  the `recv()` function will not close and the responses will be transferred to the client.
@@ -162,7 +162,7 @@ pub struct ServerBuilder {
     client_timeout_ms: u32,
 
     // maximum number of clients before 503
-    // TODO: 
+    // TODO:
     //max_clients: usize,
 }
 
@@ -239,7 +239,7 @@ impl Server {
             }
         });
 
-        // 
+        //
         let (tx_requests, rx_requests) = channel();
 
         // result

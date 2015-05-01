@@ -112,9 +112,9 @@ impl From<u32> for StatusCode {
 }
 
 /// Represents a HTTP header.
-/// 
+///
 /// The easiest way to create a `Header` object is to call `from_str`.
-/// 
+///
 /// ```
 /// let header: tiny_http::Header = from_str("Content-Type: text/plain").unwrap();
 /// ```
@@ -162,7 +162,7 @@ impl Display for Header {
 }
 
 /// Field of a header (eg. `Content-Type`, `Content-Length`, etc.)
-/// 
+///
 /// Comparaison between two `HeaderField`s ignores case.
 #[derive(Debug, Clone)]
 pub struct HeaderField(AsciiString);
@@ -202,9 +202,9 @@ impl Eq for HeaderField {}
 
 
 /// HTTP method (eg. `GET`, `POST`, etc.)
-/// 
+///
 /// The user chooses the method he wants.
-/// 
+///
 /// Comparaison between two `Method`s ignores case.
 #[derive(Debug, Clone)]
 pub struct Method(AsciiString);

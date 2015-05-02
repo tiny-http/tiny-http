@@ -40,7 +40,10 @@ impl<R> Read for EqualReader<R> where R: Read {
             &mut buf[.. self.size]
         };
 
-        self.reader.read(buf)
+        match self.reader.read(buf) {
+            Ok(len) => { self.size -= len; Ok(len) },
+            err @ Err(_) => err
+        }
     }
 }
 
@@ -93,7 +96,7 @@ mod tests {
         {
             let (mut equal_reader, _) = EqualReader::new(org_reader.by_ref(), 5);
 
-            let mut vec = vec![];
+            let mut vec = [0];
             equal_reader.read(&mut vec).unwrap();
             assert_eq!(vec[0], b'h');
         }

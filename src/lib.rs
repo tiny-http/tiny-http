@@ -41,20 +41,23 @@ In a real-case scenario, you will probably want to spawn multiple worker tasks a
 
 ```no_run
 # use std::sync::Arc;
+# use std::thread;
 # let server = tiny_http::ServerBuilder::new().build().unwrap();
-
 let server = Arc::new(server);
+let mut guards = Vec::with_capacity(4);
 
-for _ in range(0u, 4) {
+for _ in (0 .. 4) {
     let server = server.clone();
 
-    spawn(proc() {
+    let guard = thread::spawn(move || {
         loop {
             let rq = server.recv().unwrap();
 
             // ...
         }
-    })
+    });
+
+    guards.push(guard);
 }
 ```
 
@@ -70,18 +73,19 @@ To handle a request, you need to create a `Response` object. See the docs of thi
 more infos. Here is an example of creating a `Response` from a file:
 
 ```no_run
-# use std::io::File;
+# use std::fs::File;
+# use std::path::Path;
 let response = tiny_http::Response::from_file(File::open(&Path::new("image.png")).unwrap());
 ```
 
 All that remains to do is call `request.respond()`:
 
 ```no_run
-# use std::io::File;
+# use std::fs::File;
+# use std::path::Path;
 # let server = tiny_http::ServerBuilder::new().build().unwrap();
 # let request = server.recv().unwrap();
 # let response = tiny_http::Response::from_file(File::open(&Path::new("image.png")).unwrap());
-
 request.respond(response)
 ```
 */

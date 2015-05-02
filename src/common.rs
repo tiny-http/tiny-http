@@ -113,10 +113,10 @@ impl From<u32> for StatusCode {
 
 /// Represents a HTTP header.
 ///
-/// The easiest way to create a `Header` object is to call `from_str`.
+/// The easiest way to create a `Header` object is to call `parse`.
 ///
 /// ```
-/// let header: tiny_http::Header = from_str("Content-Type: text/plain").unwrap();
+/// let header: tiny_http::Header = "Content-Type: text/plain".parse().unwrap();
 /// ```
 #[derive(Debug, Clone)]
 pub struct Header {

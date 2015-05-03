@@ -173,8 +173,8 @@ pub fn new_request<R, W>(method: Method, path: String,
         } else if transfer_encoding.is_some() {
             // if a transfer-encoding was specified, then "chunked"
             //  is ALWAYS applied over the message (RFC2616 #3.6)
-            use util::ChunksDecoder;
-            Box::new(ChunksDecoder::new(source_data)) as Box<Read + Send + 'static>
+            use chunked_transfer::Decoder;
+            Box::new(Decoder::new(source_data)) as Box<Read + Send + 'static>
 
         } else {
             // if we have neither a Content-Length nor a Transfer-Encoding,

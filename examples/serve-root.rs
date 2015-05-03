@@ -1,5 +1,4 @@
 use std::path::Path;
-use std::io;
 use std::fs;
 
 extern crate ascii;

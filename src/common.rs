@@ -273,8 +273,6 @@ mod test {
 
     #[test]
     fn test_parse_header() {
-        use ascii::AsciiStr;
-
         let header: Header = "Content-Type: text/html".parse().unwrap();
 
         assert!(header.field.equiv(&"content-type"));
@@ -285,8 +283,6 @@ mod test {
 
     #[test]
     fn test_parse_header_with_doublecolon() {
-        use ascii::AsciiStr;
-
         let header: Header = "Time: 20: 34".parse().unwrap();
 
         assert!(header.field.equiv(&"time"));

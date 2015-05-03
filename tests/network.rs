@@ -2,8 +2,7 @@
 
 extern crate tiny_http;
 
-use std::sync::mpsc;
-use std::net::{Shutdown, TcpStream};
+use std::net::TcpStream;
 use std::io::{Read, Write};
 use std::thread;
 
@@ -20,7 +19,7 @@ fn connection_close_header() {
     (write!(client, "GET / HTTP/1.1\r\nConnection: close\r\n\r\n")).unwrap();
 
     // if the connection was not closed, this will err with timeout
-    client.set_keepalive(Some(1));
+    client.set_keepalive(Some(1)).unwrap();
     let mut out = Vec::new();
     client.read_to_end(&mut out).unwrap();
 }
@@ -32,7 +31,7 @@ fn http_1_0_connection_close() {
     (write!(client, "GET / HTTP/1.0\r\nHost: localhost\r\n\r\n")).unwrap();
 
     // if the connection was not closed, this will err with timeout
-    client.set_keepalive(Some(1));
+    client.set_keepalive(Some(1)).unwrap();
     let mut out = Vec::new();
     client.read_to_end(&mut out).unwrap();
 }
@@ -48,7 +47,7 @@ fn detect_connection_closed() {
     client.shutdown(Shutdown::Write);
 
     // if the connection was not closed, this will err with timeout
-    client.set_keepalive(Some(1));
+    client.set_keepalive(Some(1)).unwrap();
     let mut out = Vec::new();
     client.read_to_end(&mut out).unwrap();
 }
@@ -78,7 +77,7 @@ fn poor_network_test() {
     thread::sleep_ms(100);
     (write!(client, "\n")).unwrap();
 
-    client.set_keepalive(Some(2));
+    client.set_keepalive(Some(2)).unwrap();
     let mut data = String::new();
     client.read_to_string(&mut data).unwrap();
     assert!(data.ends_with("hello world"));
@@ -92,7 +91,7 @@ fn pipelining_test() {
     (write!(client, "GET /hello HTTP/1.1\r\nHost: localhost\r\n\r\n")).unwrap();
     (write!(client, "GET /world HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n")).unwrap();
 
-    client.set_keepalive(Some(2));
+    client.set_keepalive(Some(2)).unwrap();
     let mut data = String::new();
     client.read_to_string(&mut data).unwrap();
     assert_eq!(data.split("hello world").count(), 4);
@@ -111,7 +110,7 @@ fn server_crash_results_in_response() {
 
     (write!(client, "GET / HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n")).unwrap();
 
-    client.set_keepalive(Some(2));
+    client.set_keepalive(Some(2)).unwrap();
     let mut content = String::new();
     client.read_to_string(&mut content).unwrap();
     assert!(&content[9..].starts_with("5"));   // 5xx status code
@@ -139,7 +138,7 @@ fn responses_reordered() {
         });
     });
 
-    client.set_keepalive(Some(2));
+    client.set_keepalive(Some(2)).unwrap();
     let mut content = String::new();
     client.read_to_string(&mut content).unwrap();
     assert!(content.ends_with("second request"));

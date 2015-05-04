@@ -357,6 +357,18 @@ impl<R> Response<R> where R: Read {
     }
 }
 
+impl<R> Response<R> where R: Read + Send + 'static {
+    /// Turns this response into a `Response<Box<Read + Send>>`.
+    pub fn boxed(self) -> Response<Box<Read + Send>> {
+        Response {
+            reader: Box::new(self.reader) as Box<Read + Send>,
+            status_code: self.status_code,
+            headers: self.headers,
+            data_length: self.data_length,
+        }
+    }
+}
+
 impl Response<File> {
     /// Builds a new `Response` from a `File`.
     ///

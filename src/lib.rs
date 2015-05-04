@@ -103,7 +103,7 @@ All that remains to do is call `request.respond()`:
 request.respond(response)
 ```
 */
-#![feature(std_misc, str_words)]
+#![feature(std_misc)]
 #![crate_name = "tiny_http"]
 #![crate_type = "lib"]
 

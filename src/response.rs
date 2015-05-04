@@ -405,8 +405,7 @@ impl Response<Cursor<Vec<u8>>> {
 
 impl Response<io::Empty> {
     /// Builds an empty `Response` with the given status code.
-
-    pub fn new_empty(status_code: StatusCode) -> Response<io::Empty> {
+    pub fn empty(status_code: StatusCode) -> Response<io::Empty> {
         Response::new(
             status_code,
             Vec::new(),
@@ -414,6 +413,11 @@ impl Response<io::Empty> {
             Some(0),
             None,
         )
+    }
+
+    /// DEPRECATED. Use `empty` instead.
+    pub fn new_empty(status_code: StatusCode) -> Response<io::Empty> {
+        Response::empty(status_code)
     }
 }
 

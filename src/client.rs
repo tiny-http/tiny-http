@@ -277,7 +277,7 @@ fn parse_http_version(version: &str) -> Result<HTTPVersion, ReadError> {
 /// Parses the request line of the request.
 /// eg. GET / HTTP/1.1
 fn parse_request_line(line: &str) -> Result<(Method, String, HTTPVersion), ReadError> {
-    let mut words = line.words();
+    let mut words = line.split(' ');
 
     let method = words.next();
     let path = words.next();

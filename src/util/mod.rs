@@ -13,8 +13,6 @@
 // limitations under the License.
 
 pub use self::any::{AnyReader, AnyWriter};
-pub use self::chunks_decoder::ChunksDecoder;
-pub use self::chunks_encoder::ChunksEncoder;
 pub use self::closable_tcp_stream::ClosableTcpStream;
 pub use self::custom_stream::CustomStream;
 pub use self::encoding_decoder::EncodingDecoder;
@@ -26,8 +24,6 @@ pub use self::task_pool::TaskPool;
 use std::str::FromStr;
 
 mod any;
-mod chunks_decoder;
-mod chunks_encoder;
 mod closable_tcp_stream;
 mod custom_stream;
 mod encoding_decoder;

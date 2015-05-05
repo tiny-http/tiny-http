@@ -113,9 +113,10 @@ extern crate encoding;
 extern crate url;
 
 use std::sync::mpsc::{Sender, Receiver};
+use std::io::Error as IoError;
 use std::io::Result as IoResult;
-use std::sync::mpsc::Select;
-use std::sync::mpsc::channel;
+use std::io::ErrorKind;
+use std::sync::mpsc::{channel, TryRecvError};
 use std::sync::{Arc, Mutex};
 use std::sync::atomic::AtomicBool;
 use std::thread;
@@ -297,53 +298,29 @@ impl Server {
         let connections_receiver = self.connections_receiver.lock().unwrap();
         let requests_receiver = self.requests_receiver.lock().unwrap();
 
-        // TODO: the select! macro doesn't seem to be usable without moving
-        //       out of self, so we use Select directly
-
-        let select = Select::new();
-
-        let mut request_handle = select.handle(&*requests_receiver);
-        unsafe { request_handle.add() };
-
-        let mut connect_handle = select.handle(&*connections_receiver);
-        unsafe { connect_handle.add() };
-
         loop {
-            let id = select.wait();
-
-            if id == request_handle.id() {
-                let request = request_handle.recv().unwrap();
-
-                unsafe { request_handle.remove() };
-                unsafe { connect_handle.remove() };
-
-                return Ok(request);
-            }
-
-            if id == connect_handle.id() {
-                let client = connect_handle.recv();
-
-                match client {
-                    Ok(Ok(client)) => {
-                        self.add_client(client);
-                        continue
+            loop {
+                match connections_receiver.try_recv() {
+                    Ok(Ok(client)) => self.add_client(client),
+                    Ok(Err(err)) => return Err(err),
+                    Err(TryRecvError::Empty) => break,
+                    Err(TryRecvError::Disconnected) => {
+                        return Err(IoError::new(ErrorKind::ConnectionAborted,
+                                                "Server socket has closed unexpectedly"));
                     },
-                    Ok(Err(err)) => {
-                        unsafe { request_handle.remove() };
-                        unsafe { connect_handle.remove() };
-
-                        return Err(err)
-                    },
-                    Err(_) => {
-                        unsafe { request_handle.remove() };
-                        unsafe { connect_handle.remove() };
-
-                        panic!() // FIXME: return Err(old_io::standard_error(old_io::Closed));
-                    }
                 }
             }
 
-            unreachable!()
+            match requests_receiver.try_recv() {
+                Ok(request) => return Ok(request),
+                Err(TryRecvError::Empty) => (),
+
+                // we keep a `Sender` alive inside the `Server`, so it's not possible to be
+                // disconnected here
+                Err(TryRecvError::Disconnected) => unreachable!(),
+            }
+
+            thread::sleep_ms(2);
         }
     }
 

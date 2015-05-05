@@ -107,7 +107,6 @@ request.respond(response)
 #![crate_name = "tiny_http"]
 #![crate_type = "lib"]
 
-extern crate ascii;
 extern crate chunked_transfer;
 extern crate encoding;
 extern crate url;

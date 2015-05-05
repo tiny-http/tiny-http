@@ -94,7 +94,8 @@ impl ClientConnection {
                 buf.pop();  // removing the '\r'
                 return match AsciiString::from_bytes(buf) {
                     Ok(s) => Ok(s),
-                    Err(_) => panic!() //FIXME: Err(old_io::standard_error(old_io::InvalidInput))
+                    Err(_) => return Err(IoError::new(ErrorKind::InvalidInput,
+                                                      "Header is not in ASCII"))
                 }
             }
 

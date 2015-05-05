@@ -2,6 +2,8 @@
 
 [![Build Status](https://travis-ci.org/frewsxcv/tiny-http.svg?branch=master)](https://travis-ci.org/frewsxcv/tiny-http)
 
+[Documentation](https://frewsxcv.github.io/tiny-http)
+
 **STATUS: Code is being updated to run on beta Rust**
 
 Tiny but strong HTTP server in Rust.

@@ -2,9 +2,7 @@
 
 [![Build Status](https://travis-ci.org/frewsxcv/tiny-http.svg?branch=master)](https://travis-ci.org/frewsxcv/tiny-http)
 
-[Documentation](https://frewsxcv.github.io/tiny-http)
-
-**STATUS: Code is being updated to run on beta Rust**
+### [Documentation](https://frewsxcv.github.io/tiny-http)
 
 Tiny but strong HTTP server in Rust.
 Its main objectives are to be 100% compliant with the HTTP standard and to provide an easy way to create an HTTP server.

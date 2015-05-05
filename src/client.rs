@@ -88,7 +88,12 @@ impl ClientConnection {
         let mut prev_byte_was_cr = false;
 
         loop {
-            let byte = try!(self.next_header_source.by_ref().bytes().next().unwrap_or(Ok(0)));
+            let byte = self.next_header_source.by_ref().bytes().next();
+
+            let byte = match byte {
+                Some(b) => try!(b),
+                None => return Err(IoError::new(ErrorKind::ConnectionAborted, "Unexpected EOF"))
+            };
 
             if byte == b'\n' && prev_byte_was_cr {
                 buf.pop();  // removing the '\r'

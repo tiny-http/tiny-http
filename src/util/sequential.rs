@@ -15,28 +15,28 @@
 use std::io::Result as IoResult;
 use std::io::{Read, Write};
 
-use std::sync::mpsc::Sender;
+use std::sync::mpsc::{Receiver, Sender};
 use std::sync::mpsc::channel;
-use std::sync::{self, Arc, Mutex};
+use std::sync::{Arc, Mutex};
 
 pub struct SequentialReaderBuilder<R> where R: Read + Send {
     reader: Arc<Mutex<R>>,
-    next_trigger: Option<sync::Future<()>>,
+    next_trigger: Option<Receiver<()>>,
 }
 
 pub struct SequentialReader<R> where R: Read + Send {
-    trigger: Option<sync::Future<()>>,
+    trigger: Option<Receiver<()>>,
     reader: Arc<Mutex<R>>,
     on_finish: Sender<()>,
 }
 
 pub struct SequentialWriterBuilder<W> where W: Write + Send {
     writer: Arc<Mutex<W>>,
-    next_trigger: Option<sync::Future<()>>,
+    next_trigger: Option<Receiver<()>>,
 }
 
 pub struct SequentialWriter<W> where W: Write + Send {
-    trigger: Option<sync::Future<()>>,
+    trigger: Option<Receiver<()>>,
     writer: Arc<Mutex<W>>,
     on_finish: Sender<()>,
 }
@@ -63,7 +63,7 @@ impl<R: Read + Send> Iterator for SequentialReaderBuilder<R> {
     type Item = SequentialReader<R>;
     fn next(&mut self) -> Option<SequentialReader<R>> {
         let (tx, rx) = channel();
-        let mut next_next_trigger = Some(sync::Future::from_receiver(rx));
+        let mut next_next_trigger = Some(rx);
         ::std::mem::swap(&mut next_next_trigger, &mut self.next_trigger);
 
         Some(SequentialReader {
@@ -78,7 +78,7 @@ impl<W: Write + Send> Iterator for SequentialWriterBuilder<W> {
     type Item = SequentialWriter<W>;
     fn next(&mut self) -> Option<SequentialWriter<W>> {
         let (tx, rx) = channel();
-        let mut next_next_trigger = Some(sync::Future::from_receiver(rx));
+        let mut next_next_trigger = Some(rx);
         ::std::mem::swap(&mut next_next_trigger, &mut self.next_trigger);
 
         Some(SequentialWriter {
@@ -91,7 +91,7 @@ impl<W: Write + Send> Iterator for SequentialWriterBuilder<W> {
 
 impl<R: Read + Send> Read for SequentialReader<R> {
     fn read(&mut self, buf: &mut [u8]) -> IoResult<usize> {
-        self.trigger.as_mut().map(|v| v.get());
+        self.trigger.as_mut().map(|v| v.recv().unwrap());
         self.trigger = None;
 
         self.reader.lock().unwrap().read(buf)
@@ -100,14 +100,14 @@ impl<R: Read + Send> Read for SequentialReader<R> {
 
 impl<W: Write + Send> Write for SequentialWriter<W> {
     fn write(&mut self, buf: &[u8]) -> IoResult<usize> {
-        self.trigger.as_mut().map(|v| v.get());
+        self.trigger.as_mut().map(|v| v.recv().unwrap());
         self.trigger = None;
 
         self.writer.lock().unwrap().write(buf)
     }
 
     fn flush(&mut self) -> IoResult<()> {
-        self.trigger.as_mut().map(|v| v.get());
+        self.trigger.as_mut().map(|v| v.recv().unwrap());
         self.trigger = None;
 
         self.writer.lock().unwrap().flush()

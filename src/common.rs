@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use ascii::{AsciiString, AsciiStr};
 use std::ascii::AsciiExt;
 use std::fmt::{self, Display, Formatter};
 use std::str::{FromStr};
@@ -135,7 +134,7 @@ impl From<u32> for StatusCode {
 #[derive(Debug, Clone)]
 pub struct Header {
     pub field: HeaderField,
-    pub value: AsciiString,
+    pub value: String,
 }
 
 impl FromStr for Header {
@@ -157,21 +156,16 @@ impl FromStr for Header {
             _ => return Err(())
         };
 
-        let value = match AsciiStr::from_str(value.trim()) {
-            Some(v) => v.to_ascii_string(),
-            None => return Err(())
-        };
-
         Ok(Header {
             field: field,
-            value: value,
+            value: value.to_string(),
         })
     }
 }
 
 impl Display for Header {
     fn fmt(&self, formatter: &mut Formatter) -> Result<(), fmt::Error> {
-        write!(formatter, "{}: {}", self.field, self.value.as_str())
+        write!(formatter, "{}: {}", self.field, self.value)
     }
 }
 
@@ -179,15 +173,15 @@ impl Display for Header {
 ///
 /// Comparaison between two `HeaderField`s ignores case.
 #[derive(Debug, Clone)]
-pub struct HeaderField(AsciiString);
+pub struct HeaderField(String);
 
 impl HeaderField {
-    pub fn as_str<'a>(&'a self) -> &'a AsciiStr {
+    pub fn as_str<'a>(&'a self) -> &'a String {
         match self { &HeaderField(ref s) => s }
     }
 
     pub fn equiv(&self, other: &'static str) -> bool {
-        other.eq_ignore_ascii_case(self.as_str().as_str())
+        other.eq_ignore_ascii_case(self.as_str())
     }
 }
 
@@ -195,14 +189,14 @@ impl FromStr for HeaderField {
     type Err = ();
 
     fn from_str(s: &str) -> Result<HeaderField, ()> {
-        AsciiStr::from_str(s.trim()).map(|s| HeaderField(s.to_ascii_string())).ok_or(())
+        Ok(HeaderField(s.trim().to_string()))
     }
 }
 
 impl Display for HeaderField {
     fn fmt(&self, formatter: &mut Formatter) -> Result<(), fmt::Error> {
         let method = self.as_str();
-        write!(formatter, "{}", method.as_str())
+        write!(formatter, "{}", method)
     }
 }
 
@@ -221,15 +215,15 @@ impl Eq for HeaderField {}
 ///
 /// Comparaison between two `Method`s ignores case.
 #[derive(Debug, Clone)]
-pub struct Method(AsciiString);
+pub struct Method(String);
 
 impl Method {
-    fn as_str(&self) -> &AsciiStr {
+    fn as_str(&self) -> &String {
         match self { &Method(ref s) => s }
     }
 
     pub fn equiv(&self, other: &'static str) -> bool {
-        other.eq_ignore_ascii_case(self.as_str().as_str())
+        other.eq_ignore_ascii_case(self.as_str())
     }
 }
 
@@ -237,7 +231,7 @@ impl FromStr for Method {
     type Err = ();
 
     fn from_str(s: &str) -> Result<Method, ()> {
-        <AsciiString as FromStr>::from_str(s).map(|s| Method(s))
+        Ok(Method(s.to_string()))
     }
 }
 
@@ -290,7 +284,7 @@ mod test {
         let header: Header = "Content-Type: text/html".parse().unwrap();
 
         assert!(header.field.equiv(&"content-type"));
-        assert!(header.value.as_str() == "text/html");
+        assert!(header.value == "text/html");
 
         assert!("hello world".parse::<Header>().is_err());
     }
@@ -300,6 +294,6 @@ mod test {
         let header: Header = "Time: 20: 34".parse().unwrap();
 
         assert!(header.field.equiv(&"time"));
-        assert!(header.value.as_str() == "20: 34");
+        assert!(header.value == "20: 34");
     }
 }

@@ -4,7 +4,6 @@ version = "0.0.1"
 authors = ["pierre.krieger1708@gmail.com", "coreyf@rwell.org"]
 
 [dependencies]
-ascii = "0.4"
 chunked_transfer = "0.3"
 encoding = "0.2"
 rustc-serialize = "0.3"

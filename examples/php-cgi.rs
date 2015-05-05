@@ -1,7 +1,4 @@
-extern crate ascii;
 extern crate tiny_http;
-
-use ascii::AsciiCast;
 
 /**!
 
@@ -49,12 +46,12 @@ fn handle(rq: tiny_http::Request, script: &str) {
             let mut writer: &mut Write = &mut *writer;
 
             (write!(writer, "HTTP/1.1 200 OK\r\n")).unwrap();
-            (write!(writer, "{}", php.stdout.clone().to_ascii().unwrap().to_string())).unwrap();
+            (write!(writer, "{}", String::from_utf8(php.stdout.clone()).unwrap())).unwrap();
 
             writer.flush().unwrap();
         },
         _ => {
-            println!("Error in script execution: {}", php.stderr.clone().to_ascii().unwrap().to_string());
+            println!("Error in script execution: {}", String::from_utf8(php.stderr.clone()).unwrap());
         }
     }
 }

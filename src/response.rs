@@ -96,8 +96,7 @@ fn write_message_header<W>(mut writer: W, http_version: &HTTPVersion,
 
     // writing headers
     for header in headers.iter() {
-        try!(write!(&mut writer, "{}: {}\r\n", header.field.as_str().as_str(),
-            header.value.as_str()));
+        try!(write!(&mut writer, "{}: {}\r\n", header.field, header.value));
     }
 
     // separator between header and data
@@ -128,7 +127,7 @@ fn choose_transfer_encoding(request_headers: &[Header], http_version: &HTTPVersi
         // getting the corresponding TransferEncoding
         .and_then(|value| {
             // getting list of requested elements
-            let mut parse = util::parse_header_value(value.as_str());     // TODO: remove conversion
+            let mut parse = util::parse_header_value(&value);
 
             // sorting elements by most priority
             parse.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(Ordering::Equal));
@@ -217,7 +216,7 @@ impl<R> Response<R> where R: Read {
 
         // if the header is Content-Length, setting the data length
         if header.field.equiv(&"Content-Length") {
-            match <usize as FromStr>::from_str(header.value.as_str()) {
+            match <usize as FromStr>::from_str(&header.value) {
                 Ok(val) => self.data_length = Some(val),
                 Err(_) => ()      // wrong value for content-length
             };

@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use ascii::{AsciiString};
 use std::ascii::AsciiExt;
 
 use std::io::Error as IoError;
@@ -83,7 +82,7 @@ impl ClientConnection {
     ///
     /// Reads until `CRLF` is reached. The next read will start
     ///  at the first byte of the new line.
-    fn read_next_line(&mut self) -> IoResult<AsciiString> {
+    fn read_next_line(&mut self) -> IoResult<String> {
         let mut buf = Vec::new();
         let mut prev_byte_was_cr = false;
 
@@ -97,7 +96,7 @@ impl ClientConnection {
 
             if byte == b'\n' && prev_byte_was_cr {
                 buf.pop();  // removing the '\r'
-                return match AsciiString::from_bytes(buf) {
+                return match String::from_utf8(buf) {
                     Ok(s) => Ok(s),
                     Err(_) => return Err(IoError::new(ErrorKind::InvalidInput,
                                                       "Header is not in ASCII"))
@@ -118,9 +117,7 @@ impl ClientConnection {
             let (method, path, version) = {
                 let line = try!(self.read_next_line().map_err(|e| ReadError::ReadIoError(e)));
 
-                try!(parse_request_line(
-                    line.as_str().trim()    // TODO: remove this conversion
-                ))
+                try!(parse_request_line(line.trim()))
             };
 
             // getting all headers
@@ -131,7 +128,7 @@ impl ClientConnection {
 
                     if line.len() == 0 { break };
                     headers.push(
-                        match FromStr::from_str(line.as_str().trim()) {    // TODO: remove this conversion
+                        match FromStr::from_str(line.trim()) {
                             Ok(h) => h,
                             _ => return Err(ReadError::WrongHeader(version))
                         }
@@ -231,19 +228,17 @@ impl Iterator for ClientConnection {
 
             // updating the status of the connection
             {
-                use ascii::AsciiCast;
-
                 let connection_header = rq.get_headers().iter()
                     .find(|h| h.field.equiv(&"Connection")).map(|h| &h.value);
 
                 match connection_header {
-                    Some(ref val) if val.eq_ignore_ascii_case(b"close".to_ascii().unwrap()) =>
+                    Some(ref val) if val.eq_ignore_ascii_case("close") =>
                         self.no_more_requests = true,
 
-                    Some(ref val) if val.eq_ignore_ascii_case(b"upgrade".to_ascii().unwrap()) =>
+                    Some(ref val) if val.eq_ignore_ascii_case("upgrade") =>
                         self.no_more_requests = true,
 
-                    Some(ref val) if !val.eq_ignore_ascii_case(b"keep-alive".to_ascii().unwrap()) &&
+                    Some(ref val) if !val.eq_ignore_ascii_case("keep-alive") &&
                                     *rq.get_http_version() == HTTPVersion(1, 0) =>
                         self.no_more_requests = true,
 

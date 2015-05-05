@@ -1,7 +1,6 @@
 use std::path::Path;
 use std::fs;
 
-extern crate ascii;
 extern crate tiny_http;
 
 fn get_content_type(path: &Path) -> &'static str {
@@ -24,7 +23,6 @@ fn get_content_type(path: &Path) -> &'static str {
 }
 
 fn main() {
-    use ascii::AsciiCast;
     let server = tiny_http::ServerBuilder::new().with_random_port().build().unwrap();
     let port = server.get_server_addr().port();
     println!("Now listening on port {}", port);
@@ -47,7 +45,7 @@ fn main() {
             let response = response.with_header(
                 tiny_http::Header {
                     field: "Content-Type".parse().unwrap(),
-                    value: get_content_type(&path).to_ascii().unwrap().to_ascii_string()
+                    value: get_content_type(&path).to_string(),
                 }
             );
 

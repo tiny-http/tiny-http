@@ -258,7 +258,7 @@ impl Eq for Method {}
 
 /// HTTP version (usually 1.0 or 1.1).
 #[derive(Debug, Clone, PartialEq, Eq, Ord)]
-pub struct HTTPVersion(pub usize, pub usize);
+pub struct HTTPVersion(pub u8, pub u8);
 
 impl Display for HTTPVersion {
     fn fmt(&self, formatter: &mut Formatter) -> Result<(), fmt::Error> {

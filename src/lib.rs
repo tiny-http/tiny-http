@@ -124,7 +124,7 @@ use client::ClientConnection;
 
 pub use common::{Header, HeaderField, HTTPVersion, Method, StatusCode};
 pub use request::Request;
-pub use response::Response;
+pub use response::{ResponseBox, Response};
 
 mod client;
 mod common;

@@ -203,7 +203,9 @@ impl<R> Response<R> where R: Read {
 
     /// Adds a header to the list.
     /// Does all the checks.
-    pub fn add_header(&mut self, header: Header) {
+    pub fn add_header<H>(&mut self, header: H) where H: Into<Header> {
+        let header = header.into();
+
         // ignoring forbidden headers
         if header.field.equiv(&"Accept-Ranges") ||
            header.field.equiv(&"Connection") ||
@@ -233,8 +235,8 @@ impl<R> Response<R> where R: Read {
     /// Some headers cannot be modified and some other have a
     ///  special behavior. See the documentation above.
     #[inline]
-    pub fn with_header(mut self, header: Header) -> Response<R> {
-        self.add_header(header);
+    pub fn with_header<H>(mut self, header: H) -> Response<R> where H: Into<Header> {
+        self.add_header(header.into());
         self
     }
 
@@ -388,7 +390,8 @@ impl Response<File> {
 }
 
 impl Response<Cursor<Vec<u8>>> {
-    pub fn from_data(data: Vec<u8>) -> Response<Cursor<Vec<u8>>> {
+    pub fn from_data<D>(data: D) -> Response<Cursor<Vec<u8>>> where D: Into<Vec<u8>> {
+        let data = data.into();
         let data_len = data.len();
 
         Response::new(
@@ -400,7 +403,8 @@ impl Response<Cursor<Vec<u8>>> {
         )
     }
 
-    pub fn from_string(data: String) -> Response<Cursor<Vec<u8>>> {
+    pub fn from_string<S>(data: S) -> Response<Cursor<Vec<u8>>> where S: Into<String> {
+        let data = data.into();
         let data_len = data.len();
 
         Response::new(
@@ -417,9 +421,9 @@ impl Response<Cursor<Vec<u8>>> {
 
 impl Response<io::Empty> {
     /// Builds an empty `Response` with the given status code.
-    pub fn empty(status_code: StatusCode) -> Response<io::Empty> {
+    pub fn empty<S>(status_code: S) -> Response<io::Empty> where S: Into<StatusCode> {
         Response::new(
-            status_code,
+            status_code.into(),
             Vec::new(),
             io::empty(),
             Some(0),

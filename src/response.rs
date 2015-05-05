@@ -55,6 +55,9 @@ pub struct Response<R> where R: Read {
     data_length: Option<usize>,
 }
 
+/// A `Response` without a template parameter.
+pub type ResponseBox = Response<Box<Read + Send>>;
+
 /// Transfer encoding to use when sending the message.
 /// Note that only *supported* encoding are listed here.
 enum TransferEncoding {
@@ -359,7 +362,7 @@ impl<R> Response<R> where R: Read {
 
 impl<R> Response<R> where R: Read + Send + 'static {
     /// Turns this response into a `Response<Box<Read + Send>>`.
-    pub fn boxed(self) -> Response<Box<Read + Send>> {
+    pub fn boxed(self) -> ResponseBox {
         Response {
             reader: Box::new(self.reader) as Box<Read + Send>,
             status_code: self.status_code,

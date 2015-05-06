@@ -23,19 +23,10 @@ use std::cmp::Ordering;
 pub struct StatusCode(pub u16);
 
 impl StatusCode {
-    /// Returns the status code as a number.
-    pub fn as_u16(&self) -> u16 {
-        match *self { StatusCode(n) => n }
-    }
-
-    pub fn from_u16(in_code: u16) -> StatusCode {
-        StatusCode(in_code)
-    }
-
     /// Returns the default reason phrase for this status code.
     /// For example the status code 404 corresponds to "Not Found".
     pub fn get_default_reason_phrase(&self) -> &'static str {
-        match self.as_u16() {
+        match self.0 {
             100 => "Continue",
             101 => "Switching Protocols",
             102 => "Processing",
@@ -83,10 +74,6 @@ impl StatusCode {
             _ => "Unknown"
         }
     }
-
-    pub fn equiv(&self, other: &u16) -> bool {
-        self.as_u16() == *other
-    }
 }
 
 impl From<i8> for StatusCode {
@@ -122,6 +109,36 @@ impl From<i32> for StatusCode {
 impl From<u32> for StatusCode {
     fn from(in_code: u32) -> StatusCode {
         StatusCode(in_code as u16)
+    }
+}
+
+impl AsRef<u16> for StatusCode {
+    fn as_ref(&self) -> &u16 {
+        &self.0
+    }
+}
+
+impl PartialEq<u16> for StatusCode {
+    fn eq(&self, other: &u16) -> bool {
+        &self.0 == other
+    }
+}
+
+impl PartialEq<StatusCode> for u16 {
+    fn eq(&self, other: &StatusCode) -> bool {
+        self == &other.0
+    }
+}
+
+impl PartialOrd<u16> for StatusCode {
+    fn partial_cmp(&self, other: &u16) -> Option<Ordering> {
+        self.0.partial_cmp(other)
+    }
+}
+
+impl PartialOrd<StatusCode> for u16 {
+    fn partial_cmp(&self, other: &StatusCode) -> Option<Ordering> {
+        self.partial_cmp(&other.0)
     }
 }
 

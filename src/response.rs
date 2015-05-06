@@ -93,7 +93,7 @@ fn write_message_header<W>(mut writer: W, http_version: &HTTPVersion,
     // writing status line
     try!(write!(&mut writer, "HTTP/{} {} {}\r\n",
         http_version,
-        status_code.as_u16(),
+        status_code.0,
         status_code.get_default_reason_phrase()
     ));
 
@@ -299,7 +299,7 @@ impl<R> Response<R> where R: Read {
 
         // checking whether to ignore the body of the response
         let do_not_send_body = do_not_send_body ||
-            match self.status_code.as_u16() {
+            match self.status_code.0 {
                 // sattus code 1xx, 204 and 304 MUST not include a body
                 100...199 | 204 | 304 => true,
                 _ => false

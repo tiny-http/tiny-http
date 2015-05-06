@@ -111,16 +111,15 @@ extern crate chunked_transfer;
 extern crate encoding;
 extern crate url;
 
-use std::sync::mpsc::{Sender, Receiver};
 use std::io::Error as IoError;
 use std::io::Result as IoResult;
-use std::io::ErrorKind;
-use std::sync::mpsc::{channel, TryRecvError};
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::thread;
 use std::net;
+
 use client::ClientConnection;
+use util::MessagesQueue;
 
 pub use common::{Header, HeaderField, HTTPVersion, Method, StatusCode};
 pub use request::Request;
@@ -143,22 +142,32 @@ pub struct Server {
     // tasks where the client connections are dispatched
     tasks_pool: util::TaskPool,
 
-    // receiver for client connections
-    connections_receiver: Mutex<Receiver<IoResult<ClientConnection>>>,
-
     // should be false as long as the server exists
     // when set to true, all the subtasks will close within a few hundreds ms
     close: Arc<AtomicBool>,
 
-    // the sender linked to requests_receiver
-    // cloned each time a client connection is created
-    requests_sender: Mutex<Sender<Request>>,
-
-    // channel to receive requests from
-    requests_receiver: Mutex<Receiver<Request>>,
+    // queue for messages received by child threads
+    messages: Arc<MessagesQueue<Message>>,
 
     // result of TcpListener::local_addr()
     listening_addr: net::SocketAddr,
+}
+
+enum Message {
+    NewClient(Result<ClientConnection, IoError>),
+    NewRequest(Request),
+}
+
+impl From<Result<ClientConnection, IoError>> for Message {
+    fn from(c: Result<ClientConnection, IoError>) -> Message {
+        Message::NewClient(c)
+    }
+}
+
+impl From<Request> for Message {
+    fn from(rq: Request) -> Message {
+        Message::NewRequest(rq)
+    }
 }
 
 // this trait is to make sure that Server implements Share and Send
@@ -237,11 +246,13 @@ impl Server {
         };
 
         // creating a task where server.accept() is continuously called
-        // and ClientConnection objects are returned in the receiver
-        let (tx_incoming, rx_incoming) = channel();
+        // and ClientConnection objects are pushed in the messages queue
+        let messages = MessagesQueue::with_capacity(8);
 
         let inside_close_trigger = close_trigger.clone();
+        let inside_messages = messages.clone();
         thread::spawn(move || {
+
             loop {
                 let new_client = server.accept().map(|(sock, _)| {
                     use util::ClosableTcpStream;
@@ -252,22 +263,15 @@ impl Server {
                     ClientConnection::new(write_closable, read_closable)
                 });
 
-                if tx_incoming.send(new_client).is_err() {
-                    break;
-                }
+                inside_messages.push(new_client.into());
             }
         });
-
-        //
-        let (tx_requests, rx_requests) = channel();
 
         // result
         Ok(Server {
             tasks_pool: util::TaskPool::new(),
-            connections_receiver: Mutex::new(rx_incoming),
+            messages: messages,
             close: close_trigger,
-            requests_sender: Mutex::new(tx_requests),
-            requests_receiver: Mutex::new(rx_requests),
             listening_addr: local_addr,
         })
     }
@@ -294,64 +298,37 @@ impl Server {
 
     /// Blocks until an HTTP request has been submitted and returns it.
     pub fn recv(&self) -> IoResult<Request> {
-        let connections_receiver = self.connections_receiver.lock().unwrap();
-        let requests_receiver = self.requests_receiver.lock().unwrap();
-
         loop {
-            loop {
-                match connections_receiver.try_recv() {
-                    Ok(Ok(client)) => self.add_client(client),
-                    Ok(Err(err)) => return Err(err),
-                    Err(TryRecvError::Empty) => break,
-                    Err(TryRecvError::Disconnected) => {
-                        return Err(IoError::new(ErrorKind::ConnectionAborted,
-                                                "Server socket has closed unexpectedly"));
-                    },
-                }
+            match self.messages.pop() {
+                Message::NewClient(Ok(client)) => self.add_client(client),
+                Message::NewClient(Err(err)) => return Err(err),
+                Message::NewRequest(rq) => return Ok(rq),
             }
-
-            match requests_receiver.try_recv() {
-                Ok(request) => return Ok(request),
-                Err(TryRecvError::Empty) => (),
-
-                // we keep a `Sender` alive inside the `Server`, so it's not possible to be
-                // disconnected here
-                Err(TryRecvError::Disconnected) => unreachable!(),
-            }
-
-            thread::sleep_ms(2);
         }
     }
 
     /// Same as `recv()` but doesn't block.
     pub fn try_recv(&self) -> IoResult<Option<Request>> {
-        let connections_receiver = self.connections_receiver.lock().unwrap();
-        let requests_receiver = self.requests_receiver.lock().unwrap();
-
-        // processing all new clients
         loop {
-            match connections_receiver.try_recv() {
-                Ok(client) => self.add_client(try!(client)),
-                Err(_) => break
+            match self.messages.try_pop() {
+                Some(Message::NewClient(Ok(client))) => self.add_client(client),
+                Some(Message::NewClient(Err(err))) => return Err(err),
+                Some(Message::NewRequest(rq)) => return Ok(Some(rq)),
+                None => return Ok(None)
             }
         }
-
-        // reading the next request
-        Ok(requests_receiver.try_recv().ok())
     }
 
     /// Adds a new client to the list.
     fn add_client(&self, client: ClientConnection) {
-        let requests_sender = self.requests_sender.lock().unwrap().clone();
+        let messages = self.messages.clone();
 
         let mut client = Some(client);
 
         self.tasks_pool.spawn(Box::new(move || {
             if let Some(client) = client.take() {
                 for rq in client {
-                    if let Err(_) = requests_sender.send(rq) {
-                        break;
-                    }
+                    messages.push(rq.into());
                 }
             }
         }));

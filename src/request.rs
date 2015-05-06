@@ -16,14 +16,15 @@ use ascii::AsciiCast;
 use std::ascii::AsciiExt;
 
 use std::io::Error as IoError;
-use std::io::{self, Read, Write, ErrorKind};
+use std::io::{self, Cursor, Read, Write, ErrorKind};
 
 use std::net::SocketAddr;
 use std::fmt;
 use std::str::FromStr;
 
 use {Header, HTTPVersion, Method, Response, StatusCode};
-use util::{AnyReader, AnyWriter};
+use util::{AnyReader, AnyWriter, EqualReader};
+use chunked_transfer::Decoder;
 
 /// Represents an HTTP request made by a client.
 ///
@@ -82,11 +83,28 @@ pub struct Request {
 
 /// Error that can happen when building a `Request` object.
 pub enum RequestCreationError {
+    /// The client sent an `Expect` header that was not recognized by tiny-http.
     ExpectationFailed,
+
+    /// Error while reading data from the socket during the creation of the `Request`.
     CreationIoError(IoError),
 }
 
-/// Builds a new request
+impl From<IoError> for RequestCreationError {
+    fn from(err: IoError) -> RequestCreationError {
+        RequestCreationError::CreationIoError(err)
+    }
+}
+
+/// Builds a new request.
+///
+/// After the request line and headers have been read from the socket, a new `Request` object
+/// is built.
+///
+/// You must pass a `Read` that will allow the `Request` object to read from the incoming data.
+/// It is the responsibility of the `Request` to read only the data of the request and not further.
+///
+/// The `Write` object will be used by the `Request` to write the response.
 pub fn new_request<R, W>(method: Method, path: String,
                          version: HTTPVersion, headers: Vec<Header>,
                          remote_addr: SocketAddr, mut source_data: R, writer: W)
@@ -130,8 +148,8 @@ pub fn new_request<R, W>(method: Method, path: String,
         }
     };
 
-    // building the reader depending on
-    //  transfer-encoding and content-length
+    // we wrap `source_data` around a reading whose nature depends on the transfer-encoding and
+    // content-length headers
     let reader =
         if connection_upgrade {
             // if we have a `Connection: upgrade`, always keeping the whole reader
@@ -139,11 +157,10 @@ pub fn new_request<R, W>(method: Method, path: String,
 
         } else if let Some(content_length) = content_length {
             if content_length == 0 {
-                use std::io;
                 Box::new(io::empty()) as Box<Read + Send + 'static>
 
             } else if content_length <= 1024 && !expects_continue {
-                use std::io::Cursor;
+                // if the content-length is small enough, we just read everything into a buffer
 
                 let mut buffer = vec![0; content_length];
                 let mut offset = 0;
@@ -153,10 +170,13 @@ pub fn new_request<R, W>(method: Method, path: String,
                         break;
                     }
 
-                    let read = try!(source_data.read(&mut buffer[offset..])
-                                               .map_err(|e| RequestCreationError::CreationIoError(e)));
+                    let read = try!(source_data.read(&mut buffer[offset..]));
                     if read == 0 {
-                        break;
+                        // the socket returned EOF, but we were before the expected content-length
+                        // aborting
+                        let info = "Connection has been closed before we received enough data";
+                        let err = IoError::new(ErrorKind::ConnectionAborted, info);
+                        return Err(RequestCreationError::CreationIoError(err));
                     }
 
                     offset += read;
@@ -165,15 +185,13 @@ pub fn new_request<R, W>(method: Method, path: String,
                 Box::new(Cursor::new(buffer)) as Box<Read + Send + 'static>
 
             } else {
-                use util::EqualReader;
                 let (data_reader, _) = EqualReader::new(source_data, content_length);   // TODO:
                 Box::new(data_reader) as Box<Read + Send + 'static>
             }
 
         } else if transfer_encoding.is_some() {
-            // if a transfer-encoding was specified, then "chunked"
-            //  is ALWAYS applied over the message (RFC2616 #3.6)
-            use chunked_transfer::Decoder;
+            // if a transfer-encoding was specified, then "chunked" is ALWAYS applied
+            // over the message (RFC2616 #3.6)
             Box::new(Decoder::new(source_data)) as Box<Read + Send + 'static>
 
         } else {
@@ -291,8 +309,7 @@ impl Request {
             self.must_send_continue = false;
         }
 
-        fn passthrough<'a>(r: &'a mut Read) -> &'a mut Read { r }
-        passthrough(self.data_reader.as_mut().unwrap())
+        self.data_reader.as_mut().unwrap()
     }
 
     /// Turns the `Request` into a writer.
@@ -320,7 +337,8 @@ impl Request {
         writer.unwrap()
     }
 
-    fn into_reader_impl(&mut self) -> AnyReader {
+    // TODO: unused
+    /*fn into_reader_impl(&mut self) -> AnyReader {
         use std::mem;
 
         assert!(self.data_reader.is_some());
@@ -328,7 +346,7 @@ impl Request {
         let mut reader = None;
         mem::swap(&mut self.data_reader, &mut reader);
         reader.unwrap()
-    }
+    }*/
 
     /// Sends a response to this request.
     #[inline]
@@ -367,7 +385,7 @@ impl fmt::Debug for Request {
 impl Drop for Request {
     fn drop(&mut self) {
         if self.response_writer.is_some() {
-            let response = Response::new_empty(StatusCode(500));
+            let response = Response::empty(500);
             self.respond_impl(response);
         }
     }
@@ -379,6 +397,7 @@ mod tests {
 
     #[test]
     fn must_be_send() {
+        #![allow(dead_code)]
         fn f<T: Send>(_: &T) {}
         fn bar(rq: &Request) { f(rq); }
     }

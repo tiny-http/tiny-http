@@ -23,7 +23,7 @@ use std::fmt;
 use std::str::FromStr;
 
 use {Header, HTTPVersion, Method, Response, StatusCode};
-use util::{AnyReader, AnyWriter, EqualReader};
+use util::EqualReader;
 use chunked_transfer::Decoder;
 
 /// Represents an HTTP request made by a client.
@@ -60,10 +60,10 @@ use chunked_transfer::Decoder;
 /// error" response will automatically be sent during the stack unwinding.
 pub struct Request {
     // where to read the body from
-    data_reader: Option<AnyReader>,
+    data_reader: Option<Box<Read + Send + 'static>>,
 
     // if this writer is empty, then the request has been answered
-    response_writer: Option<AnyWriter>,
+    response_writer: Option<Box<Write + Send + 'static>>,
 
     remote_addr: SocketAddr,
 
@@ -202,8 +202,8 @@ pub fn new_request<R, W>(method: Method, path: String,
         };
 
     Ok(Request {
-        data_reader: Some(AnyReader::new(reader)),
-        response_writer: Some(AnyWriter::new(Box::new(writer) as Box<Write + Send + 'static>)),
+        data_reader: Some(reader),
+        response_writer: Some(Box::new(writer) as Box<Write + Send + 'static>),
         remote_addr: remote_addr,
         method: method,
         path: path,
@@ -324,10 +324,10 @@ impl Request {
     /// Therefore you should always destroy the `Writer` as soon as possible.
     #[inline]
     pub fn into_writer(mut self) -> Box<Write + Send + 'static> {
-        self.into_writer_impl().unwrap()
+        self.into_writer_impl()
     }
 
-    fn into_writer_impl(&mut self) -> AnyWriter {
+    fn into_writer_impl(&mut self) -> Box<Write + Send + 'static> {
         use std::mem;
 
         assert!(self.response_writer.is_some());

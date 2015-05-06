@@ -17,6 +17,7 @@ pub use self::closable_tcp_stream::ClosableTcpStream;
 pub use self::custom_stream::CustomStream;
 pub use self::encoding_decoder::EncodingDecoder;
 pub use self::equal_reader::EqualReader;
+pub use self::messages_queue::MessagesQueue;
 pub use self::sequential::{SequentialReaderBuilder, SequentialReader};
 pub use self::sequential::{SequentialWriterBuilder, SequentialWriter};
 pub use self::task_pool::TaskPool;
@@ -28,6 +29,7 @@ mod closable_tcp_stream;
 mod custom_stream;
 mod encoding_decoder;
 mod equal_reader;
+mod messages_queue;
 mod sequential;
 mod task_pool;
 

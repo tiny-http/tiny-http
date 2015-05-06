@@ -80,10 +80,9 @@ impl FromStr for TransferEncoding {
 }
 
 /// Builds a Date: header with the current date.
-// TODO: this is optimisable
 fn build_date_header() -> Header {
     // FIXME: right date
-    FromStr::from_str("Date: Wed, 15 Nov 1995 06:25:24 GMT").unwrap()
+    Header::from_bytes(&b"Date"[..], &b"Wed, 15 Nov 1995 06:25:24 GMT"[..]).unwrap()
 }
 
 fn write_message_header<W>(mut writer: W, http_version: &HTTPVersion,

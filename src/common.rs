@@ -143,16 +143,30 @@ impl PartialOrd<StatusCode> for u16 {
 }
 
 /// Represents a HTTP header.
-///
-/// The easiest way to create a `Header` object is to call `parse`.
-///
-/// ```
-/// let header: tiny_http::Header = "Content-Type: text/plain".parse().unwrap();
-/// ```
 #[derive(Debug, Clone)]
 pub struct Header {
     pub field: HeaderField,
     pub value: AsciiString,
+}
+
+impl Header {
+    /// Builds a `Header` from two `Vec<u8>`s or two `&[u8]`s.
+    ///
+    /// Example:
+    ///
+    /// ```
+    /// let header = tiny_http::Header::from_bytes(&b"Content-Type"[..], &b"text/plain"[..]).unwrap();
+    /// ```
+    pub fn from_bytes<B1, B2>(header: B1, value: B2) -> Result<Header, ()>
+                              where B1: Into<Vec<u8>> + AsRef<[u8]>,
+                                    B2: Into<Vec<u8>> + AsRef<[u8]>
+    {
+        let header = try!(HeaderField::from_bytes(header).or(Err(())));
+        let value = try!(AsciiString::from_bytes(value).or(Err(())));
+
+        Ok(Header { field: header, value: value })
+    }
+
 }
 
 impl FromStr for Header {
@@ -199,6 +213,10 @@ impl Display for Header {
 pub struct HeaderField(AsciiString);
 
 impl HeaderField {
+    pub fn from_bytes<B>(bytes: B) -> Result<HeaderField, B> where B: Into<Vec<u8>> + AsRef<[u8]> {
+        AsciiString::from_bytes(bytes).map(|s| HeaderField(s))
+    }
+
     pub fn as_str<'a>(&'a self) -> &'a AsciiStr {
         match self { &HeaderField(ref s) => s }
     }

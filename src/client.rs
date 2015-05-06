@@ -220,7 +220,7 @@ impl Iterator for ClientConnection {
             };
 
             // checking HTTP version
-            if *rq.get_http_version() > HTTPVersion(1, 1) {
+            if *rq.get_http_version() > (1, 1) {
                 let writer = self.sink.next().unwrap();
                 let response =
                     Response::from_string("This server only supports HTTP versions 1.0 and 1.1"

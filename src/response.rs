@@ -116,7 +116,7 @@ fn choose_transfer_encoding(request_headers: &[Header], http_version: &HTTPVersi
     use util;
 
     // HTTP 1.0 doesn't support other encoding
-    if *http_version <= HTTPVersion(1, 0) {
+    if *http_version <= (1, 0) {
         return TransferEncoding::Identity;
     }
 

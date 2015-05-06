@@ -280,6 +280,38 @@ impl PartialOrd for HTTPVersion {
     }
 }
 
+impl PartialEq<(u8, u8)> for HTTPVersion {
+    fn eq(&self, &(major, minor): &(u8, u8)) -> bool {
+        self.eq(&HTTPVersion(major, minor))
+    }
+}
+
+impl PartialEq<HTTPVersion> for (u8, u8) {
+    fn eq(&self, other: &HTTPVersion) -> bool {
+        let &(major, minor) = self;
+        HTTPVersion(major, minor).eq(other)
+    }
+}
+
+impl PartialOrd<(u8, u8)> for HTTPVersion {
+    fn partial_cmp(&self, &(major, minor): &(u8, u8)) -> Option<Ordering> {
+        self.partial_cmp(&HTTPVersion(major, minor))
+    }
+}
+
+impl PartialOrd<HTTPVersion> for (u8, u8) {
+    fn partial_cmp(&self, other: &HTTPVersion) -> Option<Ordering> {
+        let &(major, minor) = self;
+        HTTPVersion(major, minor).partial_cmp(other)
+    }
+}
+
+impl From<(u8, u8)> for HTTPVersion {
+    fn from((major, minor): (u8, u8)) -> HTTPVersion {
+        HTTPVersion(major, minor)
+    }
+}
+
 
 #[cfg(test)]
 mod test {

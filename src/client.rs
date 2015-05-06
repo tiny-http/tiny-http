@@ -221,12 +221,10 @@ impl Iterator for ClientConnection {
 
             // checking HTTP version
             if *rq.get_http_version() > (1, 1) {
-                let writer = self.sink.next().unwrap();
-                let response =
-                    Response::from_string("This server only supports HTTP versions 1.0 and 1.1"
-                        .to_string()).with_status_code(StatusCode(505));
-                response.raw_print(writer, HTTPVersion(1, 1), &[], false, None).ok();
-                continue
+                let response = Response::from_string("This server only supports HTTP versions \
+                                                      1.0 and 1.1").with_status_code(505);
+                rq.respond(response);
+                continue;
             }
 
             // updating the status of the connection

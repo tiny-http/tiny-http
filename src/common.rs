@@ -243,7 +243,9 @@ impl Display for HeaderField {
 
 impl PartialEq for HeaderField {
     fn eq(&self, other: &HeaderField) -> bool {
-        self.as_str().eq_ignore_ascii_case(other.as_str())
+        let self_str: &str = self.as_str().as_ref();
+        let other_str = other.as_str().as_ref();
+        self_str.eq_ignore_ascii_case(other_str)
     }
 }
 
@@ -284,7 +286,9 @@ impl Display for Method {
 
 impl PartialEq for Method {
     fn eq(&self, other: &Method) -> bool {
-        self.0.eq_ignore_ascii_case(&other.0)
+        let self_str: &str = self.0.as_str().as_ref();
+        let other_str: &str = other.0.as_str().as_ref();
+        self_str.eq_ignore_ascii_case(other_str)
     }
 }
 

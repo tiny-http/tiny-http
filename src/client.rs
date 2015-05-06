@@ -231,19 +231,18 @@ impl Iterator for ClientConnection {
 
             // updating the status of the connection
             {
-                use ascii::AsciiCast;
-
                 let connection_header = rq.get_headers().iter()
-                    .find(|h| h.field.equiv(&"Connection")).map(|h| &h.value);
+                    .find(|h| h.field.equiv(&"Connection"))
+                    .map(|h| AsRef::<str>::as_ref(h.value.as_ref()));
 
                 match connection_header {
-                    Some(ref val) if val.eq_ignore_ascii_case(b"close".to_ascii().unwrap()) =>
+                    Some(val) if val.eq_ignore_ascii_case("close") =>
                         self.no_more_requests = true,
 
-                    Some(ref val) if val.eq_ignore_ascii_case(b"upgrade".to_ascii().unwrap()) =>
+                    Some(ref val) if val.eq_ignore_ascii_case("upgrade") =>
                         self.no_more_requests = true,
 
-                    Some(ref val) if !val.eq_ignore_ascii_case(b"keep-alive".to_ascii().unwrap()) &&
+                    Some(ref val) if !val.eq_ignore_ascii_case("keep-alive") &&
                                     *rq.get_http_version() == HTTPVersion(1, 0) =>
                         self.no_more_requests = true,
 

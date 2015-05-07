@@ -4,6 +4,8 @@ version = "0.1.0"
 authors = ["pierre.krieger1708@gmail.com",
            "Corey Farwell <coreyf@rwell.org>"]
 description = "Low level HTTP server library"
+documentation = "https://frewsxcv.github.io/tiny-http/tiny_http/index.html"
+keywords = ["http", "server", "web"]
 license = "Apache-2.0"
 repository = "https://github.com/frewsxcv/tiny-http"
 

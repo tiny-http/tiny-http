@@ -90,16 +90,19 @@ fn write_message_header<W>(mut writer: W, http_version: &HTTPVersion,
                            -> IoResult<()> where W: Write
 {
     // writing status line
-    try!(write!(&mut writer, "HTTP/{} {} {}\r\n",
-        http_version,
+    try!(write!(&mut writer, "HTTP/{}.{} {} {}\r\n",
+        http_version.0,
+        http_version.1,
         status_code.0,
         status_code.get_default_reason_phrase()
     ));
 
     // writing headers
     for header in headers.iter() {
-        try!(write!(&mut writer, "{}: {}\r\n", header.field.as_str().as_str(),
-            header.value.as_str()));
+        try!(writer.write_all(header.field.as_str().as_ref()));
+        try!(write!(&mut writer, ": "));
+        try!(writer.write_all(header.value.as_ref().as_ref()));
+        try!(write!(&mut writer, "\r\n"));
     }
 
     // separator between header and data
@@ -185,7 +188,7 @@ impl<R> Response<R> where R: Read {
         let mut response = Response {
             reader: data,
             status_code: status_code,
-            headers: Vec::new(),
+            headers: Vec::with_capacity(16),
             data_length: data_length,
         };
 
@@ -194,8 +197,8 @@ impl<R> Response<R> where R: Read {
         }
 
         // dummy implementation
-        if additional_headers.is_some() {
-            for h in additional_headers.unwrap().iter() {
+        if let Some(additional_headers) = additional_headers {
+            for h in additional_headers.iter() {
                 response.add_header(h)
             }
         }
@@ -229,7 +232,7 @@ impl<R> Response<R> where R: Read {
             return;
         }
 
-        self.headers.push(header)
+        self.headers.push(header);
     }
 
     /// Returns the same request, but with an additional header.
@@ -284,15 +287,15 @@ impl<R> Response<R> where R: Read {
         // add `Server` if not in the headers
         if self.headers.iter().find(|h| h.field.equiv(&"Server")).is_none() {
             self.headers.insert(0,
-                FromStr::from_str("Server: tiny-http (Rust)").unwrap()
+                Header::from_bytes(&b"Server"[..], &b"tiny-http (Rust)"[..]).unwrap()
             );
         }
 
         // handling upgrade
         if upgrade.is_some() {
             let upgrade = upgrade.unwrap();
-            self.headers.insert(0, FromStr::from_str(&format!("Upgrade: {}", upgrade)).unwrap());
-            self.headers.insert(0, FromStr::from_str("Connection: upgrade").unwrap());
+            self.headers.insert(0, Header::from_bytes(&b"Upgrade"[..], upgrade.as_bytes()).unwrap());
+            self.headers.insert(0, Header::from_bytes(&b"Connection"[..], &b"upgrade"[..]).unwrap());
             transfer_encoding = None;
         }
 
@@ -308,7 +311,7 @@ impl<R> Response<R> where R: Read {
         match transfer_encoding {
             Some(TransferEncoding::Chunked) => {
                 self.headers.push(
-                    FromStr::from_str("Transfer-Encoding: chunked").unwrap()
+                    Header::from_bytes(&b"Transfer-Encoding"[..], &b"chunked"[..]).unwrap()
                 )
             },
 
@@ -317,7 +320,7 @@ impl<R> Response<R> where R: Read {
                 let data_length = self.data_length.unwrap();
 
                 self.headers.push(
-                    FromStr::from_str(&format!("Content-Length: {}", data_length)).unwrap()
+                    Header::from_bytes(&b"Content-Length"[..], format!("{}", data_length).as_bytes()).unwrap()
                 )
             },
 
@@ -383,7 +386,7 @@ impl Response<File> {
 
         Response::new(
             StatusCode(200),
-            Vec::new(),
+            Vec::with_capacity(0),
             file,
             file_size,
             None,
@@ -398,7 +401,7 @@ impl Response<Cursor<Vec<u8>>> {
 
         Response::new(
             StatusCode(200),
-            Vec::new(),
+            Vec::with_capacity(0),
             Cursor::new(data),
             Some(data_len),
             None,
@@ -411,9 +414,9 @@ impl Response<Cursor<Vec<u8>>> {
 
         Response::new(
             StatusCode(200),
-            vec!(
-                FromStr::from_str("Content-Type: text/plain; charset=UTF-8").unwrap()
-            ),
+            vec![
+                Header::from_bytes(&b"Content-Type"[..], &b"text/plain; charset=UTF-8"[..]).unwrap()
+            ],
             Cursor::new(data.into_bytes()),
             Some(data_len),
             None,
@@ -426,7 +429,7 @@ impl Response<io::Empty> {
     pub fn empty<S>(status_code: S) -> Response<io::Empty> where S: Into<StatusCode> {
         Response::new(
             status_code.into(),
-            Vec::new(),
+            Vec::with_capacity(0),
             io::empty(),
             Some(0),
             None,

@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use ascii::AsciiCast;
 use std::ascii::AsciiExt;
 
 use std::io::Error as IoError;
@@ -130,9 +129,9 @@ pub fn new_request<R, W>(method: Method, path: String,
 
     // true if the client sent a `Expect: 100-continue` header
     let expects_continue = {
-        match headers.iter().find(|h: &&Header| h.field.equiv(&"Expect")) {
+        match headers.iter().find(|h: &&Header| h.field.equiv(&"Expect")).map(|h| AsRef::<str>::as_ref(h.value.as_ref())) {
             None => false,
-            Some(h) if h.value.eq_ignore_ascii_case(b"100-continue".to_ascii().unwrap())
+            Some(v) if v.eq_ignore_ascii_case("100-continue")
                 => true,
             _ => return Err(RequestCreationError::ExpectationFailed)
         }
@@ -140,9 +139,9 @@ pub fn new_request<R, W>(method: Method, path: String,
 
     // true if the client sent a `Connection: upgrade` header
     let connection_upgrade = {
-        match headers.iter().find(|h: &&Header| h.field.equiv(&"Connection")) {
+        match headers.iter().find(|h: &&Header| h.field.equiv(&"Connection")).map(|h| AsRef::<str>::as_ref(h.value.as_ref())) {
             None => false,
-            Some(h) if h.value.eq_ignore_ascii_case(b"upgrade".to_ascii().unwrap())
+            Some(v) if v.eq_ignore_ascii_case("upgrade")
                 => true,
             _ => false
         }

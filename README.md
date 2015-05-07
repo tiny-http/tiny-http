@@ -1,9 +1,9 @@
-## tiny-http
+# tiny-http
 
 [![Build Status](https://travis-ci.org/frewsxcv/tiny-http.svg?branch=master)](https://travis-ci.org/frewsxcv/tiny-http)
 [![tiny\_http on Crates.io](https://meritbadge.herokuapp.com/tiny_http)](https://crates.io/crates/tiny\_http)
 
-### [Documentation](https://frewsxcv.github.io/tiny-http)
+[**Documentation**](https://frewsxcv.github.io/tiny-http)
 
 Tiny but strong HTTP server in Rust.
 Its main objectives are to be 100% compliant with the HTTP standard and to provide an easy way to create an HTTP server.
@@ -22,8 +22,6 @@ Tiny-http handles everything that is related to client connections and data tran
 
 Everything else (parsing the values of the headers, multipart data, routing, etags, cache-control, HTML templates, etc.) must be handled by your code.
 If you want to create a website in Rust, I strongly recommend using a framework instead of this library.
-
-[**Link to the documentation**](http://www.rust-ci.org/tomaka/tiny-http/doc/tiny_http/index.html)
 
 ### Installation
 

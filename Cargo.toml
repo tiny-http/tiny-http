@@ -1,7 +1,8 @@
 [package]
 name = "tiny_http"
 version = "0.0.1"
-authors = ["pierre.krieger1708@gmail.com", "coreyf@rwell.org"]
+authors = ["pierre.krieger1708@gmail.com",
+           "Corey Farwell <coreyf@rwell.org>"]
 description = "Low level HTTP server library"
 license = "Apache-2.0"
 repository = "https://github.com/frewsxcv/tiny-http"

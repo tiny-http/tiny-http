@@ -48,14 +48,14 @@ struct Registration<'a> {
 
 impl<'a> Registration<'a> {
     fn new(nb: &'a AtomicUsize) -> Registration<'a> {
-        nb.fetch_add(1, Ordering::Relaxed);
+        nb.fetch_add(1, Ordering::Release);
         Registration { nb: nb }
     }
 }
 
 impl<'a> Drop for Registration<'a> {
     fn drop(&mut self) {
-        self.nb.fetch_sub(1, Ordering::Relaxed);
+        self.nb.fetch_sub(1, Ordering::Release);
     }
 }
 
@@ -82,7 +82,7 @@ impl TaskPool {
     pub fn spawn(&self, code: Box<FnMut() + Send>) {
         let mut queue = self.sharing.todo.lock().unwrap();
 
-        if self.sharing.waiting_tasks.load(Ordering::Relaxed) == 0 {
+        if self.sharing.waiting_tasks.load(Ordering::Acquire) == 0 {
             self.add_thread(Some(code));
 
         } else {
@@ -96,7 +96,7 @@ impl TaskPool {
 
         thread::spawn(move || {
             let sharing = sharing;
-            let _ = Registration::new(&sharing.active_tasks);
+            let _active_guard = Registration::new(&sharing.active_tasks);
 
             if initial_fn.is_some() {
                 let mut f = initial_fn.unwrap();
@@ -114,9 +114,9 @@ impl TaskPool {
                             break;
 
                         } else {
-                            let _ = Registration::new(&sharing.waiting_tasks);
+                            let _waiting_guard = Registration::new(&sharing.waiting_tasks);
 
-                            let received = if sharing.active_tasks.load(Ordering::Relaxed)
+                            let received = if sharing.active_tasks.load(Ordering::Acquire)
                                                     <= MIN_THREADS
                             {
                                 todo = sharing.condvar.wait(todo).unwrap();
@@ -147,7 +147,7 @@ impl TaskPool {
 
 impl Drop for TaskPool {
     fn drop(&mut self) {
-        self.sharing.active_tasks.store(999999999, Ordering::Relaxed);
+        self.sharing.active_tasks.store(999999999, Ordering::Release);
         self.sharing.condvar.notify_all();
     }
 }

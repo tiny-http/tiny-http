@@ -95,126 +95,124 @@ impl From<IoError> for RequestCreationError {
         RequestCreationError::CreationIoError(err)
     }
 }
+impl Request {
+    /// Builds a new request.
+    ///
+    /// After the request line and headers have been read from the socket, a new `Request` object
+    /// is built.
+    ///
+    /// You must pass a `Read` that will allow the `Request` object to read from the incoming data.
+    /// It is the responsibility of the `Request` to read only the data of the request and not further.
+    ///
+    /// The `Write` object will be used by the `Request` to write the response.
+    pub fn new<R, W>(method: Method, path: String, version: HTTPVersion, headers: Vec<Header>,
+                     remote_addr: SocketAddr, mut source_data: R, writer: W) -> 
+                     Result<Request, RequestCreationError> 
+                     where R: Read + Send + 'static, W: Write + Send + 'static
+    {
+        // finding the transfer-encoding header
+        let transfer_encoding = headers.iter()
+            .find(|h: &&Header| h.field.equiv(&"Transfer-Encoding"))
+            .map(|h| h.value.clone());
 
-/// Builds a new request.
-///
-/// After the request line and headers have been read from the socket, a new `Request` object
-/// is built.
-///
-/// You must pass a `Read` that will allow the `Request` object to read from the incoming data.
-/// It is the responsibility of the `Request` to read only the data of the request and not further.
-///
-/// The `Write` object will be used by the `Request` to write the response.
-pub fn new_request<R, W>(method: Method, path: String,
-                         version: HTTPVersion, headers: Vec<Header>,
-                         remote_addr: SocketAddr, mut source_data: R, writer: W)
-                         -> Result<Request, RequestCreationError>
-                         where R: Read + Send + 'static, W: Write + Send + 'static
-{
-    // finding the transfer-encoding header
-    let transfer_encoding = headers.iter()
-        .find(|h: &&Header| h.field.equiv(&"Transfer-Encoding"))
-        .map(|h| h.value.clone());
-
-    // finding the content-length header
-    let content_length = if transfer_encoding.is_some() {
-        // if transfer-encoding is specified, the Content-Length
-        // header must be ignored (RFC2616 #4.4)
-        None
-
-    } else {
-        headers.iter()
-               .find(|h: &&Header| h.field.equiv(&"Content-Length"))
-               .and_then(|h| FromStr::from_str(h.value.as_str()).ok())
-    };
-
-    // true if the client sent a `Expect: 100-continue` header
-    let expects_continue = {
-        match headers.iter().find(|h: &&Header| h.field.equiv(&"Expect")) {
-            None => false,
-            Some(h) if h.value.eq_ignore_ascii_case(b"100-continue".to_ascii().unwrap())
-                => true,
-            _ => return Err(RequestCreationError::ExpectationFailed)
-        }
-    };
-
-    // true if the client sent a `Connection: upgrade` header
-    let connection_upgrade = {
-        match headers.iter().find(|h: &&Header| h.field.equiv(&"Connection")) {
-            None => false,
-            Some(h) if h.value.eq_ignore_ascii_case(b"upgrade".to_ascii().unwrap())
-                => true,
-            _ => false
-        }
-    };
-
-    // we wrap `source_data` around a reading whose nature depends on the transfer-encoding and
-    // content-length headers
-    let reader =
-        if connection_upgrade {
-            // if we have a `Connection: upgrade`, always keeping the whole reader
-            Box::new(source_data) as Box<Read + Send + 'static>
-
-        } else if let Some(content_length) = content_length {
-            if content_length == 0 {
-                Box::new(io::empty()) as Box<Read + Send + 'static>
-
-            } else if content_length <= 1024 && !expects_continue {
-                // if the content-length is small enough, we just read everything into a buffer
-
-                let mut buffer = vec![0; content_length];
-                let mut offset = 0;
-
-                loop {
-                    if offset == content_length {
-                        break;
-                    }
-
-                    let read = try!(source_data.read(&mut buffer[offset..]));
-                    if read == 0 {
-                        // the socket returned EOF, but we were before the expected content-length
-                        // aborting
-                        let info = "Connection has been closed before we received enough data";
-                        let err = IoError::new(ErrorKind::ConnectionAborted, info);
-                        return Err(RequestCreationError::CreationIoError(err));
-                    }
-
-                    offset += read;
-                }
-
-                Box::new(Cursor::new(buffer)) as Box<Read + Send + 'static>
-
-            } else {
-                let (data_reader, _) = EqualReader::new(source_data, content_length);   // TODO:
-                Box::new(data_reader) as Box<Read + Send + 'static>
-            }
-
-        } else if transfer_encoding.is_some() {
-            // if a transfer-encoding was specified, then "chunked" is ALWAYS applied
-            // over the message (RFC2616 #3.6)
-            Box::new(Decoder::new(source_data)) as Box<Read + Send + 'static>
+        // finding the content-length header
+        let content_length = if transfer_encoding.is_some() {
+            // if transfer-encoding is specified, the Content-Length
+            // header must be ignored (RFC2616 #4.4)
+            None
 
         } else {
-            // if we have neither a Content-Length nor a Transfer-Encoding,
-            // assuming that we have no data
-            // TODO: could also be multipart/byteranges
-            Box::new(io::empty()) as Box<Read + Send + 'static>
+            headers.iter()
+                   .find(|h: &&Header| h.field.equiv(&"Content-Length"))
+                   .and_then(|h| FromStr::from_str(h.value.as_str()).ok())
         };
 
-    Ok(Request {
-        data_reader: Some(reader),
-        response_writer: Some(Box::new(writer) as Box<Write + Send + 'static>),
-        remote_addr: remote_addr,
-        method: method,
-        path: path,
-        http_version: version,
-        headers: headers,
-        body_length: content_length,
-        must_send_continue: expects_continue,
-    })
-}
+        // true if the client sent a `Expect: 100-continue` header
+        let expects_continue = {
+            match headers.iter().find(|h: &&Header| h.field.equiv(&"Expect")) {
+                None => false,
+                Some(h) if h.value.eq_ignore_ascii_case(b"100-continue".to_ascii().unwrap())
+                    => true,
+                _ => return Err(RequestCreationError::ExpectationFailed)
+            }
+        };
 
-impl Request {
+        // true if the client sent a `Connection: upgrade` header
+        let connection_upgrade = {
+            match headers.iter().find(|h: &&Header| h.field.equiv(&"Connection")) {
+                None => false,
+                Some(h) if h.value.eq_ignore_ascii_case(b"upgrade".to_ascii().unwrap())
+                    => true,
+                _ => false
+            }
+        };
+
+        // we wrap `source_data` around a reading whose nature depends on the transfer-encoding and
+        // content-length headers
+        let reader =
+            if connection_upgrade {
+                // if we have a `Connection: upgrade`, always keeping the whole reader
+                Box::new(source_data) as Box<Read + Send + 'static>
+
+            } else if let Some(content_length) = content_length {
+                if content_length == 0 {
+                    Box::new(io::empty()) as Box<Read + Send + 'static>
+
+                } else if content_length <= 1024 && !expects_continue {
+                    // if the content-length is small enough, we just read everything into a buffer
+
+                    let mut buffer = vec![0; content_length];
+                    let mut offset = 0;
+
+                    loop {
+                        if offset == content_length {
+                            break;
+                        }
+
+                        let read = try!(source_data.read(&mut buffer[offset..]));
+                        if read == 0 {
+                            // the socket returned EOF, but we were before the expected content-length
+                            // aborting
+                            let info = "Connection has been closed before we received enough data";
+                            let err = IoError::new(ErrorKind::ConnectionAborted, info);
+                            return Err(RequestCreationError::CreationIoError(err));
+                        }
+
+                        offset += read;
+                    }
+
+                    Box::new(Cursor::new(buffer)) as Box<Read + Send + 'static>
+
+                } else {
+                    let (data_reader, _) = EqualReader::new(source_data, content_length);   // TODO:
+                    Box::new(data_reader) as Box<Read + Send + 'static>
+                }
+
+            } else if transfer_encoding.is_some() {
+                // if a transfer-encoding was specified, then "chunked" is ALWAYS applied
+                // over the message (RFC2616 #3.6)
+                Box::new(Decoder::new(source_data)) as Box<Read + Send + 'static>
+
+            } else {
+                // if we have neither a Content-Length nor a Transfer-Encoding,
+                // assuming that we have no data
+                // TODO: could also be multipart/byteranges
+                Box::new(io::empty()) as Box<Read + Send + 'static>
+            };
+
+        Ok(Request {
+            data_reader: Some(reader),
+            response_writer: Some(Box::new(writer) as Box<Write + Send + 'static>),
+            remote_addr: remote_addr,
+            method: method,
+            path: path,
+            http_version: version,
+            headers: headers,
+            body_length: content_length,
+            must_send_continue: expects_continue,
+        })
+    }
+
     /// Returns the method requested by the client (eg. `GET`, `POST`, etc.).
     #[inline]
     pub fn get_method(&self) -> &Method {

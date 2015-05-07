@@ -152,7 +152,7 @@ impl ClientConnection {
         ::std::mem::swap(&mut self.next_header_source, &mut data_source);
 
         // building the next reader
-        let request = try!(::request::new_request(method, path, version.clone(),
+        let request = try!(::request::Request::new(method, path, version.clone(),
                 headers, self.remote_addr.as_ref().unwrap().clone(), data_source, writer)
             .map_err(|e| {
                 use request;

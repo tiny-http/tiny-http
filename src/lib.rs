@@ -139,9 +139,6 @@ mod util;
 ///  part of all the client's connections. Requests that have already been returned by
 ///  the `recv()` function will not close and the responses will be transferred to the client.
 pub struct Server {
-    // tasks where the client connections are dispatched
-    tasks_pool: util::TaskPool,
-
     // should be false as long as the server exists
     // when set to true, all the subtasks will close within a few hundreds ms
     close: Arc<AtomicBool>,
@@ -154,13 +151,13 @@ pub struct Server {
 }
 
 enum Message {
-    NewClient(Result<ClientConnection, IoError>),
+    Error(IoError),
     NewRequest(Request),
 }
 
-impl From<Result<ClientConnection, IoError>> for Message {
-    fn from(c: Result<ClientConnection, IoError>) -> Message {
-        Message::NewClient(c)
+impl From<IoError> for Message {
+    fn from(e: IoError) -> Message {
+        Message::Error(e)
     }
 }
 
@@ -252,6 +249,8 @@ impl Server {
         let inside_close_trigger = close_trigger.clone();
         let inside_messages = messages.clone();
         thread::spawn(move || {
+            // a tasks pool is used to dispatch the connections into threads
+            let tasks_pool = util::TaskPool::new();
 
             loop {
                 let new_client = server.accept().map(|(sock, _)| {
@@ -263,13 +262,29 @@ impl Server {
                     ClientConnection::new(write_closable, read_closable)
                 });
 
-                inside_messages.push(new_client.into());
+                match new_client {
+                    Ok(client) => {
+                        let messages = inside_messages.clone();
+                        let mut client = Some(client);
+                        tasks_pool.spawn(Box::new(move || {
+                            if let Some(client) = client.take() {
+                                for rq in client {
+                                    messages.push(rq.into());
+                                }
+                            }
+                        }));
+                    },
+
+                    Err(e) => {
+                        inside_messages.push(e.into());
+                        break;
+                    }
+                }
             }
         });
 
         // result
         Ok(Server {
-            tasks_pool: util::TaskPool::new(),
             messages: messages,
             close: close_trigger,
             listening_addr: local_addr,
@@ -300,8 +315,7 @@ impl Server {
     pub fn recv(&self) -> IoResult<Request> {
         loop {
             match self.messages.pop() {
-                Message::NewClient(Ok(client)) => self.add_client(client),
-                Message::NewClient(Err(err)) => return Err(err),
+                Message::Error(err) => return Err(err),
                 Message::NewRequest(rq) => return Ok(rq),
             }
         }
@@ -311,27 +325,11 @@ impl Server {
     pub fn try_recv(&self) -> IoResult<Option<Request>> {
         loop {
             match self.messages.try_pop() {
-                Some(Message::NewClient(Ok(client))) => self.add_client(client),
-                Some(Message::NewClient(Err(err))) => return Err(err),
+                Some(Message::Error(err)) => return Err(err),
                 Some(Message::NewRequest(rq)) => return Ok(Some(rq)),
                 None => return Ok(None)
             }
         }
-    }
-
-    /// Adds a new client to the list.
-    fn add_client(&self, client: ClientConnection) {
-        let messages = self.messages.clone();
-
-        let mut client = Some(client);
-
-        self.tasks_pool.spawn(Box::new(move || {
-            if let Some(client) = client.take() {
-                for rq in client {
-                    messages.push(rq.into());
-                }
-            }
-        }));
     }
 }
 

@@ -164,11 +164,7 @@ pub fn new_request<R, W>(method: Method, path: String,
                 let mut buffer = vec![0; content_length];
                 let mut offset = 0;
 
-                loop {
-                    if offset == content_length {
-                        break;
-                    }
-
+                while offset != content_length {
                     let read = try!(source_data.read(&mut buffer[offset..]));
                     if read == 0 {
                         // the socket returned EOF, but we were before the expected content-length

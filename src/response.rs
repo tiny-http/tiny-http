@@ -292,8 +292,7 @@ impl<R> Response<R> where R: Read {
         }
 
         // handling upgrade
-        if upgrade.is_some() {
-            let upgrade = upgrade.unwrap();
+        if let Some(upgrade) = upgrade {
             self.headers.insert(0, Header::from_bytes(&b"Upgrade"[..], upgrade.as_bytes()).unwrap());
             self.headers.insert(0, Header::from_bytes(&b"Connection"[..], &b"upgrade"[..]).unwrap());
             transfer_encoding = None;

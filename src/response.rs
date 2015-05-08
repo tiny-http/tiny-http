@@ -192,7 +192,7 @@ impl<R> Response<R> where R: Read {
             data_length: data_length,
         };
 
-        for h in headers.into_iter() {
+        for h in headers {
             response.add_header(h)
         }
 

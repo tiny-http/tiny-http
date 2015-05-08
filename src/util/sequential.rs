@@ -19,15 +19,26 @@ use std::sync::mpsc::{Receiver, Sender};
 use std::sync::mpsc::channel;
 use std::sync::{Arc, Mutex};
 
+use std::mem;
+
 pub struct SequentialReaderBuilder<R> where R: Read + Send {
-    reader: Arc<Mutex<R>>,
-    next_trigger: Option<Receiver<()>>,
+    inner: SequentialReaderBuilderInner<R>,
+}
+
+enum SequentialReaderBuilderInner<R> where R: Read + Send {
+    First(R),
+    NotFirst(Receiver<R>),
 }
 
 pub struct SequentialReader<R> where R: Read + Send {
-    trigger: Option<Receiver<()>>,
-    reader: Arc<Mutex<R>>,
-    on_finish: Sender<()>,
+    inner: SequentialReaderInner<R>,
+    next: Sender<R>,
+}
+
+enum SequentialReaderInner<R> where R: Read + Send {
+    MyTurn(R),
+    Waiting(Receiver<R>),
+    Empty,
 }
 
 pub struct SequentialWriterBuilder<W> where W: Write + Send {
@@ -44,8 +55,7 @@ pub struct SequentialWriter<W> where W: Write + Send {
 impl<R: Read + Send> SequentialReaderBuilder<R> {
     pub fn new(reader: R) -> SequentialReaderBuilder<R> {
         SequentialReaderBuilder {
-            reader: Arc::new(Mutex::new(reader)),
-            next_trigger: None,
+            inner: SequentialReaderBuilderInner::First(reader),
         }
     }
 }
@@ -61,16 +71,27 @@ impl<W: Write + Send> SequentialWriterBuilder<W> {
 
 impl<R: Read + Send> Iterator for SequentialReaderBuilder<R> {
     type Item = SequentialReader<R>;
+
     fn next(&mut self) -> Option<SequentialReader<R>> {
         let (tx, rx) = channel();
-        let mut next_next_trigger = Some(rx);
-        ::std::mem::swap(&mut next_next_trigger, &mut self.next_trigger);
 
-        Some(SequentialReader {
-            trigger: next_next_trigger,
-            reader: self.reader.clone(),
-            on_finish: tx,
-        })
+        let inner = mem::replace(&mut self.inner, SequentialReaderBuilderInner::NotFirst(rx));
+
+        match inner {
+            SequentialReaderBuilderInner::First(reader) => {
+                Some(SequentialReader {
+                    inner: SequentialReaderInner::MyTurn(reader),
+                    next: tx,
+                })
+            },
+
+            SequentialReaderBuilderInner::NotFirst(previous) => {
+                Some(SequentialReader {
+                    inner: SequentialReaderInner::Waiting(previous),
+                    next: tx,
+                })
+            },
+        }
     }
 }
 
@@ -91,10 +112,15 @@ impl<W: Write + Send> Iterator for SequentialWriterBuilder<W> {
 
 impl<R: Read + Send> Read for SequentialReader<R> {
     fn read(&mut self, buf: &mut [u8]) -> IoResult<usize> {
-        self.trigger.as_mut().map(|v| v.recv().unwrap());
-        self.trigger = None;
+        let mut reader = match self.inner {
+            SequentialReaderInner::MyTurn(ref mut reader) => return reader.read(buf),
+            SequentialReaderInner::Waiting(ref mut recv) => recv.recv().unwrap(),
+            SequentialReaderInner::Empty => unreachable!(),
+        };
 
-        self.reader.lock().unwrap().read(buf)
+        let result = reader.read(buf);
+        self.inner = SequentialReaderInner::MyTurn(reader);
+        result
     }
 }
 
@@ -116,7 +142,18 @@ impl<W: Write + Send> Write for SequentialWriter<W> {
 
 impl<R> Drop for SequentialReader<R> where R: Read + Send {
     fn drop(&mut self) {
-        self.on_finish.send(()).ok();
+        let inner = mem::replace(&mut self.inner, SequentialReaderInner::Empty);
+
+        match inner {
+            SequentialReaderInner::MyTurn(reader) => {
+                self.next.send(reader).ok();
+            },
+            SequentialReaderInner::Waiting(recv) => {
+                let reader = recv.recv().unwrap();
+                self.next.send(reader).ok();
+            },
+            SequentialReaderInner::Empty => (),
+        }
     }
 }
 

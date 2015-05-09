@@ -38,7 +38,7 @@ Don't forget to add the external crate:
 extern crate tiny_http;
 ```
 
-### [Usage](http://www.rust-ci.org/frewsxcv/tiny-http/doc/tiny-http/index.html)
+### Usage
 
 ```rust
 let server = tiny_http::ServerBuilder::new().build().unwrap();

@@ -28,8 +28,8 @@ If you want to create a website in Rust, I strongly recommend using a framework 
 Add this to the `Cargo.toml` file of your project:
 
 ```toml
-[dependencies.tiny_http]
-git = "https://github.com/frewsxcv/tiny-http"
+[dependencies]
+tiny_http = "0.1"
 ```
 
 Don't forget to add the external crate:

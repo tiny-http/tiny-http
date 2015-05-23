@@ -154,8 +154,8 @@ fn choose_transfer_encoding(request_headers: &[Header], http_version: &HTTPVersi
         });
 
     //
-    if user_request.is_some() {
-        return user_request.unwrap();
+    if let Some(user_request) = user_request {
+        return user_request;
     }
 
     // if we have additional headers, using chunked

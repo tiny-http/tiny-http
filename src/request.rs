@@ -22,7 +22,6 @@ use std::fmt;
 use std::str::FromStr;
 
 use {Header, HTTPVersion, Method, Response, StatusCode};
-use util::EqualReader;
 use chunked_transfer::Decoder;
 
 /// Represents an HTTP request made by a client.
@@ -180,7 +179,7 @@ pub fn new_request<R, W>(method: Method, path: String,
                 Box::new(Cursor::new(buffer)) as Box<Read + Send + 'static>
 
             } else {
-                let (data_reader, _) = EqualReader::new(source_data, content_length);   // TODO:
+                let data_reader = source_data.take(content_length as u64);   // TODO:
                 Box::new(data_reader) as Box<Read + Send + 'static>
             }
 

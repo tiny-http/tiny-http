@@ -342,14 +342,11 @@ impl<R> Response<R> where R: Read {
                 },
 
                 Some(TransferEncoding::Identity) => {
-                    use util::EqualReader;
-
                     assert!(self.data_length.is_some());
                     let data_length = self.data_length.unwrap();
 
                     if data_length >= 1 {
-                        let (mut equ_reader, _) =
-                            EqualReader::new(self.reader.by_ref(), data_length);
+                        let mut equ_reader = self.reader.by_ref().take(data_length as u64);
                         try!(io::copy(&mut equ_reader, &mut writer));
                     }
                 },

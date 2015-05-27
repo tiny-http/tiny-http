@@ -81,3 +81,15 @@ fn unsupported_expect_header() {
     client.read_to_string(&mut content).unwrap();
     assert!(&content[9..].starts_with("417"));   // 417 status code
 }
+
+#[test]
+fn unsupported_http_version() {
+    let mut client = support::new_client_to_hello_world_server();
+
+    (write!(client, "GET / HTTP/1.43\r\nHost: localhost\r\nContent-Type: text/plain; charset=utf8\r\nContent-Length: 3\r\n\r\nhello")).unwrap();
+    client.flush().unwrap();
+
+    let mut content = vec![0; 13];
+    client.read(&mut content).unwrap();
+    assert_eq!(&content[10..13], b"505");   // 505 status code
+}

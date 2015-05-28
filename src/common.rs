@@ -25,7 +25,7 @@ pub struct StatusCode(pub u16);
 impl StatusCode {
     /// Returns the default reason phrase for this status code.
     /// For example the status code 404 corresponds to "Not Found".
-    pub fn get_default_reason_phrase(&self) -> &'static str {
+    pub fn default_reason_phrase(&self) -> &'static str {
         match self.0 {
             100 => "Continue",
             101 => "Switching Protocols",

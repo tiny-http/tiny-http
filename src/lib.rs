@@ -80,7 +80,7 @@ If you don't want to block, you can call `server.try_recv()` instead.
 ## Handling requests
 
 The `Request` object returned by `server.recv()` contains informations about the client's request.
-The most useful methods are probably `request.get_method()` and `request.get_url()` which return
+The most useful methods are probably `request.method()` and `request.url()` which return
 the requested method (`GET`, `POST`, etc.) and url.
 
 To handle a request, you need to create a `Response` object. See the docs of this object for
@@ -210,7 +210,7 @@ impl ServerBuilder {
 
     /// The server will use a random port.
     ///
-    /// Call `server.get_server_addr()` to retreive it once the server is created.
+    /// Call `server.server_addr()` to retreive it once the server is created.
     pub fn with_random_port(mut self) -> ServerBuilder {
         let addr = self.address.ip().clone();
         self.address = net::SocketAddrV4::new(addr, 0);
@@ -301,12 +301,12 @@ impl Server {
 
     /// Returns the address the server is listening to.
     #[inline]
-    pub fn get_server_addr(&self) -> net::SocketAddr {
+    pub fn server_addr(&self) -> net::SocketAddr {
         self.listening_addr.clone()
     }
 
     /// Returns the number of clients currently connected to the server.
-    pub fn get_num_connections(&self) -> usize {
+    pub fn num_connections(&self) -> usize {
         unimplemented!()
         //self.requests_receiver.lock().len()
     }

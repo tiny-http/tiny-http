@@ -94,7 +94,7 @@ fn write_message_header<W>(mut writer: W, http_version: &HTTPVersion,
         http_version.0,
         http_version.1,
         status_code.0,
-        status_code.get_default_reason_phrase()
+        status_code.default_reason_phrase()
     ));
 
     // writing headers

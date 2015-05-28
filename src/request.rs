@@ -212,25 +212,25 @@ pub fn new_request<R, W>(method: Method, path: String,
 impl Request {
     /// Returns the method requested by the client (eg. `GET`, `POST`, etc.).
     #[inline]
-    pub fn get_method(&self) -> &Method {
+    pub fn method(&self) -> &Method {
         &self.method
     }
 
     /// Returns the resource requested by the client.
     #[inline]
-    pub fn get_url(&self) -> &str {
+    pub fn url(&self) -> &str {
         &self.path
     }
 
     /// Returns a list of all headers sent by the client.
     #[inline]
-    pub fn get_headers(&self) -> &[Header] {
+    pub fn headers(&self) -> &[Header] {
         &self.headers
     }
 
     /// Returns the HTTP version of the request.
     #[inline]
-    pub fn get_http_version(&self) -> &HTTPVersion {
+    pub fn http_version(&self) -> &HTTPVersion {
         &self.http_version
     }
 
@@ -238,13 +238,13 @@ impl Request {
     ///
     /// Returns `None` if the length is unknown.
     #[inline]
-    pub fn get_body_length(&self) -> Option<usize> {
+    pub fn body_length(&self) -> Option<usize> {
         self.body_length
     }
 
     /// Returns the length of the body in bytes.
     #[inline]
-    pub fn get_remote_addr(&self) -> &SocketAddr {
+    pub fn remote_addr(&self) -> &SocketAddr {
         &self.remote_addr
     }
 

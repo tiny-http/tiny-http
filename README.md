@@ -41,7 +41,9 @@ extern crate tiny_http;
 ### Usage
 
 ```rust
-let server = tiny_http::ServerBuilder::new().build().unwrap();
+use tiny_http::{ServerBuilder, Response};
+
+let server = ServerBuilder::new().with_port(8000).build().unwrap();
 
 for request in server.incoming_requests() {
     println!("received request! method: {:?}, url: {:?}, headers: {:?}",
@@ -50,7 +52,7 @@ for request in server.incoming_requests() {
         request.get_headers()
     );
 
-    let response = tiny_http::Response::from_string("hello world".to_string());
+    let response = Response::from_string("hello world");
     request.respond(response);
 }
 ```

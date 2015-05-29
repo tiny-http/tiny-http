@@ -54,7 +54,7 @@ fn convert_key(input: &str) -> String {
 
 fn main() {
     let server = tiny_http::ServerBuilder::new().with_random_port().build().unwrap();
-    let port = server.get_server_addr().port;
+    let port = server.server_addr().port;
 
     println!("Server started");
     println!("To try this example, open a browser to http://localhost:{}/", port);
@@ -63,7 +63,7 @@ fn main() {
         // we are handling this websocket connection in a new task
         spawn(move || {
             // checking the "Upgrade" header to check that it is a websocket
-            match request.get_headers().iter()
+            match request.headers().iter()
                 .find(|h| h.field.equiv(&"Upgrade")) 
                 .filtered(|hdr| hdr.value.as_slice().eq_ignore_case(b"websocket".to_ascii()))
             {
@@ -76,7 +76,7 @@ fn main() {
             };
 
             // getting the value of Sec-WebSocket-Key
-            let key = match request.get_headers().iter()
+            let key = match request.headers().iter()
                 .find(|h| h.field.equiv(&"Sec-WebSocket-Key"))
             {
                 None => {

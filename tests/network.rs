@@ -98,7 +98,7 @@ fn pipelining_test() {
 #[test]
 fn server_crash_results_in_response() {
     let server = tiny_http::ServerBuilder::new().with_random_port().build().unwrap();
-    let port = server.get_server_addr().port();
+    let port = server.server_addr().port();
     let mut client = TcpStream::connect(("127.0.0.1", port)).unwrap();
 
     thread::spawn(move || {
@@ -149,7 +149,7 @@ fn connection_timeout() {
         let server = tiny_http::ServerBuilder::new()
             .with_client_connections_timeout(3000)
             .with_random_port().build().unwrap();
-        let port = server.get_server_addr().port();
+        let port = server.server_addr().port();
         let client = TcpStream::connect(("127.0.0.1", port)).unwrap();
         (server, client)
     };

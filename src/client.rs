@@ -220,7 +220,7 @@ impl Iterator for ClientConnection {
             };
 
             // checking HTTP version
-            if *rq.get_http_version() > (1, 1) {
+            if *rq.http_version() > (1, 1) {
                 let writer = self.sink.next().unwrap();
                 let response =
                     Response::from_string("This server only supports HTTP versions 1.0 and 1.1"
@@ -231,7 +231,7 @@ impl Iterator for ClientConnection {
 
             // updating the status of the connection
             {
-                let connection_header = rq.get_headers().iter()
+                let connection_header = rq.headers().iter()
                     .find(|h| h.field.equiv(&"Connection"))
                     .map(|h| AsRef::<str>::as_ref(h.value.as_ref()));
 
@@ -243,10 +243,10 @@ impl Iterator for ClientConnection {
                         self.no_more_requests = true,
 
                     Some(ref val) if !val.eq_ignore_ascii_case("keep-alive") &&
-                                    *rq.get_http_version() == HTTPVersion(1, 0) =>
+                                    *rq.http_version() == HTTPVersion(1, 0) =>
                         self.no_more_requests = true,
 
-                    None if *rq.get_http_version() == HTTPVersion(1, 0) =>
+                    None if *rq.http_version() == HTTPVersion(1, 0) =>
                         self.no_more_requests = true,
 
                     _ => ()

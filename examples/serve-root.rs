@@ -26,7 +26,7 @@ fn get_content_type(path: &Path) -> &'static str {
 fn main() {
     use ascii::AsciiCast;
     let server = tiny_http::ServerBuilder::new().with_random_port().build().unwrap();
-    let port = server.get_server_addr().port();
+    let port = server.server_addr().port();
     println!("Now listening on port {}", port);
 
     loop {
@@ -37,7 +37,7 @@ fn main() {
 
         println!("{:?}", rq);
 
-        let url = rq.get_url().to_string();
+        let url = rq.url().to_string();
         let path = Path::new(&url);
         let file = fs::File::open(&path);
 

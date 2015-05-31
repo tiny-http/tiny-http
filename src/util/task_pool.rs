@@ -112,27 +112,25 @@ impl TaskPool {
                         if let Some(poped_task) = todo.pop_front() {
                             task = poped_task;
                             break;
+                        }
+                        let _waiting_guard = Registration::new(&sharing.waiting_tasks);
+
+                        let received = if sharing.active_tasks.load(Ordering::Acquire)
+                                                <= MIN_THREADS
+                        {
+                            todo = sharing.condvar.wait(todo).unwrap();
+                            true
 
                         } else {
-                            let _waiting_guard = Registration::new(&sharing.waiting_tasks);
+                            let (new_lock, receved) = sharing.condvar
+                                                             .wait_timeout_ms(todo, 5000)
+                                                             .unwrap();
+                            todo = new_lock;
+                            receved
+                        };
 
-                            let received = if sharing.active_tasks.load(Ordering::Acquire)
-                                                    <= MIN_THREADS
-                            {
-                                todo = sharing.condvar.wait(todo).unwrap();
-                                true
-
-                            } else {
-                                let (new_lock, receved) = sharing.condvar
-                                                                 .wait_timeout_ms(todo, 5000)
-                                                                 .unwrap();
-                                todo = new_lock;
-                                receved
-                            };
-
-                            if !received && todo.is_empty() {
-                                return;
-                            }
+                        if !received && todo.is_empty() {
+                            return;
                         }
                     }
 

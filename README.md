@@ -76,3 +76,10 @@ Tiny-http was designed with speed in mind:
  request has not yet been answered. The reading part of the socket will also be immediatly closed.
  - Decoding the client's request is done lazily. If you don't read the request's body, it will not
  be decoded.
+
+### Examples
+
+Examples of tiny-http in use:
+
+* [heroku-tiny-http-hello-world](https://github.com/frewsxcv/heroku-tiny-http-hello-world) - A simple web application demonstrating how to deploy tiny-http to Heroku
+* [crate-deps](https://github.com/frewsxcv/crate-deps) - A web service that generates images of dependency graphs for crates hosted on crates.io

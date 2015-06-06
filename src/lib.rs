@@ -105,6 +105,7 @@ request.respond(response)
 */
 #![crate_name = "tiny_http"]
 #![crate_type = "lib"]
+#![forbid(unsafe_code)]
 
 extern crate ascii;
 extern crate chunked_transfer;

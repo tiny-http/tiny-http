@@ -1,6 +1,6 @@
 [package]
 name = "tiny_http"
-version = "0.2.0"
+version = "0.2.1"
 authors = ["pierre.krieger1708@gmail.com",
            "Corey Farwell <coreyf@rwell.org>"]
 description = "Low level HTTP server library"

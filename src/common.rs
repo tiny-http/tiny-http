@@ -261,7 +261,7 @@ impl Eq for HeaderField {}
 pub struct Method(AsciiString);
 
 impl Method {
-    fn as_str(&self) -> &AsciiStr {
+    pub fn as_str(&self) -> &AsciiStr {
         match self { &Method(ref s) => s }
     }
 

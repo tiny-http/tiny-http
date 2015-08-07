@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common::{Header, HTTPVersion, StatusCode};
+use common::{Header, HTTPVersion, StatusCode, HTTPDate};
 
 use std::ascii::AsciiExt;
 use std::cmp::Ordering;
@@ -81,8 +81,8 @@ impl FromStr for TransferEncoding {
 
 /// Builds a Date: header with the current date.
 fn build_date_header() -> Header {
-    // FIXME: right date
-    Header::from_bytes(&b"Date"[..], &b"Wed, 15 Nov 1995 06:25:24 GMT"[..]).unwrap()
+    let d = HTTPDate::new();
+    Header::from_bytes(&b"Date"[..], &d.to_string().into_bytes()[..]).unwrap()
 }
 
 fn write_message_header<W>(mut writer: W, http_version: &HTTPVersion,

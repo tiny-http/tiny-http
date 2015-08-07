@@ -18,6 +18,8 @@ use std::fmt::{self, Display, Formatter};
 use std::str::{FromStr};
 use std::cmp::Ordering;
 
+use chrono::*;
+
 /// Status code of a request or response.
 #[derive(Eq, PartialEq, Clone, Debug, Ord, PartialOrd)]
 pub struct StatusCode(pub u16);
@@ -350,6 +352,23 @@ impl From<(u8, u8)> for HTTPVersion {
         HTTPVersion(major, minor)
     }
 }
+/// Represents the current date, expressed in RFC 1123 format, e.g. Sun, 06 Nov 1994 08:49:37 GMT
+pub struct HTTPDate {
+    d: DateTime<UTC>
+}
+
+impl HTTPDate {
+    pub fn new() -> HTTPDate {
+        HTTPDate {d: UTC::now(),}
+    }
+}
+
+impl ToString for HTTPDate {
+    fn to_string(&self) -> String {
+        self.d.format("%a, %e %b %Y %H:%M:%S GMT").to_string()
+    }
+}
+
 
 
 #[cfg(test)]

@@ -111,6 +111,7 @@ extern crate ascii;
 extern crate chunked_transfer;
 extern crate encoding;
 extern crate url;
+extern crate chrono;
 
 use std::io::Error as IoError;
 use std::io::Result as IoResult;

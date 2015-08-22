@@ -313,7 +313,7 @@ mod test {
                 Ok(v) => v
             };
 
-        assert!(method.equiv(&"get"));
+        assert!(method == ::Method::Get);
         assert!(path == "/hello");
         assert!(ver == ::common::HTTPVersion(1, 1));
 

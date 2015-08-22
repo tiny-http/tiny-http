@@ -11,7 +11,7 @@ fn basic_handling() {
     write!(stream, "GET / HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n").unwrap();
 
     let request = server.recv().unwrap();
-    assert!(request.method().equiv(&"get"));
+    assert!(*request.method() == tiny_http::Method::Get);
     //assert!(request.url() == "/");
     request.respond(tiny_http::Response::from_string(format!("hello world")));
 

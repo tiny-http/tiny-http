@@ -254,21 +254,57 @@ impl PartialEq for HeaderField {
 impl Eq for HeaderField {}
 
 
-/// HTTP method (eg. `GET`, `POST`, etc.)
+/// HTTP request methods
 ///
-/// The user chooses the method he wants.
-///
-/// Comparaison between two `Method`s ignores case.
+/// As per [RFC 7231](https://tools.ietf.org/html/rfc7231#section-4.1) and
+/// [RFC 5789](https://tools.ietf.org/html/rfc5789)
 #[derive(Debug, Clone)]
-pub struct Method(AsciiString);
+pub enum Method {
+    /// `GET`
+    Get,
+
+    /// `HEAD`
+    Head,
+
+    /// `POST`
+    Post,
+
+    /// `PUT`
+    Put,
+
+    /// `DELETE`
+    Delete,
+
+    /// `CONNECT`
+    Connect,
+
+    /// `OPTIONS`
+    Options,
+
+    /// `TRACE`
+    Trace,
+
+    /// `PATCH`
+    Patch,
+
+    /// Request methods not standardized by the IETF
+    NonStandard(AsciiString),
+}
 
 impl Method {
-    pub fn as_str(&self) -> &AsciiStr {
-        match self { &Method(ref s) => s }
-    }
-
-    pub fn equiv(&self, other: &'static str) -> bool {
-        other.eq_ignore_ascii_case(self.as_str().as_str())
+    pub fn as_str(&self) -> &str {
+        match *self {
+            Method::Get => "GET",
+            Method::Head => "HEAD",
+            Method::Post => "POST",
+            Method::Put => "PUT",
+            Method::Delete => "DELETE",
+            Method::Connect => "CONNECT",
+            Method::Options => "OPTIONS",
+            Method::Trace => "TRACE",
+            Method::Patch => "PATCH",
+            Method::NonStandard(ref s) => s.as_str(),
+        }
     }
 }
 
@@ -276,21 +312,46 @@ impl FromStr for Method {
     type Err = ();
 
     fn from_str(s: &str) -> Result<Method, ()> {
-        <AsciiString as FromStr>::from_str(s).map(|s| Method(s))
+        Ok(match s {
+            s if s.eq_ignore_ascii_case("GET") => Method::Get,
+            s if s.eq_ignore_ascii_case("HEAD") => Method::Head,
+            s if s.eq_ignore_ascii_case("POST") => Method::Post,
+            s if s.eq_ignore_ascii_case("PUT") => Method::Put,
+            s if s.eq_ignore_ascii_case("DELETE") => Method::Delete,
+            s if s.eq_ignore_ascii_case("CONNECT") => Method::Connect,
+            s if s.eq_ignore_ascii_case("OPTIONS") => Method::Options,
+            s if s.eq_ignore_ascii_case("TRACE") => Method::Trace,
+            s if s.eq_ignore_ascii_case("PATCH") => Method::Patch,
+            s => {
+                let ascii_string = try!(AsciiString::from_str(s));
+                Method::NonStandard(ascii_string)
+            }
+        })
     }
 }
 
 impl Display for Method {
     fn fmt(&self, formatter: &mut Formatter) -> Result<(), fmt::Error> {
-        write!(formatter, "{}", self.0)
+        write!(formatter, "{}", self.as_str())
     }
 }
 
 impl PartialEq for Method {
     fn eq(&self, other: &Method) -> bool {
-        let self_str: &str = self.0.as_str().as_ref();
-        let other_str: &str = other.0.as_str().as_ref();
-        self_str.eq_ignore_ascii_case(other_str)
+        match (self, other) {
+            (&Method::NonStandard(ref s1), &Method::NonStandard(ref s2)) =>
+                s1.as_str().eq_ignore_ascii_case(s2.as_str()),
+            (&Method::Get, &Method::Get) => true,
+            (&Method::Head, &Method::Head) => true,
+            (&Method::Post, &Method::Post) => true,
+            (&Method::Put, &Method::Put) => true,
+            (&Method::Delete, &Method::Delete) => true,
+            (&Method::Connect, &Method::Connect) => true,
+            (&Method::Options, &Method::Options) => true,
+            (&Method::Trace, &Method::Trace) => true,
+            (&Method::Patch, &Method::Patch) => true,
+            _ => false,
+        }
     }
 }
 

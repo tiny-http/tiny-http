@@ -352,7 +352,7 @@ impl Request {
     fn respond_impl<R>(&mut self, response: Response<R>) where R: Read {
         let mut writer = self.into_writer_impl();
 
-        let do_not_send_body = self.method.equiv(&"HEAD");
+        let do_not_send_body = self.method == Method::Head;
 
         match response.raw_print(writer.by_ref(),
                                  self.http_version.clone(), &self.headers,

@@ -210,6 +210,12 @@ impl ServerBuilder {
         self
     }
 
+    /// The server will bind to the nic:port specified by address
+    pub fn with_address(mut self, address: net::SocketAddrV4) -> ServerBuilder {
+        self.address = address;
+        self
+    }
+
     /// The server will use a random port.
     ///
     /// Call `server.server_addr()` to retreive it once the server is created.

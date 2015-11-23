@@ -24,7 +24,7 @@ use std::str::FromStr;
 
 use common::{HTTPVersion, Method};
 use util::{SequentialReader, SequentialReaderBuilder, SequentialWriterBuilder};
-use util::ClosableTcpStream;
+use util::RefinedTcpStream;
 
 use Request;
 
@@ -36,14 +36,14 @@ pub struct ClientConnection {
 
     // sequence of Readers to the stream, so that the data is not read in
     //  the wrong order
-    source: SequentialReaderBuilder<BufReader<ClosableTcpStream>>,
+    source: SequentialReaderBuilder<BufReader<RefinedTcpStream>>,
 
     // sequence of Writers to the stream, to avoid writing response #2 before
     //  response #1
-    sink: SequentialWriterBuilder<BufWriter<ClosableTcpStream>>,
+    sink: SequentialWriterBuilder<BufWriter<RefinedTcpStream>>,
 
     // Reader to read the next header from
-	next_header_source: SequentialReader<BufReader<ClosableTcpStream>>,
+	next_header_source: SequentialReader<BufReader<RefinedTcpStream>>,
 
     // set to true if we know that the previous request is the last one
     no_more_requests: bool,
@@ -62,7 +62,7 @@ enum ReadError {
 
 impl ClientConnection {
     /// Creates a new ClientConnection that takes ownership of the TcpStream.
-    pub fn new(write_socket: ClosableTcpStream, mut read_socket: ClosableTcpStream)
+    pub fn new(write_socket: RefinedTcpStream, mut read_socket: RefinedTcpStream)
                -> ClientConnection
     {
         let remote_addr = read_socket.peer_addr();

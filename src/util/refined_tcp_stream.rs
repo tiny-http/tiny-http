@@ -16,15 +16,15 @@ use std::io::{Read, Write};
 use std::io::Result as IoResult;
 use std::net::{SocketAddr, TcpStream, Shutdown};
 
-pub struct ClosableTcpStream {
+pub struct RefinedTcpStream {
     stream: TcpStream,
     close_read: bool,
     close_write: bool,
 }
 
-impl ClosableTcpStream {
-    pub fn new(stream: TcpStream, close_read: bool, close_write: bool) -> ClosableTcpStream {
-        ClosableTcpStream {
+impl RefinedTcpStream {
+    pub fn new(stream: TcpStream, close_read: bool, close_write: bool) -> RefinedTcpStream {
+        RefinedTcpStream {
             stream: stream,
             close_read: close_read,
             close_write: close_write,
@@ -36,7 +36,7 @@ impl ClosableTcpStream {
     }
 }
 
-impl Drop for ClosableTcpStream {
+impl Drop for RefinedTcpStream {
     fn drop(&mut self) {
         if self.close_read {
             self.stream.shutdown(Shutdown::Read).ok();      // ignoring outcome
@@ -47,13 +47,13 @@ impl Drop for ClosableTcpStream {
     }
 }
 
-impl Read for ClosableTcpStream {
+impl Read for RefinedTcpStream {
     fn read(&mut self, buf: &mut [u8]) -> IoResult<usize> {
         self.stream.read(buf)
     }
 }
 
-impl Write for ClosableTcpStream {
+impl Write for RefinedTcpStream {
     fn write(&mut self, buf: &[u8]) -> IoResult<usize> {
         self.stream.write(buf)
     }

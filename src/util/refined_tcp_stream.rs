@@ -31,17 +31,41 @@ enum Stream {
     Https(SslStream<TcpStream>),
 }
 
+impl From<TcpStream> for Stream {
+    #[inline]
+    fn from(stream: TcpStream) -> Stream {
+        Stream::Http(stream)
+    }
+}
+
+#[cfg(feature = "ssl")]
+impl From<SslStream<TcpStream>> for Stream {
+    #[inline]
+    fn from(stream: SslStream<TcpStream>) -> Stream {
+        Stream::Https(stream)
+    }
+}
+
 impl RefinedTcpStream {
-    pub fn new(stream: TcpStream) -> (RefinedTcpStream, RefinedTcpStream) {
-        let read = stream.try_clone().unwrap();
+    pub fn new<S>(stream: S) -> (RefinedTcpStream, RefinedTcpStream)
+        where S: Into<Stream>
+    {
+        let stream = stream.into();
+
+        let read = match stream {
+            Stream::Http(ref stream) => Stream::Http(stream.try_clone().unwrap()),
+            #[cfg(feature = "ssl")]
+            Stream::Https(ref stream) => Stream::Https(stream.try_clone().unwrap()),
+        };
+
         let read = RefinedTcpStream {
-            stream: Stream::Http(read),
+            stream: read,
             close_read: true,
             close_write: false,
         };
 
         let write = RefinedTcpStream {
-            stream: Stream::Http(stream),
+            stream: stream,
             close_read: false,
             close_write: true,
         };

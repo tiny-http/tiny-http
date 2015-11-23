@@ -230,9 +230,7 @@ impl Server {
                 let new_client = server.accept().map(|(sock, _)| {
                     use util::RefinedTcpStream;
 
-                    let read_closable = RefinedTcpStream::new(sock.try_clone().unwrap(), true, false);
-                    let write_closable = RefinedTcpStream::new(sock, false, true);
-
+                    let (read_closable, write_closable) = RefinedTcpStream::new(sock);
                     ClientConnection::new(write_closable, read_closable)
                 });
 

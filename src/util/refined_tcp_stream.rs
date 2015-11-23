@@ -32,12 +32,21 @@ enum Stream {
 }
 
 impl RefinedTcpStream {
-    pub fn new(stream: TcpStream, close_read: bool, close_write: bool) -> RefinedTcpStream {
-        RefinedTcpStream {
+    pub fn new(stream: TcpStream) -> (RefinedTcpStream, RefinedTcpStream) {
+        let read = stream.try_clone().unwrap();
+        let read = RefinedTcpStream {
+            stream: Stream::Http(read),
+            close_read: true,
+            close_write: false,
+        };
+
+        let write = RefinedTcpStream {
             stream: Stream::Http(stream),
-            close_read: close_read,
-            close_write: close_write,
-        }
+            close_read: false,
+            close_write: true,
+        };
+
+        (read, write)
     }
 
     pub fn peer_addr(&mut self) -> IoResult<SocketAddr> {

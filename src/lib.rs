@@ -216,6 +216,13 @@ impl Server {
             (listener, local_addr)
         };
 
+        // building the SSL capabilities
+        #[cfg(feature = "ssl")]
+        type SslContext = openssl::ssl::SslContext;
+        #[cfg(not(feature = "ssl"))]
+        type SslContext = ();
+        let ssl: Option<SslContext> = None;     // TODO: implement creating the SSL stuff here
+
         // creating a task where server.accept() is continuously called
         // and ClientConnection objects are pushed in the messages queue
         let messages = MessagesQueue::with_capacity(8);
@@ -230,7 +237,17 @@ impl Server {
                 let new_client = server.accept().map(|(sock, _)| {
                     use util::RefinedTcpStream;
 
-                    let (read_closable, write_closable) = RefinedTcpStream::new(sock);
+                    let (read_closable, write_closable) = match ssl {
+                        None => RefinedTcpStream::new(sock),
+                        #[cfg(feature = "ssl")]
+                        Some(ref ssl) => {
+                            let sock = openssl::ssl::SslStream::accept(ssl, sock).unwrap();     // FIXME: handle this error
+                            RefinedTcpStream::new(sock)
+                        },
+                        #[cfg(not(feature = "ssl"))]
+                        Some(_) => unreachable!(),
+                    };
+
                     ClientConnection::new(write_closable, read_closable)
                 });
 

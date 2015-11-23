@@ -16,49 +16,85 @@ use std::io::{Read, Write};
 use std::io::Result as IoResult;
 use std::net::{SocketAddr, TcpStream, Shutdown};
 
+#[cfg(feature = "ssl")]
+use openssl::ssl::SslStream;
+
 pub struct RefinedTcpStream {
-    stream: TcpStream,
+    stream: Stream,
     close_read: bool,
     close_write: bool,
+}
+
+enum Stream {
+    Http(TcpStream),
+    #[cfg(feature = "ssl")]
+    Https(SslStream<TcpStream>),
 }
 
 impl RefinedTcpStream {
     pub fn new(stream: TcpStream, close_read: bool, close_write: bool) -> RefinedTcpStream {
         RefinedTcpStream {
-            stream: stream,
+            stream: Stream::Http(stream),
             close_read: close_read,
             close_write: close_write,
         }
     }
 
     pub fn peer_addr(&mut self) -> IoResult<SocketAddr> {
-        self.stream.peer_addr()
+        match self.stream {
+            Stream::Http(ref mut stream) => stream.peer_addr(),
+            #[cfg(feature = "ssl")]
+            Stream::Https(ref mut stream) => stream.get_ref().peer_addr(),
+        }
     }
 }
 
 impl Drop for RefinedTcpStream {
     fn drop(&mut self) {
         if self.close_read {
-            self.stream.shutdown(Shutdown::Read).ok();      // ignoring outcome
+            match self.stream {
+                // ignoring outcome
+                Stream::Http(ref mut stream) => stream.shutdown(Shutdown::Read).ok(),
+                #[cfg(feature = "ssl")]
+                Stream::Https(ref mut stream) => stream.get_mut().shutdown(Shutdown::Read).ok(),
+            };
         }
+
         if self.close_write {
-            self.stream.shutdown(Shutdown::Write).ok();     // ignoring outcome
+            match self.stream {
+                // ignoring outcome
+                Stream::Http(ref mut stream) => stream.shutdown(Shutdown::Write).ok(),
+                #[cfg(feature = "ssl")]
+                Stream::Https(ref mut stream) => stream.get_mut().shutdown(Shutdown::Write).ok(),
+            };
         }
     }
 }
 
 impl Read for RefinedTcpStream {
     fn read(&mut self, buf: &mut [u8]) -> IoResult<usize> {
-        self.stream.read(buf)
+        match self.stream {
+            Stream::Http(ref mut stream) => stream.read(buf),
+            #[cfg(feature = "ssl")]
+            Stream::Https(ref mut stream) => stream.read(buf),
+        }
     }
 }
 
 impl Write for RefinedTcpStream {
     fn write(&mut self, buf: &[u8]) -> IoResult<usize> {
-        self.stream.write(buf)
+        match self.stream {
+            Stream::Http(ref mut stream) => stream.write(buf),
+            #[cfg(feature = "ssl")]
+            Stream::Https(ref mut stream) => stream.write(buf),
+        }
     }
 
     fn flush(&mut self) -> IoResult<()> {
-        self.stream.flush()
+        match self.stream {
+            Stream::Http(ref mut stream) => stream.flush(),
+            #[cfg(feature = "ssl")]
+            Stream::Https(ref mut stream) => stream.flush(),
+        }
     }
 }

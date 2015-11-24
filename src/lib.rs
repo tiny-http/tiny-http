@@ -290,22 +290,33 @@ impl Server {
             let tasks_pool = util::TaskPool::new();
 
             loop {
-                let new_client = server.accept().map(|(sock, _)| {
-                    use util::RefinedTcpStream;
+                let new_client = match server.accept() {
+                    Ok((sock, _)) => {
+                        use util::RefinedTcpStream;
 
-                    let (read_closable, write_closable) = match ssl {
-                        None => RefinedTcpStream::new(sock),
-                        #[cfg(feature = "ssl")]
-                        Some(ref ssl) => {
-                            let sock = openssl::ssl::SslStream::accept(ssl, sock).unwrap();     // FIXME: handle this error
-                            RefinedTcpStream::new(sock)
-                        },
-                        #[cfg(not(feature = "ssl"))]
-                        Some(_) => unreachable!(),
-                    };
+                        let (read_closable, write_closable) = match ssl {
+                            None => {
+                                RefinedTcpStream::new(sock)
+                            },
+                            #[cfg(feature = "ssl")]
+                            Some(ref ssl) => {
+                                // trying to apply SSL over the connection
+                                // if an error occurs, we just close the socket and resume listening
+                                let sock = match openssl::ssl::SslStream::accept(ssl, sock) {
+                                    Ok(s) => s,
+                                    Err(_) => continue
+                                };
 
-                    ClientConnection::new(write_closable, read_closable)
-                });
+                                RefinedTcpStream::new(sock)
+                            },
+                            #[cfg(not(feature = "ssl"))]
+                            Some(_) => unreachable!(),
+                        };
+
+                        Ok(ClientConnection::new(write_closable, read_closable))
+                    },
+                    Err(e) => Err(e),
+                };
 
                 match new_client {
                     Ok(client) => {

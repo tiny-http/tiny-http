@@ -12,8 +12,8 @@ fn main() {
         private_key: include_bytes!("ssl-key.pem").to_vec(),
     }).unwrap();
 
-    println!("Note: connecting to this server will likely give you a warning from your browser
-              because the connection is unsecure. This is because the certificate used by this
+    println!("Note: connecting to this server will likely give you a warning from your browser \
+              because the connection is unsecure. This is because the certificate used by this \
               example is self-signed. With a real certificate, you wouldn't get this warning.");
 
     for request in server.incoming_requests() {

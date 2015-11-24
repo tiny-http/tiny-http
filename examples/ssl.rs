@@ -17,6 +17,8 @@ fn main() {
               example is self-signed. With a real certificate, you wouldn't get this warning.");
 
     for request in server.incoming_requests() {
+        assert!(request.secure());
+
         println!("received request! method: {:?}, url: {:?}, headers: {:?}",
             request.method(),
             request.url(),

@@ -73,6 +73,16 @@ impl RefinedTcpStream {
         (read, write)
     }
 
+    /// Returns true if this struct wraps arounds a secure connection.
+    #[inline]
+    pub fn secure(&self) -> bool {
+        match self.stream {
+            Stream::Http(_) => false,
+            #[cfg(feature = "ssl")]
+            Stream::Https(_) => true,
+        }
+    }
+
     pub fn peer_addr(&mut self) -> IoResult<SocketAddr> {
         match self.stream {
             Stream::Http(ref mut stream) => stream.peer_addr(),

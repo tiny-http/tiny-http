@@ -47,6 +47,9 @@ pub struct ClientConnection {
 
     // set to true if we know that the previous request is the last one
     no_more_requests: bool,
+
+    // true if the connection goes through SSL
+    secure: bool,
 }
 
 /// Error that can happen when reading a request.
@@ -66,6 +69,7 @@ impl ClientConnection {
                -> ClientConnection
     {
         let remote_addr = read_socket.peer_addr();
+        let secure = read_socket.secure();
 
         let mut source = SequentialReaderBuilder::new(BufReader::with_capacity(1024, read_socket));
         let first_header = source.next().unwrap();
@@ -76,6 +80,7 @@ impl ClientConnection {
             remote_addr: remote_addr,
             next_header_source: first_header,
             no_more_requests: false,
+            secure: secure,
         }
     }
 
@@ -152,7 +157,7 @@ impl ClientConnection {
         ::std::mem::swap(&mut self.next_header_source, &mut data_source);
 
         // building the next reader
-        let request = try!(::request::new_request(method, path, version.clone(),
+        let request = try!(::request::new_request(self.secure, method, path, version.clone(),
                 headers, self.remote_addr.as_ref().unwrap().clone(), data_source, writer)
             .map_err(|e| {
                 use request;

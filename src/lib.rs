@@ -263,7 +263,7 @@ impl Server {
                 try!(ctxt.set_certificate(&certificate));
                 let private_key = try!(PKey::private_key_from_pem(&mut Cursor::new(&config.private_key)));
                 try!(ctxt.set_private_key(&private_key));
-                ctxt.set_verify(SSL_VERIFY_PEER, None);
+                //ctxt.set_verify(SSL_VERIFY_PEER, None);
                 try!(ctxt.check_private_key());
 
                 // let's wipe the certificate and private key from memory, because we're

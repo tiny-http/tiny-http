@@ -259,9 +259,9 @@ impl Server {
 
                 let mut ctxt = try!(SslContext::new(ssl::SslMethod::Sslv23));
                 try!(ctxt.set_cipher_list("DEFAULT"));
-                let certificate = try!(X509::from_pem(&mut Cursor::new(&config.certificate)));
+                let certificate = try!(X509::from_pem(&mut Cursor::new(&config.certificate[..])));
                 try!(ctxt.set_certificate(&certificate));
-                let private_key = try!(PKey::private_key_from_pem(&mut Cursor::new(&config.private_key)));
+                let private_key = try!(PKey::private_key_from_pem(&mut Cursor::new(&config.private_key[..])));
                 try!(ctxt.set_private_key(&private_key));
                 ctxt.set_verify(SSL_VERIFY_NONE, None);
                 try!(ctxt.check_private_key());

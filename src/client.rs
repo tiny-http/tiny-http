@@ -224,7 +224,7 @@ impl Iterator for ClientConnection {
                 let writer = self.sink.next().unwrap();
                 let response =
                     Response::from_string("This server only supports HTTP versions 1.0 and 1.1"
-                        .to_string()).with_status_code(StatusCode(505));
+                        .to_owned()).with_status_code(StatusCode(505));
                 response.raw_print(writer, HTTPVersion(1, 1), &[], false, None).ok();
                 continue
             }
@@ -261,13 +261,13 @@ impl Iterator for ClientConnection {
 
 /// Parses a "HTTP/1.1" string.
 fn parse_http_version(version: &str) -> Result<HTTPVersion, ReadError> {
-    let elems = version.splitn(2, '/').map(|e| e.to_string()).collect::<Vec<String>>();
+    let elems = version.splitn(2, '/').map(|e| e.to_owned()).collect::<Vec<String>>();
     if elems.len() != 2 {
         return Err(ReadError::WrongRequestLine)
     }
 
     let elems = elems[1].splitn(2, '.')
-        .map(|e| e.to_string()).collect::<Vec<String>>();
+        .map(|e| e.to_owned()).collect::<Vec<String>>();
     if elems.len() != 2 {
         return Err(ReadError::WrongRequestLine)
     }
@@ -300,7 +300,7 @@ fn parse_request_line(line: &str) -> Result<(Method, String, HTTPVersion), ReadE
 
     let version = try!(parse_http_version(version));
 
-    Ok((method, path.to_string(), version))
+    Ok((method, path.to_owned(), version))
 }
 
 #[cfg(test)]

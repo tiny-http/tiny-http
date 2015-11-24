@@ -255,7 +255,7 @@ impl Server {
                 use openssl::ssl;
                 use openssl::x509::X509;
                 use openssl::crypto::pkey::PKey;
-                use openssl::ssl::SSL_VERIFY_PEER;
+                use openssl::ssl::SSL_VERIFY_NONE;
 
                 let mut ctxt = try!(SslContext::new(ssl::SslMethod::Sslv23));
                 try!(ctxt.set_cipher_list("DEFAULT"));
@@ -263,7 +263,7 @@ impl Server {
                 try!(ctxt.set_certificate(&certificate));
                 let private_key = try!(PKey::private_key_from_pem(&mut Cursor::new(&config.private_key)));
                 try!(ctxt.set_private_key(&private_key));
-                //ctxt.set_verify(SSL_VERIFY_PEER, None);
+                ctxt.set_verify(SSL_VERIFY_NONE, None);
                 try!(ctxt.check_private_key());
 
                 // let's wipe the certificate and private key from memory, because we're

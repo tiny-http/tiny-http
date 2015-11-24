@@ -70,7 +70,7 @@ fn main() {
         args.nth(1).unwrap()
     };
 
-    let server = Arc::new(tiny_http::ServerBuilder::new().with_port(9975).build().unwrap());
+    let server = Arc::new(tiny_http::Server::http("0.0.0.0:9975").unwrap());
     println!("Now listening on port 9975");
 
     let num_cpus = 4;  // TODO: dynamically generate this value

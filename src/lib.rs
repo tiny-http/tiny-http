@@ -17,14 +17,14 @@
 
 ## Creating the server
 
-The easiest way to create a server is to call `Server::new()`.
+The easiest way to create a server is to call `Server::http()`.
 
-The `new()` function returns an `IoResult<Server>` which will return an error
+The `http()` function returns an `IoResult<Server>` which will return an error
 in the case where the server creation fails (for example if the listening port is already
 occupied).
 
 ```no_run
-let server = tiny_http::ServerBuilder::new().build().unwrap();
+let server = tiny_http::Server::http("0.0.0.0:0").unwrap();
 ```
 
 A newly-created `Server` will immediatly start listening for incoming connections and HTTP
@@ -36,7 +36,7 @@ Calling `server.recv()` will block until the next request is available.
 This function returns an `IoResult<Request>`, so you need to handle the possible errors.
 
 ```no_run
-# let server = tiny_http::ServerBuilder::new().build().unwrap();
+# let server = tiny_http::Server::http("0.0.0.0:0").unwrap();
 
 loop {
     // blocks until the next request is received
@@ -56,7 +56,7 @@ In a real-case scenario, you will probably want to spawn multiple worker tasks a
 ```no_run
 # use std::sync::Arc;
 # use std::thread;
-# let server = tiny_http::ServerBuilder::new().build().unwrap();
+# let server = tiny_http::Server::http("0.0.0.0:0").unwrap();
 let server = Arc::new(server);
 let mut guards = Vec::with_capacity(4);
 
@@ -97,7 +97,7 @@ All that remains to do is call `request.respond()`:
 ```no_run
 # use std::fs::File;
 # use std::path::Path;
-# let server = tiny_http::ServerBuilder::new().build().unwrap();
+# let server = tiny_http::Server::http("0.0.0.0:0").unwrap();
 # let request = server.recv().unwrap();
 # let response = tiny_http::Response::from_file(File::open(&Path::new("image.png")).unwrap());
 request.respond(response)
@@ -119,6 +119,7 @@ use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::thread;
 use std::net;
+use std::net::ToSocketAddrs;
 
 use client::ClientConnection;
 use util::MessagesQueue;
@@ -180,72 +181,34 @@ pub struct IncomingRequests<'a> {
     server: &'a Server
 }
 
-/// Object which allows you to build a server.
-pub struct ServerBuilder {
-    // the address to listen to
-    address: net::SocketAddrV4,
-
-    // number of milliseconds before client timeout
-    client_timeout_ms: u32,
-
-    // maximum number of clients before 503
-    // TODO:
-    //max_clients: usize,
-}
-
-impl ServerBuilder {
-    /// Creates a new builder.
-    pub fn new() -> ServerBuilder {
-        ServerBuilder {
-            address: net::SocketAddrV4::new(net::Ipv4Addr::new(0, 0, 0, 0), 80),
-            client_timeout_ms: 60 * 1000,
-            //max_clients: { use std::num::Bounded; Bounded::max_value() },
-        }
-    }
-
-    /// The server will use a precise port.
-    pub fn with_port(mut self, port: u16) -> ServerBuilder {
-        let addr = self.address.ip().clone();
-        self.address = net::SocketAddrV4::new(addr, port);
-        self
-    }
-
-    /// The server will bind to the nic:port specified by address
-    pub fn with_address(mut self, address: net::SocketAddrV4) -> ServerBuilder {
-        self.address = address;
-        self
-    }
-
-    /// The server will use a random port.
-    ///
-    /// Call `server.server_addr()` to retreive it once the server is created.
-    pub fn with_random_port(mut self) -> ServerBuilder {
-        let addr = self.address.ip().clone();
-        self.address = net::SocketAddrV4::new(addr, 0);
-        self
-    }
-
-    /// The server will use a precise port.
-    pub fn with_client_connections_timeout(mut self, milliseconds: u32) -> ServerBuilder {
-        self.client_timeout_ms = milliseconds;
-        self
-    }
-
-    /// Builds the server with the given configuration.
-    pub fn build(self) -> IoResult<Server> {
-        Server::new(self)
-    }
+/// Represents the parameters required to create a server.
+#[derive(Debug, Clone)]
+pub struct ServerConfig<A> where A: ToSocketAddrs {
+    /// The addresses to listen to.
+    pub addr: A,
 }
 
 impl Server {
+    /// Shortcut for a simple server on a specific address.
+    #[inline]
+    pub fn http<A>(addr: A) -> IoResult<Server>
+        where A: ToSocketAddrs
+    {
+        Server::new(ServerConfig {
+            addr: addr,
+        })
+    }
+
     /// Builds a new server that listens on the specified address.
-    fn new(config: ServerBuilder) -> IoResult<Server> {
+    pub fn new<A>(config: ServerConfig<A>) -> IoResult<Server>
+        where A: ToSocketAddrs
+    {
         // building the "close" variable
         let close_trigger = Arc::new(AtomicBool::new(false));
 
         // building the TcpListener
         let (server, local_addr) = {
-            let listener = try!(net::TcpListener::bind(net::SocketAddr::V4(config.address)));
+            let listener = try!(net::TcpListener::bind(config.addr));
             let local_addr = try!(listener.local_addr());
             (listener, local_addr)
         };

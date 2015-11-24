@@ -53,7 +53,7 @@ fn convert_key(input: &str) -> String {
 }
 
 fn main() {
-    let server = tiny_http::ServerBuilder::new().with_random_port().build().unwrap();
+    let server = tiny_http::Server::http("0.0.0.0:0").unwrap();
     let port = server.server_addr().port;
 
     println!("Server started");

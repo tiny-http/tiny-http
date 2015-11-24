@@ -1,9 +1,9 @@
 extern crate tiny_http;
 
 fn main() {
-    use tiny_http::{ServerBuilder, Response};
+    use tiny_http::{Server, Response};
 
-    let server = ServerBuilder::new().with_port(8000).build().unwrap();
+    let server = Server::http("0.0.0.0:8000").unwrap();
 
     for request in server.incoming_requests() {
         println!("received request! method: {:?}, url: {:?}, headers: {:?}",

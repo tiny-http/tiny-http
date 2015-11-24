@@ -25,7 +25,7 @@ fn get_content_type(path: &Path) -> &'static str {
 
 fn main() {
     use ascii::AsciiCast;
-    let server = tiny_http::ServerBuilder::new().with_random_port().build().unwrap();
+    let server = tiny_http::Server::http("0.0.0.0:8000").unwrap();
     let port = server.server_addr().port();
     println!("Now listening on port {}", port);
 

@@ -10,7 +10,7 @@ use std::process::Command;
 #[ignore]
 // TODO: obtain time
 fn curl_bench() {
-    let server = tiny_http::ServerBuilder::new().with_random_port().build().unwrap();
+    let server = tiny_http::Server::http("0.0.0.0:0").unwrap();
     let port = server.server_addr().port;
     let num_requests = 10usize;
 
@@ -30,7 +30,7 @@ fn curl_bench() {
 fn sequential_requests(bencher: &mut test::Bencher) {
     ::std::io::test::raise_fd_limit();
 
-    let server = tiny_http::ServerBuilder::new().with_random_port().build().unwrap();
+    let server = tiny_http::Server::http("0.0.0.0:0").unwrap();
     let port = server.server_addr().port;
 
     let mut stream = std::io::net::tcp::TcpStream::connect("127.0.0.1", port).unwrap();
@@ -50,7 +50,7 @@ fn sequential_requests(bencher: &mut test::Bencher) {
 fn parallel_requests(bencher: &mut test::Bencher) {
     ::std::io::test::raise_fd_limit();
 
-    let server = tiny_http::ServerBuilder::new().with_random_port().build().unwrap();
+    let server = tiny_http::Server::http("0.0.0.0:0").unwrap();
     let port = server.server_addr().port;
 
     bencher.bench_n(5, |_| {

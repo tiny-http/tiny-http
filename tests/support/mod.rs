@@ -4,7 +4,7 @@ use tiny_http;
 
 /// Creates a server and a client connected to the server.
 pub fn new_one_server_one_client() -> (tiny_http::Server, TcpStream) {
-    let server = tiny_http::ServerBuilder::new().with_random_port().build().unwrap();
+    let server = tiny_http::Server::http("0.0.0.0:0").unwrap();
     let port = server.server_addr().port();
     let client = TcpStream::connect(("127.0.0.1", port)).unwrap();
     (server, client)
@@ -14,7 +14,7 @@ pub fn new_one_server_one_client() -> (tiny_http::Server, TcpStream) {
 /// 
 /// The server will automatically close after 3 seconds.
 pub fn new_client_to_hello_world_server() -> TcpStream {
-    let server = tiny_http::ServerBuilder::new().with_random_port().build().unwrap();
+    let server = tiny_http::Server::http("0.0.0.0:0").unwrap();
     let port = server.server_addr().port();
     let client = TcpStream::connect(("127.0.0.1", port)).unwrap();
 

@@ -4,12 +4,12 @@ use std::sync::Arc;
 use std::thread;
 
 fn main() {
-    let server = Arc::new(tiny_http::ServerBuilder::new().with_port(9975).build().unwrap());
+    let server = Arc::new(tiny_http::Server::http("0.0.0.0:9975").unwrap());
     println!("Now listening on port 9975");
 
     let mut handles = Vec::new();
 
-    for _ in (0 .. 4) {
+    for _ in 0 .. 4 {
         let server = server.clone();
 
         handles.push(thread::spawn(move || {

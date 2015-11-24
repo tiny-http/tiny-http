@@ -12,22 +12,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub use self::closable_tcp_stream::ClosableTcpStream;
 pub use self::custom_stream::CustomStream;
 pub use self::encoding_decoder::EncodingDecoder;
 pub use self::equal_reader::EqualReader;
 pub use self::messages_queue::MessagesQueue;
+pub use self::refined_tcp_stream::RefinedTcpStream;
 pub use self::sequential::{SequentialReaderBuilder, SequentialReader};
 pub use self::sequential::{SequentialWriterBuilder, SequentialWriter};
 pub use self::task_pool::TaskPool;
 
 use std::str::FromStr;
 
-mod closable_tcp_stream;
 mod custom_stream;
 mod encoding_decoder;
 mod equal_reader;
 mod messages_queue;
+mod refined_tcp_stream;
 mod sequential;
 mod task_pool;
 

@@ -113,6 +113,10 @@ extern crate encoding;
 extern crate url;
 extern crate chrono;
 
+#[cfg(feature = "ssl")]
+extern crate openssl;
+
+use std::error::Error;
 use std::io::Error as IoError;
 use std::io::Result as IoResult;
 use std::sync::Arc;
@@ -186,21 +190,47 @@ pub struct IncomingRequests<'a> {
 pub struct ServerConfig<A> where A: ToSocketAddrs {
     /// The addresses to listen to.
     pub addr: A,
+
+    /// If `Some`, then the server will use SSL to encode the communications.
+    pub ssl: Option<SslConfig>,
+}
+
+/// Configuration of the server for SSL.
+#[derive(Debug, Clone)]
+pub struct SslConfig {
+    /// Contains the public certificate to send to clients.
+    pub certificate: Vec<u8>,
+    /// Contains the ultra-secret private key used to decode communications.
+    pub private_key: Vec<u8>,
 }
 
 impl Server {
     /// Shortcut for a simple server on a specific address.
     #[inline]
-    pub fn http<A>(addr: A) -> IoResult<Server>
+    pub fn http<A>(addr: A) -> Result<Server, Box<Error + Send + Sync + 'static>>
         where A: ToSocketAddrs
     {
         Server::new(ServerConfig {
             addr: addr,
+            ssl: None,
+        })
+    }
+
+    /// Shortcut for an HTTPS server on a specific address.
+    #[cfg(feature = "ssl")]
+    #[inline]
+    pub fn https<A>(addr: A, config: SslConfig)
+                    -> Result<Server, Box<Error + Send + Sync + 'static>>
+        where A: ToSocketAddrs
+    {
+        Server::new(ServerConfig {
+            addr: addr,
+            ssl: Some(config),
         })
     }
 
     /// Builds a new server that listens on the specified address.
-    pub fn new<A>(config: ServerConfig<A>) -> IoResult<Server>
+    pub fn new<A>(config: ServerConfig<A>) -> Result<Server, Box<Error + Send + Sync + 'static>>
         where A: ToSocketAddrs
     {
         // building the "close" variable
@@ -211,6 +241,42 @@ impl Server {
             let listener = try!(net::TcpListener::bind(config.addr));
             let local_addr = try!(listener.local_addr());
             (listener, local_addr)
+        };
+
+        // building the SSL capabilities
+        #[cfg(feature = "ssl")]
+        type SslContext = openssl::ssl::SslContext;
+        #[cfg(not(feature = "ssl"))]
+        type SslContext = ();
+        let ssl: Option<SslContext> = match config.ssl {
+            #[cfg(feature = "ssl")]
+            Some(mut config) => {
+                use std::io::Cursor;
+                use openssl::ssl;
+                use openssl::x509::X509;
+                use openssl::crypto::pkey::PKey;
+                use openssl::ssl::SSL_VERIFY_NONE;
+
+                let mut ctxt = try!(SslContext::new(ssl::SslMethod::Sslv23));
+                try!(ctxt.set_cipher_list("DEFAULT"));
+                let certificate = try!(X509::from_pem(&mut Cursor::new(&config.certificate[..])));
+                try!(ctxt.set_certificate(&certificate));
+                let private_key = try!(PKey::private_key_from_pem(&mut Cursor::new(&config.private_key[..])));
+                try!(ctxt.set_private_key(&private_key));
+                ctxt.set_verify(SSL_VERIFY_NONE, None);
+                try!(ctxt.check_private_key());
+
+                // let's wipe the certificate and private key from memory, because we're
+                // better safe than sorry
+                for b in &mut config.certificate { *b = 0; }
+                for b in &mut config.private_key { *b = 0; }
+
+                Some(ctxt)
+            },
+            #[cfg(not(feature = "ssl"))]
+            Some(_) => return Err("Building a server with SSL requires enabling the `ssl` feature \
+                                   in tiny-http".to_owned().into()),
+            None => None,
         };
 
         // creating a task where server.accept() is continuously called
@@ -224,14 +290,33 @@ impl Server {
             let tasks_pool = util::TaskPool::new();
 
             loop {
-                let new_client = server.accept().map(|(sock, _)| {
-                    use util::ClosableTcpStream;
+                let new_client = match server.accept() {
+                    Ok((sock, _)) => {
+                        use util::RefinedTcpStream;
 
-                    let read_closable = ClosableTcpStream::new(sock.try_clone().unwrap(), true, false);
-                    let write_closable = ClosableTcpStream::new(sock, false, true);
+                        let (read_closable, write_closable) = match ssl {
+                            None => {
+                                RefinedTcpStream::new(sock)
+                            },
+                            #[cfg(feature = "ssl")]
+                            Some(ref ssl) => {
+                                // trying to apply SSL over the connection
+                                // if an error occurs, we just close the socket and resume listening
+                                let sock = match openssl::ssl::SslStream::accept(ssl, sock) {
+                                    Ok(s) => s,
+                                    Err(_) => continue
+                                };
 
-                    ClientConnection::new(write_closable, read_closable)
-                });
+                                RefinedTcpStream::new(sock)
+                            },
+                            #[cfg(not(feature = "ssl"))]
+                            Some(_) => unreachable!(),
+                        };
+
+                        Ok(ClientConnection::new(write_closable, read_closable))
+                    },
+                    Err(e) => Err(e),
+                };
 
                 match new_client {
                     Ok(client) => {

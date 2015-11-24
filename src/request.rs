@@ -66,6 +66,9 @@ pub struct Request {
 
     remote_addr: SocketAddr,
 
+    // true if HTTPS, false if HTTP
+    secure: bool,
+
     method: Method,
 
     path: String,
@@ -104,7 +107,7 @@ impl From<IoError> for RequestCreationError {
 /// It is the responsibility of the `Request` to read only the data of the request and not further.
 ///
 /// The `Write` object will be used by the `Request` to write the response.
-pub fn new_request<R, W>(method: Method, path: String,
+pub fn new_request<R, W>(secure: bool, method: Method, path: String,
                          version: HTTPVersion, headers: Vec<Header>,
                          remote_addr: SocketAddr, mut source_data: R, writer: W)
                          -> Result<Request, RequestCreationError>
@@ -200,6 +203,7 @@ pub fn new_request<R, W>(method: Method, path: String,
         data_reader: Some(reader),
         response_writer: Some(Box::new(writer) as Box<Write + Send + 'static>),
         remote_addr: remote_addr,
+        secure: secure,
         method: method,
         path: path,
         http_version: version,
@@ -210,6 +214,12 @@ pub fn new_request<R, W>(method: Method, path: String,
 }
 
 impl Request {
+    /// Returns true if the request was made through HTTPS.
+    #[inline]
+    pub fn secure(&self) -> bool {
+        self.secure
+    }
+
     /// Returns the method requested by the client (eg. `GET`, `POST`, etc.).
     #[inline]
     pub fn method(&self) -> &Method {

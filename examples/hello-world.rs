@@ -15,7 +15,7 @@ fn main() {
         handles.push(thread::spawn(move || {
             for rq in server.incoming_requests() {
                 let response = tiny_http::Response::from_string("hello world".to_string());
-                rq.respond(response);
+                let _ = rq.respond(response);
             }
         }));
     }

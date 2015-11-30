@@ -51,11 +51,11 @@ fn main() {
                 }
             );
 
-            rq.respond(response);
+            let _ = rq.respond(response);
 
         } else {
             let rep = tiny_http::Response::new_empty(tiny_http::StatusCode(404));
-            rq.respond(rep);
+            let _ = rq.respond(rep);
         }
     }
 }

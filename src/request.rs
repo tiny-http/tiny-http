@@ -355,11 +355,15 @@ impl Request {
 
     /// Sends a response to this request.
     #[inline]
-    pub fn respond<R>(mut self, response: Response<R>) where R: Read {
+    pub fn respond<R>(mut self, response: Response<R>) -> Result<(), IoError>
+        where R: Read
+    {
         self.respond_impl(response)
     }
 
-    fn respond_impl<R>(&mut self, response: Response<R>) where R: Read {
+    fn respond_impl<R>(&mut self, response: Response<R>) -> Result<(), IoError>
+        where R: Read
+    {
         let mut writer = self.into_writer_impl();
 
         let do_not_send_body = self.method == Method::Head;
@@ -373,11 +377,10 @@ impl Request {
             Err(ref err) if err.kind() == ErrorKind::ConnectionAborted => (),
             Err(ref err) if err.kind() == ErrorKind::ConnectionRefused => (),
             Err(ref err) if err.kind() == ErrorKind::ConnectionReset => (),
-            Err(ref err) =>
-                println!("error while sending answer: {}", err)     // TODO: handle better?
+            Err(err) => return Err(err)
         };
 
-        writer.flush().ok();
+        writer.flush()
     }
 }
 
@@ -391,7 +394,7 @@ impl Drop for Request {
     fn drop(&mut self) {
         if self.response_writer.is_some() {
             let response = Response::empty(500);
-            self.respond_impl(response);
+            let _ = self.respond_impl(response);        // ignoring any potential error
         }
     }
 }

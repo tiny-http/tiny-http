@@ -126,13 +126,13 @@ fn responses_reordered() {
         let rq2 = server.recv().unwrap();
 
         thread::spawn(move || {
-            rq2.respond(tiny_http::Response::from_string(format!("second request")));
+            rq2.respond(tiny_http::Response::from_string(format!("second request"))).unwrap();
         });
 
         thread::sleep_ms(100);
 
         thread::spawn(move || {
-            rq1.respond(tiny_http::Response::from_string(format!("first request")));
+            rq1.respond(tiny_http::Response::from_string(format!("first request"))).unwrap();
         });
     });
 

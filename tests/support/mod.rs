@@ -25,7 +25,7 @@ pub fn new_client_to_hello_world_server() -> TcpStream {
             match server.try_recv().unwrap() {
                 Some(rq) => {
                     let response = tiny_http::Response::from_string("hello world".to_string());
-                    rq.respond(response);
+                    rq.respond(response).unwrap();
                 },
                 _ => ()
             };

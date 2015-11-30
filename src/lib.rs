@@ -100,7 +100,7 @@ All that remains to do is call `request.respond()`:
 # let server = tiny_http::Server::http("0.0.0.0:0").unwrap();
 # let request = server.recv().unwrap();
 # let response = tiny_http::Response::from_file(File::open(&Path::new("image.png")).unwrap());
-request.respond(response)
+let _ = request.respond(response);
 ```
 */
 #![crate_name = "tiny_http"]

@@ -13,7 +13,7 @@ fn basic_handling() {
     let request = server.recv().unwrap();
     assert!(*request.method() == tiny_http::Method::Get);
     //assert!(request.url() == "/");
-    request.respond(tiny_http::Response::from_string(format!("hello world")));
+    request.respond(tiny_http::Response::from_string(format!("hello world"))).unwrap();
 
     server.try_recv().unwrap();
 

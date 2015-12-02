@@ -252,7 +252,11 @@ impl Request {
         self.body_length
     }
 
-    /// Returns the length of the body in bytes.
+    /// Returns the address of the client that sent this request.
+    ///
+    /// Note that this is gathered from the socket. If you receive the request from a proxy,
+    /// this function will return the address of the proxy and not the address of the actual
+    /// user.
     #[inline]
     pub fn remote_addr(&self) -> &SocketAddr {
         &self.remote_addr

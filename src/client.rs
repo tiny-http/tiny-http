@@ -102,11 +102,8 @@ impl ClientConnection {
 
             if byte == b'\n' && prev_byte_was_cr {
                 buf.pop();  // removing the '\r'
-                return match AsciiString::from_bytes(buf) {
-                    Ok(s) => Ok(s),
-                    Err(_) => return Err(IoError::new(ErrorKind::InvalidInput,
-                                                      "Header is not in ASCII"))
-                }
+                return AsciiString::from_ascii(buf)
+                    .map_err(|_| IoError::new(ErrorKind::InvalidInput, "Header is not in ASCII"))
             }
 
             prev_byte_was_cr = byte == b'\r';

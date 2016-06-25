@@ -164,7 +164,7 @@ impl Header {
                                     B2: Into<Vec<u8>> + AsRef<[u8]>
     {
         let header = try!(HeaderField::from_bytes(header).or(Err(())));
-        let value = try!(AsciiString::from_bytes(value).or(Err(())));
+        let value = try!(AsciiString::from_ascii(value).or(Err(())));
 
         Ok(Header { field: header, value: value })
     }
@@ -190,10 +190,7 @@ impl FromStr for Header {
             _ => return Err(())
         };
 
-        let value = match AsciiStr::from_str(value.trim()) {
-            Some(v) => v.to_ascii_string(),
-            None => return Err(())
-        };
+        let value = try!(AsciiString::from_ascii(value.trim()).map_err(|_| () ));
 
         Ok(Header {
             field: field,
@@ -216,7 +213,7 @@ pub struct HeaderField(AsciiString);
 
 impl HeaderField {
     pub fn from_bytes<B>(bytes: B) -> Result<HeaderField, B> where B: Into<Vec<u8>> + AsRef<[u8]> {
-        AsciiString::from_bytes(bytes).map(|s| HeaderField(s))
+        AsciiString::from_ascii(bytes).map(HeaderField)
     }
 
     pub fn as_str<'a>(&'a self) -> &'a AsciiStr {
@@ -232,7 +229,7 @@ impl FromStr for HeaderField {
     type Err = ();
 
     fn from_str(s: &str) -> Result<HeaderField, ()> {
-        AsciiStr::from_str(s.trim()).map(|s| HeaderField(s.to_ascii_string())).ok_or(())
+        AsciiString::from_ascii(s.trim()).map(HeaderField).map_err(|_| () )
     }
 }
 
@@ -323,7 +320,7 @@ impl FromStr for Method {
             s if s.eq_ignore_ascii_case("TRACE") => Method::Trace,
             s if s.eq_ignore_ascii_case("PATCH") => Method::Patch,
             s => {
-                let ascii_string = try!(AsciiString::from_str(s));
+                let ascii_string = try!(AsciiString::from_ascii(s).map_err(|_| () ));
                 Method::NonStandard(ascii_string)
             }
         })

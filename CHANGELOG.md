@@ -1,5 +1,15 @@
 # Changes
 
+## 0.5.2
+
+* Update ascii to version 0.7
+ * https://github.com/frewsxcv/tiny-http/pull/114
+
+## 0.5.1
+
+* Request::respond now returns an IoResult
+ * https://github.com/frewsxcv/tiny-http/pull/110
+
 ## 0.5.0
 
 * HTTPS support

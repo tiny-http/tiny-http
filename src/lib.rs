@@ -124,6 +124,7 @@ use std::sync::atomic::AtomicBool;
 use std::thread;
 use std::net;
 use std::net::ToSocketAddrs;
+use std::time::Duration;
 
 use client::ClientConnection;
 use util::MessagesQueue;
@@ -369,22 +370,27 @@ impl Server {
 
     /// Blocks until an HTTP request has been submitted and returns it.
     pub fn recv(&self) -> IoResult<Request> {
-        loop {
-            match self.messages.pop() {
-                Message::Error(err) => return Err(err),
-                Message::NewRequest(rq) => return Ok(rq),
-            }
+        match self.messages.pop() {
+            Message::Error(err) => return Err(err),
+            Message::NewRequest(rq) => return Ok(rq),
+        }
+    }
+
+    /// Same as `recv()` but doesn't block longer than timeout
+    pub fn recv_timeout(&self, timeout: Duration) -> IoResult<Option<Request>> {
+        match self.messages.pop_timeout(timeout) {
+            Some(Message::Error(err)) => return Err(err),
+            Some(Message::NewRequest(rq)) => return Ok(Some(rq)),
+            None => return Ok(None)
         }
     }
 
     /// Same as `recv()` but doesn't block.
     pub fn try_recv(&self) -> IoResult<Option<Request>> {
-        loop {
-            match self.messages.try_pop() {
-                Some(Message::Error(err)) => return Err(err),
-                Some(Message::NewRequest(rq)) => return Ok(Some(rq)),
-                None => return Ok(None)
-            }
+        match self.messages.try_pop() {
+            Some(Message::Error(err)) => return Err(err),
+            Some(Message::NewRequest(rq)) => return Ok(Some(rq)),
+            None => return Ok(None)
         }
     }
 }

@@ -1,5 +1,10 @@
 # Changes
 
+## 0.5.3
+
+* Add try_recv_timeout function to the server
+ * https://github.com/frewsxcv/tiny-http/pull/116
+
 ## 0.5.2
 
 * Update ascii to version 0.7

@@ -15,6 +15,7 @@
 use std::sync::{Arc, Mutex, Condvar};
 use std::sync::atomic::{Ordering, AtomicUsize};
 use std::collections::VecDeque;
+use std::time::Duration;
 use std::thread;
 
 /// Manages a collection of threads.
@@ -122,11 +123,11 @@ impl TaskPool {
                             true
 
                         } else {
-                            let (new_lock, receved) = sharing.condvar
-                                                             .wait_timeout_ms(todo, 5000)
+                            let (new_lock, waitres) = sharing.condvar
+                                                             .wait_timeout(todo, Duration::from_millis(5000))
                                                              .unwrap();
                             todo = new_lock;
-                            receved
+                            !waitres.timed_out()
                         };
 
                         if !received && todo.is_empty() {

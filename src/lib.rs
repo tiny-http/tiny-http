@@ -125,6 +125,7 @@ use std::thread;
 use std::net;
 use std::net::ToSocketAddrs;
 use std::time::Duration;
+use std::sync::atomic::Ordering::Relaxed;
 
 use client::ClientConnection;
 use util::MessagesQueue;
@@ -290,7 +291,7 @@ impl Server {
             // a tasks pool is used to dispatch the connections into threads
             let tasks_pool = util::TaskPool::new();
 
-            loop {
+            while !inside_close_trigger.load(Relaxed) {
                 let new_client = match server.accept() {
                     Ok((sock, _)) => {
                         use util::RefinedTcpStream;
@@ -404,7 +405,6 @@ impl<'a> Iterator for IncomingRequests<'a> {
 
 impl Drop for Server {
     fn drop(&mut self) {
-        use std::sync::atomic::Ordering::Relaxed;
         self.close.store(true, Relaxed);
     }
 }

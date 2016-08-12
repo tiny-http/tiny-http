@@ -25,7 +25,7 @@ pub struct RefinedTcpStream {
     close_write: bool,
 }
 
-enum Stream {
+pub enum Stream {
     Http(TcpStream),
     #[cfg(feature = "ssl")]
     Https(SslStream<TcpStream>),

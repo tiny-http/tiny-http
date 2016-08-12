@@ -1,5 +1,10 @@
 # Changes
 
+## 0.5.4
+
+* Fix compilation warnings
+ * https://github.com/frewsxcv/tiny-http/pull/118
+
 ## 0.5.3
 
 * Add try_recv_timeout function to the server

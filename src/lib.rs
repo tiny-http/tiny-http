@@ -126,7 +126,7 @@ use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::thread;
 use std::net;
-use std::net::ToSocketAddrs;
+use std::net::{ToSocketAddrs, TcpStream, Shutdown};
 use std::time::Duration;
 use std::sync::atomic::Ordering::Relaxed;
 
@@ -300,7 +300,6 @@ impl Server {
                 let new_client = match server.accept() {
                     Ok((sock, _)) => {
                         use util::RefinedTcpStream;
-
                         let (read_closable, write_closable) = match ssl {
                             None => {
                                 RefinedTcpStream::new(sock)
@@ -413,5 +412,10 @@ impl<'a> Iterator for IncomingRequests<'a> {
 impl Drop for Server {
     fn drop(&mut self) {
         self.close.store(true, Relaxed);
+        // Connect briefly to ourselves to unblock the accept thread
+        let maybe_stream = TcpStream::connect(self.listening_addr);
+        if let Ok(stream) = maybe_stream {
+            let _ = stream.shutdown(Shutdown::Both);
+        }
     }
 }

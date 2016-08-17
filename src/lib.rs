@@ -107,6 +107,9 @@ let _ = request.respond(response);
 #![crate_type = "lib"]
 #![forbid(unsafe_code)]
 
+#[macro_use]
+extern crate log;
+
 extern crate ascii;
 extern crate chunked_transfer;
 extern crate encoding;
@@ -242,6 +245,7 @@ impl Server {
         let (server, local_addr) = {
             let listener = try!(net::TcpListener::bind(config.addr));
             let local_addr = try!(listener.local_addr());
+            debug!("Server listening on {}", local_addr);
             (listener, local_addr)
         };
 
@@ -291,6 +295,7 @@ impl Server {
             // a tasks pool is used to dispatch the connections into threads
             let tasks_pool = util::TaskPool::new();
 
+            debug!("Running accept thread");
             while !inside_close_trigger.load(Relaxed) {
                 let new_client = match server.accept() {
                     Ok((sock, _)) => {
@@ -334,11 +339,13 @@ impl Server {
                     },
 
                     Err(e) => {
+                        error!("Error accepting new client: {}", e);
                         inside_messages.push(e.into());
                         break;
                     }
                 }
             }
+            debug!("Terminating accept thread");
         });
 
         // result

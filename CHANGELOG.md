@@ -1,5 +1,12 @@
 # Changes
 
+## 0.5.5
+
+* Start using the log crate
+ * https://github.com/frewsxcv/tiny-http/pull/121
+* Unblock the accept thread on shutdown
+ * https://github.com/frewsxcv/tiny-http/pull/120
+
 ## 0.5.4
 
 * Fix compilation warnings

@@ -237,14 +237,16 @@ impl Iterator for ClientConnection {
                     .find(|h| h.field.equiv(&"Connection"))
                     .map(|h| AsRef::<str>::as_ref(h.value.as_ref()));
 
-                match connection_header {
-                    Some(val) if val.eq_ignore_ascii_case("close") =>
+                let lowercase = connection_header.map(|h| h.to_ascii_lowercase());
+
+                match lowercase {
+                    Some(ref val) if val.contains("close") =>
                         self.no_more_requests = true,
 
-                    Some(ref val) if val.eq_ignore_ascii_case("upgrade") =>
+                    Some(ref val) if val.contains("upgrade") =>
                         self.no_more_requests = true,
 
-                    Some(ref val) if !val.eq_ignore_ascii_case("keep-alive") &&
+                    Some(ref val) if !val.contains("keep-alive") &&
                                     *rq.http_version() == HTTPVersion(1, 0) =>
                         self.no_more_requests = true,
 

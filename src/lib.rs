@@ -134,7 +134,7 @@ use client::ClientConnection;
 use util::MessagesQueue;
 
 pub use common::{Header, HeaderField, HTTPVersion, Method, StatusCode};
-pub use request::Request;
+pub use request::{Request, ReadWrite};
 pub use response::{ResponseBox, Response};
 
 mod client;

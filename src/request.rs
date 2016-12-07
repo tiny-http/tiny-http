@@ -143,8 +143,7 @@ pub fn new_request<R, W>(secure: bool, method: Method, path: String,
     // true if the client sent a `Connection: upgrade` header
     let connection_upgrade = {
         match headers.iter().find(|h: &&Header| h.field.equiv(&"Connection")).map(|h| AsRef::<str>::as_ref(h.value.as_ref())) {
-            None => false,
-            Some(v) if v.eq_ignore_ascii_case("upgrade")
+            Some(v) if v.to_ascii_lowercase().contains("upgrade")
                 => true,
             _ => false
         }
@@ -262,7 +261,6 @@ impl Request {
         &self.remote_addr
     }
 
-/*      // FIXME: reimplement this
     /// Sends a response with a `Connection: upgrade` header, then turns the `Request` into a `Stream`.
     ///
     /// The main purpose of this function is to support websockets.
@@ -272,17 +270,17 @@ impl Request {
     /// If you call this on a non-websocket request, tiny-http will wait until this `Stream` object
     ///  is destroyed before continuing to read or write on the socket. Therefore you should always
     ///  destroy it as soon as possible.
-    pub fn upgrade<R: Read>(mut self, protocol: &str, response: Response<R>) -> Box<Read + Write + Send> {
+    pub fn upgrade<R: Read>(mut self, protocol: &str, response: Response<R>) -> Box<ReadWrite + Send> {
         use util::CustomStream;
 
-        response.raw_print(self.response_writer.as_mut().unwrap().by_ref(), self.http_version,
-                           self.headers, false, Some(protocol)).ok();   // TODO: unused result
+        response.raw_print(self.response_writer.as_mut().unwrap().by_ref(), self.http_version.clone(),
+                           &self.headers, false, Some(protocol)).ok();   // TODO: unused result
 
         self.response_writer.as_mut().unwrap().flush().ok();    // TODO: unused result
 
         let stream = CustomStream::new(self.into_reader_impl(), self.into_writer_impl());
-        Box::new(stream) as Box<Read + Write + Send>
-    }*/
+        Box::new(stream) as Box<ReadWrite + Send>
+    }
 
     /// Allows to read the body of the request.
     ///
@@ -346,8 +344,7 @@ impl Request {
         writer.unwrap()
     }
 
-    // TODO: unused
-    /*fn into_reader_impl(&mut self) -> AnyReader {
+    fn into_reader_impl(&mut self) -> Box<Read + Send + 'static> {
         use std::mem;
 
         assert!(self.data_reader.is_some());
@@ -355,7 +352,7 @@ impl Request {
         let mut reader = None;
         mem::swap(&mut self.data_reader, &mut reader);
         reader.unwrap()
-    }*/
+    }
 
     /// Sends a response to this request.
     #[inline]
@@ -402,6 +399,12 @@ impl Drop for Request {
         }
     }
 }
+
+/// Dummy trait that regroups the `Read` and `Write` traits.
+///
+/// Automatically implemented on all types that implement both `Read` and `Write`.
+pub trait ReadWrite: Read + Write {}
+impl<T> ReadWrite for T where T: Read + Write {}
 
 #[cfg(test)]
 mod tests {

@@ -365,6 +365,9 @@ impl Request {
     fn respond_impl<R>(&mut self, response: Response<R>) -> Result<(), IoError>
         where R: Read
     {
+        // Droping the request reader now so that further requests can start processing immediately.
+        self.data_reader = None;
+
         let mut writer = self.into_writer_impl();
 
         let do_not_send_body = self.method == Method::Head;
@@ -393,6 +396,9 @@ impl fmt::Debug for Request {
 
 impl Drop for Request {
     fn drop(&mut self) {
+        // Droping the request reader now so that further requests can start processing immediately.
+        self.data_reader = None;
+
         if self.response_writer.is_some() {
             let response = Response::empty(500);
             let _ = self.respond_impl(response);        // ignoring any potential error

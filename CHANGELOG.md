@@ -1,5 +1,14 @@
 # Changes
 
+## 0.5.6
+
+* Update link to documentation
+ * https://github.com/frewsxcv/tiny-http/pull/123
+* Fix websockets
+ * https://github.com/frewsxcv/tiny-http/pull/124
+* Drop the request reader earlier
+ * https://github.com/frewsxcv/tiny-http/pull/125
+
 ## 0.5.5
 
 * Start using the log crate

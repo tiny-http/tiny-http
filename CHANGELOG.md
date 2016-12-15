@@ -1,5 +1,10 @@
 # Changes
 
+## 0.5.7
+
+* Fix using Transfer-Encoding: identity with no content length
+ * https://github.com/frewsxcv/tiny-http/pull/126
+
 ## 0.5.6
 
 * Update link to documentation

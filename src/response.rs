@@ -60,6 +60,7 @@ pub type ResponseBox = Response<Box<Read + Send>>;
 
 /// Transfer encoding to use when sending the message.
 /// Note that only *supported* encoding are listed here.
+#[derive(Copy, Clone)]
 enum TransferEncoding {
     Identity,
     Chunked,
@@ -298,6 +299,20 @@ impl<R> Response<R> where R: Read {
             transfer_encoding = None;
         }
 
+        // if the transfer encoding is identity, the content length must be known ; therefore if
+        // we don't know it, we buffer the entire response first here
+        // while this is an expensive operation, it is only ever needed for clients using HTTP 1.0
+        let (mut reader, data_length) = match (self.data_length, transfer_encoding) {
+            (Some(l), _) => (Box::new(self.reader) as Box<Read>, Some(l)),
+            (None, Some(TransferEncoding::Identity)) => {
+                let mut buf = Vec::new();
+                try!(self.reader.read_to_end(&mut buf));
+                let l = buf.len();
+                (Box::new(Cursor::new(buf)) as Box<Read>, Some(l))
+            },
+            _ => (Box::new(self.reader) as Box<Read>, None),
+        };
+
         // checking whether to ignore the body of the response
         let do_not_send_body = do_not_send_body ||
             match self.status_code.0 {
@@ -315,8 +330,8 @@ impl<R> Response<R> where R: Read {
             },
 
             Some(TransferEncoding::Identity) => {
-                assert!(self.data_length.is_some());
-                let data_length = self.data_length.unwrap();
+                assert!(data_length.is_some());
+                let data_length = data_length.unwrap();
 
                 self.headers.push(
                     Header::from_bytes(&b"Content-Length"[..], format!("{}", data_length).as_bytes()).unwrap()
@@ -338,18 +353,18 @@ impl<R> Response<R> where R: Read {
                     use chunked_transfer::Encoder;
 
                     let mut writer = Encoder::new(writer);
-                    try!(io::copy(&mut self.reader, &mut writer));
+                    try!(io::copy(&mut reader, &mut writer));
                 },
 
                 Some(TransferEncoding::Identity) => {
                     use util::EqualReader;
 
-                    assert!(self.data_length.is_some());
-                    let data_length = self.data_length.unwrap();
+                    assert!(data_length.is_some());
+                    let data_length = data_length.unwrap();
 
                     if data_length >= 1 {
                         let (mut equ_reader, _) =
-                            EqualReader::new(self.reader.by_ref(), data_length);
+                            EqualReader::new(reader.by_ref(), data_length);
                         try!(io::copy(&mut equ_reader, &mut writer));
                     }
                 },

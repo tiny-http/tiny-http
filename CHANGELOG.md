@@ -1,5 +1,9 @@
 # Changes
 
+## 0.5.8
+
+* Update links to reflect repository ownership change: https://github.com/frewsxcv/tiny-http -> https://github.com/tiny-http/tiny-http
+
 ## 0.5.7
 
 * Fix using Transfer-Encoding: identity with no content length

@@ -1,6 +1,6 @@
 # tiny-http
 
-[![Build Status](https://travis-ci.org/frewsxcv/tiny-http.svg?branch=master)](https://travis-ci.org/frewsxcv/tiny-http)
+[![Build Status](https://travis-ci.org/tiny-http/tiny-http.svg?branch=master)](https://travis-ci.org/frewsxcv/tiny-http)
 [![tiny\_http on Crates.io](https://meritbadge.herokuapp.com/tiny_http)](https://crates.io/crates/tiny\_http)
 
 [**Documentation**](https://docs.rs/tiny_http)
@@ -81,5 +81,5 @@ Tiny-http was designed with speed in mind:
 
 Examples of tiny-http in use:
 
-* [heroku-tiny-http-hello-world](https://github.com/frewsxcv/heroku-tiny-http-hello-world) - A simple web application demonstrating how to deploy tiny-http to Heroku
-* [crate-deps](https://github.com/frewsxcv/crate-deps) - A web service that generates images of dependency graphs for crates hosted on crates.io
+* [heroku-tiny-http-hello-world](https://github.com/tiny-http/heroku-tiny-http-hello-world) - A simple web application demonstrating how to deploy tiny-http to Heroku
+* [crate-deps](https://github.com/tiny-http/crate-deps) - A web service that generates images of dependency graphs for crates hosted on crates.io

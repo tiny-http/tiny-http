@@ -3,6 +3,7 @@ extern crate tiny_http;
 use std::net::TcpStream;
 use std::io::{Read, Write};
 use std::thread;
+use std::time::Duration;
 
 #[allow(dead_code)]
 mod support;
@@ -12,7 +13,7 @@ fn connection_close_header() {
     let mut client = support::new_client_to_hello_world_server();
 
     (write!(client, "GET / HTTP/1.1\r\nConnection: keep-alive\r\n\r\n")).unwrap();
-    thread::sleep_ms(1000);
+    thread::sleep(Duration::from_millis(1000));
 
     (write!(client, "GET / HTTP/1.1\r\nConnection: close\r\n\r\n")).unwrap();
 
@@ -40,7 +41,7 @@ fn detect_connection_closed() {
     let mut client = support::new_client_to_hello_world_server();
 
     (write!(client, "GET / HTTP/1.1\r\nConnection: keep-alive\r\n\r\n")).unwrap();
-    thread::sleep_ms(1000);
+    thread::sleep(Duration::from_millis(1000));
 
     client.shutdown(Shutdown::Write);
 
@@ -56,23 +57,23 @@ fn poor_network_test() {
     let mut client = support::new_client_to_hello_world_server();
 
     (write!(client, "G")).unwrap();
-    thread::sleep_ms(100);
+    thread::sleep(Duration::from_millis(100));
     (write!(client, "ET /he")).unwrap();
-    thread::sleep_ms(100);
+    thread::sleep(Duration::from_millis(100));
     (write!(client, "llo HT")).unwrap();
-    thread::sleep_ms(100);
+    thread::sleep(Duration::from_millis(100));
     (write!(client, "TP/1.")).unwrap();
-    thread::sleep_ms(100);
+    thread::sleep(Duration::from_millis(100));
     (write!(client, "1\r\nHo")).unwrap();
-    thread::sleep_ms(100);
+    thread::sleep(Duration::from_millis(100));
     (write!(client, "st: localho")).unwrap();
-    thread::sleep_ms(100);
+    thread::sleep(Duration::from_millis(100));
     (write!(client, "st\r\nConnec")).unwrap();
-    thread::sleep_ms(100);
+    thread::sleep(Duration::from_millis(100));
     (write!(client, "tion: close\r")).unwrap();
-    thread::sleep_ms(100);
+    thread::sleep(Duration::from_millis(100));
     (write!(client, "\n\r")).unwrap();
-    thread::sleep_ms(100);
+    thread::sleep(Duration::from_millis(100));
     (write!(client, "\n")).unwrap();
 
     // client.set_keepalive(Some(2)).unwrap(); FIXME: reenable this
@@ -129,7 +130,7 @@ fn responses_reordered() {
             rq2.respond(tiny_http::Response::from_string(format!("second request"))).unwrap();
         });
 
-        thread::sleep_ms(100);
+        thread::sleep(Duration::from_millis(100));
 
         thread::spawn(move || {
             rq1.respond(tiny_http::Response::from_string(format!("first request"))).unwrap();
@@ -160,7 +161,7 @@ fn connection_timeout() {
     thread::spawn(move || {
         loop {
             server.try_recv();
-            thread::sleep_ms(100);
+            thread::sleep(Duration::from_millis(100));
             if rx_stop.try_recv().is_ok() { break }
         }
     });

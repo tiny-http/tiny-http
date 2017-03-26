@@ -1,6 +1,6 @@
 extern crate tiny_http;
 
-use std::net::TcpStream;
+use std::net::{TcpStream, Shutdown};
 use std::io::{Read, Write};
 use std::thread;
 
@@ -34,7 +34,6 @@ fn http_1_0_connection_close() {
     client.read_to_end(&mut out).unwrap();
 }
 
-/* FIXME: uncomment and fix
 #[test]
 fn detect_connection_closed() {
     let mut client = support::new_client_to_hello_world_server();
@@ -42,14 +41,13 @@ fn detect_connection_closed() {
     (write!(client, "GET / HTTP/1.1\r\nConnection: keep-alive\r\n\r\n")).unwrap();
     thread::sleep_ms(1000);
 
-    client.shutdown(Shutdown::Write);
+    client.shutdown(Shutdown::Write).unwrap();
 
     // if the connection was not closed, this will err with timeout
-    client.set_keepalive(Some(1)).unwrap(); FIXME: reenable this
+    // client.set_keepalive(Some(1)).unwrap(); FIXME: reenable this
     let mut out = Vec::new();
     client.read_to_end(&mut out).unwrap();
 }
-*/
 
 #[test]
 fn poor_network_test() {

@@ -81,5 +81,6 @@ Tiny-http was designed with speed in mind:
 
 Examples of tiny-http in use:
 
-* [heroku-tiny-http-hello-world](https://github.com/tiny-http/heroku-tiny-http-hello-world) - A simple web application demonstrating how to deploy tiny-http to Heroku
-* [crate-deps](https://github.com/tiny-http/crate-deps) - A web service that generates images of dependency graphs for crates hosted on crates.io
+* [heroku-tiny-http-hello-world](https://github.com/frewsxcv/heroku-tiny-http-hello-world) - A simple web application demonstrating how to deploy tiny-http to Heroku
+* [crate-deps](https://github.com/frewsxcv/crate-deps) - A web service that generates images of dependency graphs for crates hosted on crates.io
+* [rouille](https://crates.io/crates/rouille) - Web framework built on tiny-http

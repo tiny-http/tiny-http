@@ -18,10 +18,10 @@ ascii = "0.7"
 chunked_transfer = "0.3"
 encoding = "0.2"
 openssl = { version = "0.7", optional = true }
-rustc-serialize = "0.3"
 url = "0.2"
 chrono = "0.2.15"
 log = "0.3"
 
 [dev-dependencies]
+rustc-serialize = "0.3"
 sha1 = "0.2.0"

@@ -1,6 +1,6 @@
 # tiny-http
 
-[![Build Status](https://travis-ci.org/tiny-http/tiny-http.svg?branch=master)](https://travis-ci.org/frewsxcv/tiny-http)
+[![Build Status](https://travis-ci.org/tiny-http/tiny-http.svg?branch=master)](https://travis-ci.org/tiny-http/tiny-http)
 [![tiny\_http on Crates.io](https://meritbadge.herokuapp.com/tiny_http)](https://crates.io/crates/tiny\_http)
 
 [**Documentation**](https://docs.rs/tiny_http)

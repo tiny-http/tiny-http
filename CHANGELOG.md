@@ -1,5 +1,10 @@
 # Changes
 
+## 0.5.9
+
+* Expanded and changed status code description mapping according to IANA registry:
+ * https://github.com/tiny-http/tiny-http/pull/138
+
 ## 0.5.8
 
 * Update links to reflect repository ownership change: https://github.com/frewsxcv/tiny-http -> https://github.com/tiny-http/tiny-http

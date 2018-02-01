@@ -43,7 +43,7 @@ pub struct ClientConnection {
     sink: SequentialWriterBuilder<BufWriter<RefinedTcpStream>>,
 
     // Reader to read the next header from
-	next_header_source: SequentialReader<BufReader<RefinedTcpStream>>,
+    next_header_source: SequentialReader<BufReader<RefinedTcpStream>>,
 
     // set to true if we know that the previous request is the last one
     no_more_requests: bool,

@@ -132,7 +132,7 @@ pub fn new_request<R, W>(secure: bool, method: Method, path: String,
 
     // true if the client sent a `Expect: 100-continue` header
     let expects_continue = {
-        match headers.iter().find(|h: &&Header| h.field.equiv(&"Expect")).map(|h| AsRef::<str>::as_ref(h.value.as_ref())) {
+        match headers.iter().find(|h: &&Header| h.field.equiv(&"Expect")).map(|h| h.value.as_str()) {
             None => false,
             Some(v) if v.eq_ignore_ascii_case("100-continue")
                 => true,
@@ -142,7 +142,7 @@ pub fn new_request<R, W>(secure: bool, method: Method, path: String,
 
     // true if the client sent a `Connection: upgrade` header
     let connection_upgrade = {
-        match headers.iter().find(|h: &&Header| h.field.equiv(&"Connection")).map(|h| AsRef::<str>::as_ref(h.value.as_ref())) {
+        match headers.iter().find(|h: &&Header| h.field.equiv(&"Connection")).map(|h| h.value.as_str()) {
             Some(v) if v.to_ascii_lowercase().contains("upgrade")
                 => true,
             _ => false

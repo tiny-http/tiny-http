@@ -20,7 +20,7 @@ encoding = "0.2"
 openssl = { version = "0.7", optional = true }
 url = "0.2"
 chrono = "0.2.15"
-log = "0.3"
+log = "0.4"
 
 [dev-dependencies]
 rustc-serialize = "0.3"

@@ -17,6 +17,8 @@ use std::io::Result as IoResult;
 use std::net::{SocketAddr, TcpStream, Shutdown};
 
 #[cfg(feature = "ssl")]
+use std::sync::{Arc, Mutex};
+#[cfg(feature = "ssl")]
 use openssl::ssl::SslStream;
 
 pub struct RefinedTcpStream {
@@ -28,7 +30,7 @@ pub struct RefinedTcpStream {
 pub enum Stream {
     Http(TcpStream),
     #[cfg(feature = "ssl")]
-    Https(SslStream<TcpStream>),
+    Https(Arc<Mutex<SslStream<TcpStream>>>),
 }
 
 impl From<TcpStream> for Stream {
@@ -42,7 +44,7 @@ impl From<TcpStream> for Stream {
 impl From<SslStream<TcpStream>> for Stream {
     #[inline]
     fn from(stream: SslStream<TcpStream>) -> Stream {
-        Stream::Https(stream)
+        Stream::Https(Arc::new(Mutex::new(stream)))
     }
 }
 
@@ -55,7 +57,7 @@ impl RefinedTcpStream {
         let read = match stream {
             Stream::Http(ref stream) => Stream::Http(stream.try_clone().unwrap()),
             #[cfg(feature = "ssl")]
-            Stream::Https(ref stream) => Stream::Https(stream.try_clone().unwrap()),
+            Stream::Https(ref stream) => Stream::Https(stream.clone()),
         };
 
         let read = RefinedTcpStream {
@@ -87,7 +89,7 @@ impl RefinedTcpStream {
         match self.stream {
             Stream::Http(ref mut stream) => stream.peer_addr(),
             #[cfg(feature = "ssl")]
-            Stream::Https(ref mut stream) => stream.get_ref().peer_addr(),
+            Stream::Https(ref mut stream) => stream.lock().unwrap().get_ref().peer_addr(),
         }
     }
 }
@@ -99,7 +101,7 @@ impl Drop for RefinedTcpStream {
                 // ignoring outcome
                 Stream::Http(ref mut stream) => stream.shutdown(Shutdown::Read).ok(),
                 #[cfg(feature = "ssl")]
-                Stream::Https(ref mut stream) => stream.get_mut().shutdown(Shutdown::Read).ok(),
+                Stream::Https(ref mut stream) => stream.lock().unwrap().get_mut().shutdown(Shutdown::Read).ok(),
             };
         }
 
@@ -108,7 +110,7 @@ impl Drop for RefinedTcpStream {
                 // ignoring outcome
                 Stream::Http(ref mut stream) => stream.shutdown(Shutdown::Write).ok(),
                 #[cfg(feature = "ssl")]
-                Stream::Https(ref mut stream) => stream.get_mut().shutdown(Shutdown::Write).ok(),
+                Stream::Https(ref mut stream) => stream.lock().unwrap().get_mut().shutdown(Shutdown::Write).ok(),
             };
         }
     }
@@ -119,7 +121,7 @@ impl Read for RefinedTcpStream {
         match self.stream {
             Stream::Http(ref mut stream) => stream.read(buf),
             #[cfg(feature = "ssl")]
-            Stream::Https(ref mut stream) => stream.read(buf),
+            Stream::Https(ref mut stream) => stream.lock().unwrap().read(buf),
         }
     }
 }
@@ -129,7 +131,7 @@ impl Write for RefinedTcpStream {
         match self.stream {
             Stream::Http(ref mut stream) => stream.write(buf),
             #[cfg(feature = "ssl")]
-            Stream::Https(ref mut stream) => stream.write(buf),
+            Stream::Https(ref mut stream) => stream.lock().unwrap().write(buf),
         }
     }
 
@@ -137,7 +139,7 @@ impl Write for RefinedTcpStream {
         match self.stream {
             Stream::Http(ref mut stream) => stream.flush(),
             #[cfg(feature = "ssl")]
-            Stream::Https(ref mut stream) => stream.flush(),
+            Stream::Https(ref mut stream) => stream.lock().unwrap().flush(),
         }
     }
 }

@@ -18,7 +18,7 @@ ascii = "0.8"
 chunked_transfer = "0.3"
 encoding = "0.2"
 openssl = { version = "0.10", optional = true }
-url = "0.2"
+url = "1.7"
 chrono = "0.4"
 log = "0.4"
 

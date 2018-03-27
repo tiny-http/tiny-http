@@ -432,12 +432,12 @@ impl From<(u8, u8)> for HTTPVersion {
 }
 /// Represents the current date, expressed in RFC 1123 format, e.g. Sun, 06 Nov 1994 08:49:37 GMT
 pub struct HTTPDate {
-    d: DateTime<UTC>
+    d: DateTime<Utc>
 }
 
 impl HTTPDate {
     pub fn new() -> HTTPDate {
-        HTTPDate {d: UTC::now(),}
+        HTTPDate {d: Utc::now(),}
     }
 }
 

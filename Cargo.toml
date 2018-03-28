@@ -1,6 +1,6 @@
 [package]
 name = "tiny_http"
-version = "0.5.9"
+version = "0.6.0"
 authors = ["pierre.krieger1708@gmail.com",
            "Corey Farwell <coreyf@rwell.org>"]
 description = "Low level HTTP server library"
@@ -14,14 +14,14 @@ default = []
 ssl = ["openssl"]
 
 [dependencies]
-ascii = "0.7"
+ascii = "0.8"
 chunked_transfer = "0.3"
 encoding = "0.2"
-openssl = { version = "0.7", optional = true }
-url = "0.2"
-chrono = "0.2.15"
-log = "0.3"
+openssl = { version = "0.10", optional = true }
+url = "1.7"
+chrono = "0.4"
+log = "0.4"
 
 [dev-dependencies]
 rustc-serialize = "0.3"
-sha1 = "0.2.0"
+sha1 = "0.6.0"

@@ -102,7 +102,7 @@ fn write_message_header<W>(mut writer: W, http_version: &HTTPVersion,
     for header in headers.iter() {
         try!(writer.write_all(header.field.as_str().as_ref()));
         try!(write!(&mut writer, ": "));
-        try!(writer.write_all(header.value.as_ref().as_ref()));
+        try!(writer.write_all(header.value.as_str().as_ref()));
         try!(write!(&mut writer, "\r\n"));
     }
 

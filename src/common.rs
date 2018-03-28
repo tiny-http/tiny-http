@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use ascii::{AsciiString, AsciiStr};
+use ascii::{AsciiString, AsciiStr, FromAsciiError};
 use std::ascii::AsciiExt;
 use std::fmt::{self, Display, Formatter};
 use std::str::{FromStr};
@@ -232,7 +232,7 @@ impl Display for Header {
 pub struct HeaderField(AsciiString);
 
 impl HeaderField {
-    pub fn from_bytes<B>(bytes: B) -> Result<HeaderField, B> where B: Into<Vec<u8>> + AsRef<[u8]> {
+    pub fn from_bytes<B>(bytes: B) -> Result<HeaderField, FromAsciiError<B>> where B: Into<Vec<u8>> + AsRef<[u8]> {
         AsciiString::from_ascii(bytes).map(HeaderField)
     }
 
@@ -432,12 +432,12 @@ impl From<(u8, u8)> for HTTPVersion {
 }
 /// Represents the current date, expressed in RFC 1123 format, e.g. Sun, 06 Nov 1994 08:49:37 GMT
 pub struct HTTPDate {
-    d: DateTime<UTC>
+    d: DateTime<Utc>
 }
 
 impl HTTPDate {
     pub fn new() -> HTTPDate {
-        HTTPDate {d: UTC::now(),}
+        HTTPDate {d: Utc::now(),}
     }
 }
 

@@ -29,7 +29,7 @@ Add this to the `Cargo.toml` file of your project:
 
 ```toml
 [dependencies]
-tiny_http = "0.5"
+tiny_http = "0.6"
 ```
 
 Don't forget to add the external crate:

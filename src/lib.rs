@@ -147,7 +147,7 @@ mod util;
 
 /// The main class of this library.
 ///
-/// Destroying this object will immediatly close the listening socket annd the reading
+/// Destroying this object will immediatly close the listening socket and the reading
 ///  part of all the client's connections. Requests that have already been returned by
 ///  the `recv()` function will not close and the responses will be transferred to the client.
 pub struct Server {

@@ -173,3 +173,11 @@ fn connection_timeout() {
     tx_stop.send(());
 }
 */
+
+
+#[test]
+fn chunked_threshold() {
+    let resp = tiny_http::Response::from_string("test".to_string());
+    assert_eq!(resp.chunked_threshold(), 32768);
+    assert_eq!(resp.with_chunked_threshold(42).chunked_threshold(), 42);
+}

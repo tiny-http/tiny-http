@@ -123,6 +123,7 @@ use std::io::Error as IoError;
 use std::io::Result as IoResult;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
+use std::sync::mpsc;
 use std::thread;
 use std::net;
 use std::net::{ToSocketAddrs, TcpStream, Shutdown};
@@ -327,8 +328,17 @@ impl Server {
                         let mut client = Some(client);
                         tasks_pool.spawn(Box::new(move || {
                             if let Some(client) = client.take() {
-                                for rq in client {
-                                    messages.push(rq.into());
+                                // Synchronization is needed for HTTPS requests to avoid a deadlock
+                                if client.secure() {
+                                    let (sender, receiver) = mpsc::channel();
+                                    for rq in client {
+                                        messages.push(rq.with_notify_sender(sender.clone()).into());
+                                        receiver.recv().unwrap();
+                                    }
+                                } else {
+                                    for rq in client {
+                                        messages.push(rq.into());
+                                    }
                                 }
                             }
                         }));

@@ -13,7 +13,6 @@
 // limitations under the License.
 
 pub use self::custom_stream::CustomStream;
-pub use self::encoding_decoder::EncodingDecoder;
 pub use self::equal_reader::EqualReader;
 pub use self::messages_queue::MessagesQueue;
 pub use self::refined_tcp_stream::RefinedTcpStream;
@@ -24,7 +23,6 @@ pub use self::task_pool::TaskPool;
 use std::str::FromStr;
 
 mod custom_stream;
-mod encoding_decoder;
 mod equal_reader;
 mod messages_queue;
 mod refined_tcp_stream;

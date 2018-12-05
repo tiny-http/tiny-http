@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::ascii::AsciiExt;
-
 use std::io::Error as IoError;
 use std::io::{self, Cursor, Read, Write, ErrorKind};
 

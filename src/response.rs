@@ -14,7 +14,6 @@
 
 use common::{Header, HTTPVersion, StatusCode, HTTPDate};
 
-use std::ascii::AsciiExt;
 use std::cmp::Ordering;
 use std::sync::mpsc::Receiver;
 

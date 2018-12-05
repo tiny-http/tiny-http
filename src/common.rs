@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use ascii::{AsciiString, AsciiStr, FromAsciiError};
-use std::ascii::AsciiExt;
 use std::fmt::{self, Display, Formatter};
 use std::str::{FromStr};
 use std::cmp::Ordering;

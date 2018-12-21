@@ -52,6 +52,7 @@ pub struct Response<R> where R: Read {
     status_code: StatusCode,
     headers: Vec<Header>,
     data_length: Option<usize>,
+    chunked_threshold: Option<usize>
 }
 
 /// A `Response` without a template parameter.
@@ -112,7 +113,8 @@ fn write_message_header<W>(mut writer: W, http_version: &HTTPVersion,
 }
 
 fn choose_transfer_encoding(request_headers: &[Header], http_version: &HTTPVersion,
-                            entity_length: &Option<usize>, has_additional_headers: bool)
+                            entity_length: &Option<usize>, has_additional_headers: bool,
+                            chunked_threshold: usize)
     -> TransferEncoding
 {
     use util;
@@ -164,8 +166,7 @@ fn choose_transfer_encoding(request_headers: &[Header], http_version: &HTTPVersi
     }
 
     // if we don't have a Content-Length, or if the Content-Length is too big, using chunks writer
-    let chunks_threshold = 32768;
-    if entity_length.as_ref().map_or(true, |val| *val >= chunks_threshold) {
+    if entity_length.as_ref().map_or(true, |val| *val >= chunked_threshold) {
         return TransferEncoding::Chunked;
     }
 
@@ -190,6 +191,7 @@ impl<R> Response<R> where R: Read {
             status_code: status_code,
             headers: Vec::with_capacity(16),
             data_length: data_length,
+            chunked_threshold: None,
         };
 
         for h in headers {
@@ -204,6 +206,23 @@ impl<R> Response<R> where R: Read {
         }
 
         response
+    }
+
+    /// Set a threshold for `Content-Length` where we chose chunked
+    /// transfer. Notice that chunked transfer might happen regardless of
+    /// this threshold, for instance when the request headers indicate
+    /// it is wanted or when there is no `Content-Length`.
+    pub fn with_chunked_threshold(mut self, length: usize) -> Response<R>{
+        self.chunked_threshold = Some(length);
+        self
+    }
+
+    /// The current `Content-Length` threshold for switching over to
+    /// chunked transfer. The default is 32768 bytes. Notice that
+    /// chunked transfer is mutually exclusive with sending a
+    /// `Content-Length` header as per the HTTP spec.
+    pub fn chunked_threshold(&self) -> usize {
+        self.chunked_threshold.unwrap_or(32768)
     }
 
     /// Adds a header to the list.
@@ -259,6 +278,7 @@ impl<R> Response<R> where R: Read {
             headers: self.headers,
             status_code: self.status_code,
             data_length: data_length,
+            chunked_threshold: None,
         }
     }
 
@@ -277,7 +297,8 @@ impl<R> Response<R> where R: Read {
                                -> IoResult<()>
     {
         let mut transfer_encoding = Some(choose_transfer_encoding(request_headers,
-                                    &http_version, &self.data_length, false /* TODO */));
+                                    &http_version, &self.data_length, false /* TODO */,
+                                    self.chunked_threshold()));
 
         // add `Date` if not in the headers
         if self.headers.iter().find(|h| h.field.equiv(&"Date")).is_none() {
@@ -385,6 +406,7 @@ impl<R> Response<R> where R: Read + Send + 'static {
             status_code: self.status_code,
             headers: self.headers,
             data_length: self.data_length,
+            chunked_threshold: None,
         }
     }
 }
@@ -462,6 +484,7 @@ impl Clone for Response<io::Empty> {
             status_code: self.status_code.clone(),
             headers: self.headers.clone(),
             data_length: self.data_length.clone(),
+            chunked_threshold: self.chunked_threshold.clone(),
         }
     }
 }

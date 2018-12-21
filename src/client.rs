@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use ascii::{AsciiString};
-use std::ascii::AsciiExt;
 
 use std::io::Error as IoError;
 use std::io::Result as IoResult;

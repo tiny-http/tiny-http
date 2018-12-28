@@ -115,8 +115,10 @@ extern crate chunked_transfer;
 extern crate url;
 extern crate chrono;
 
-#[cfg(feature = "ssl")]
+#[cfg(feature = "ssl-openssl")]
 extern crate openssl;
+#[cfg(feature = "ssl-rustls")]
+extern crate rustls;
 
 use std::error::Error;
 use std::io::Error as IoError;
@@ -219,7 +221,7 @@ impl Server {
     }
 
     /// Shortcut for an HTTPS server on a specific address.
-    #[cfg(feature = "ssl")]
+    #[cfg(any(feature = "ssl-openssl", feature = "ssl-rustls"))]
     #[inline]
     pub fn https<A>(addr: A, config: SslConfig)
                     -> Result<Server, Box<Error + Send + Sync + 'static>>
@@ -247,12 +249,14 @@ impl Server {
         };
 
         // building the SSL capabilities
-        #[cfg(feature = "ssl")]
+        #[cfg(feature = "ssl-openssl")]
         type SslContext = openssl::ssl::SslContext;
-        #[cfg(not(feature = "ssl"))]
+        #[cfg(feature = "ssl-rustls")]
+        type SslContext = Arc<rustls::ServerConfig>;
+        #[cfg(not(any(feature = "ssl-openssl", feature = "ssl-rustls")))]
         type SslContext = ();
         let ssl: Option<SslContext> = match config.ssl {
-            #[cfg(feature = "ssl")]
+            #[cfg(feature = "ssl-openssl")]
             Some(mut config) => {
                 use openssl::ssl;
                 use openssl::x509::X509;
@@ -275,7 +279,36 @@ impl Server {
 
                 Some(ctxt.build())
             },
-            #[cfg(not(feature = "ssl"))]
+            #[cfg(feature = "ssl-rustls")]
+            Some(mut config) => {
+                let mut tls_conf = rustls::ServerConfig::new(rustls::NoClientAuth::new());
+
+                let certificate = rustls::internal::pemfile::certs(&mut config.certificate.as_slice()).expect("invalid certificate");
+                let private_key = {
+                    let mut private_key = config.private_key.clone();
+                    let pkcs8_keys = rustls::internal::pemfile::pkcs8_private_keys(&mut private_key.as_slice())
+                        .expect("file contains invalid pkcs8 private key (encrypted keys not supported)");
+                    // prefer to load pkcs8 keys
+                    if !pkcs8_keys.is_empty() {
+                        pkcs8_keys[0].clone()
+                    } else {
+                        let mut private_key = config.private_key.clone();
+                        let rsa_keys = rustls::internal::pemfile::rsa_private_keys(&mut private_key.as_slice())
+                            .expect("file contains invalid rsa private key");
+                        rsa_keys[0].clone()
+                    }
+                };
+
+                tls_conf.set_single_cert(certificate, private_key)?;
+
+                // let's wipe the certificate and private key from memory, because we're
+                // better safe than sorry
+                for b in &mut config.certificate { *b = 0; }
+                for b in &mut config.private_key { *b = 0; }
+
+                Some(Arc::new(tls_conf))
+            },
+            #[cfg(not(any(feature = "ssl-openssl", feature = "ssl-rustls")))]
             Some(_) => return Err("Building a server with SSL requires enabling the `ssl` feature \
                                    in tiny-http".to_owned().into()),
             None => None,
@@ -294,13 +327,13 @@ impl Server {
             debug!("Running accept thread");
             while !inside_close_trigger.load(Relaxed) {
                 let new_client = match server.accept() {
-                    Ok((sock, _)) => {
+                    Ok((mut sock, _)) => {
                         use util::RefinedTcpStream;
                         let (read_closable, write_closable) = match ssl {
                             None => {
                                 RefinedTcpStream::new(sock)
                             },
-                            #[cfg(feature = "ssl")]
+                            #[cfg(feature = "ssl-openssl")]
                             Some(ref ssl) => {
                                 let ssl = openssl::ssl::Ssl::new(ssl).expect("Couldn't create ssl");
                                 // trying to apply SSL over the connection
@@ -312,7 +345,14 @@ impl Server {
 
                                 RefinedTcpStream::new(sock)
                             },
-                            #[cfg(not(feature = "ssl"))]
+                            #[cfg(feature = "ssl-rustls")]
+                            Some(ref tls_conf) => {
+                                let mut tls_session = rustls::ServerSession::new(tls_conf);
+                                let stream = rustls::StreamOwned::new(tls_session, sock);
+
+                                RefinedTcpStream::new(stream)
+                            },
+                            #[cfg(not(any(feature = "ssl-openssl", feature = "ssl-rustls")))]
                             Some(_) => unreachable!(),
                         };
 

@@ -11,7 +11,9 @@ repository = "https://github.com/tiny-http/tiny-http"
 
 [features]
 default = []
-ssl = ["openssl"]
+ssl = ["ssl-openssl"]
+ssl-openssl = ["openssl"]
+ssl-rustls = ["rustls"]
 
 [dependencies]
 ascii = "0.8"
@@ -20,6 +22,7 @@ openssl = { version = "0.10", optional = true }
 url = "1.7"
 chrono = "0.4"
 log = "0.4"
+rustls = { version = "0.14", optional = true }
 
 [dev-dependencies]
 rustc-serialize = "0.3"

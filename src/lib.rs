@@ -112,7 +112,6 @@ extern crate log;
 
 extern crate ascii;
 extern crate chunked_transfer;
-extern crate encoding;
 extern crate url;
 extern crate chrono;
 
@@ -141,8 +140,6 @@ mod client;
 mod common;
 mod request;
 mod response;
-
-#[allow(dead_code)]     // TODO: remove when everything is implemented
 mod util;
 
 /// The main class of this library.

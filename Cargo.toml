@@ -1,17 +1,26 @@
 [package]
 name = "tiny_http"
-version = "0.1.1"
+version = "0.6.2"
 authors = ["pierre.krieger1708@gmail.com",
            "Corey Farwell <coreyf@rwell.org>"]
 description = "Low level HTTP server library"
-documentation = "https://frewsxcv.github.io/tiny-http/tiny_http/index.html"
+documentation = "https://tiny-http.github.io/tiny-http/tiny_http/index.html"
 keywords = ["http", "server", "web"]
 license = "Apache-2.0"
-repository = "https://github.com/frewsxcv/tiny-http"
+repository = "https://github.com/tiny-http/tiny-http"
+
+[features]
+default = []
+ssl = ["openssl"]
 
 [dependencies]
-ascii = "0.5"
+ascii = "0.8"
 chunked_transfer = "0.3"
-encoding = "0.2"
+openssl = { version = "0.10", optional = true }
+url = "1.7"
+chrono = "0.4"
+log = "0.4"
+
+[dev-dependencies]
 rustc-serialize = "0.3"
-url = "0.2"
+sha1 = "0.6.0"

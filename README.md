@@ -1,9 +1,9 @@
 # tiny-http
 
-[![Build Status](https://travis-ci.org/frewsxcv/tiny-http.svg?branch=master)](https://travis-ci.org/frewsxcv/tiny-http)
+[![Build Status](https://travis-ci.org/tiny-http/tiny-http.svg?branch=master)](https://travis-ci.org/tiny-http/tiny-http)
 [![tiny\_http on Crates.io](https://meritbadge.herokuapp.com/tiny_http)](https://crates.io/crates/tiny\_http)
 
-[**Documentation**](https://frewsxcv.github.io/tiny-http)
+[**Documentation**](https://docs.rs/tiny_http)
 
 Tiny but strong HTTP server in Rust.
 Its main objectives are to be 100% compliant with the HTTP standard and to provide an easy way to create an HTTP server.
@@ -15,7 +15,7 @@ What does **tiny-http** handle?
  - Transfer-Encoding and Content-Encoding (**not fully implemented yet**)
  - Turning user input (eg. POST input) into a contiguous UTF-8 string (**not implemented yet**)
  - Ranges (**not implemented yet**)
- - HTTPS (**not implemented yet**)
+ - HTTPS
  - `Connection: upgrade` (used by websockets)
 
 Tiny-http handles everything that is related to client connections and data transfers and encoding.
@@ -29,7 +29,7 @@ Add this to the `Cargo.toml` file of your project:
 
 ```toml
 [dependencies]
-tiny_http = "0.1"
+tiny_http = "0.6"
 ```
 
 Don't forget to add the external crate:
@@ -41,16 +41,18 @@ extern crate tiny_http;
 ### Usage
 
 ```rust
-let server = tiny_http::ServerBuilder::new().build().unwrap();
+use tiny_http::{Server, Response};
+
+let server = Server::http("0.0.0.0:8000").unwrap();
 
 for request in server.incoming_requests() {
     println!("received request! method: {:?}, url: {:?}, headers: {:?}",
-        request.get_method(),
-        request.get_url(),
-        request.get_headers()
+        request.method(),
+        request.url(),
+        request.headers()
     );
 
-    let response = tiny_http::Response::from_string("hello world".to_string());
+    let response = Response::from_string("hello world");
     request.respond(response);
 }
 ```
@@ -74,3 +76,11 @@ Tiny-http was designed with speed in mind:
  request has not yet been answered. The reading part of the socket will also be immediatly closed.
  - Decoding the client's request is done lazily. If you don't read the request's body, it will not
  be decoded.
+
+### Examples
+
+Examples of tiny-http in use:
+
+* [heroku-tiny-http-hello-world](https://github.com/frewsxcv/heroku-tiny-http-hello-world) - A simple web application demonstrating how to deploy tiny-http to Heroku
+* [crate-deps](https://github.com/frewsxcv/crate-deps) - A web service that generates images of dependency graphs for crates hosted on crates.io
+* [rouille](https://crates.io/crates/rouille) - Web framework built on tiny-http

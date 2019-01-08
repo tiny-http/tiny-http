@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use ascii::{AsciiString};
-use std::ascii::AsciiExt;
 
 use std::io::Error as IoError;
 use std::io::Result as IoResult;
@@ -24,7 +23,7 @@ use std::str::FromStr;
 
 use common::{HTTPVersion, Method};
 use util::{SequentialReader, SequentialReaderBuilder, SequentialWriterBuilder};
-use util::ClosableTcpStream;
+use util::RefinedTcpStream;
 
 use Request;
 
@@ -36,17 +35,20 @@ pub struct ClientConnection {
 
     // sequence of Readers to the stream, so that the data is not read in
     //  the wrong order
-    source: SequentialReaderBuilder<BufReader<ClosableTcpStream>>,
+    source: SequentialReaderBuilder<BufReader<RefinedTcpStream>>,
 
     // sequence of Writers to the stream, to avoid writing response #2 before
     //  response #1
-    sink: SequentialWriterBuilder<BufWriter<ClosableTcpStream>>,
+    sink: SequentialWriterBuilder<BufWriter<RefinedTcpStream>>,
 
     // Reader to read the next header from
-	next_header_source: SequentialReader<BufReader<ClosableTcpStream>>,
+    next_header_source: SequentialReader<BufReader<RefinedTcpStream>>,
 
     // set to true if we know that the previous request is the last one
     no_more_requests: bool,
+
+    // true if the connection goes through SSL
+    secure: bool,
 }
 
 /// Error that can happen when reading a request.
@@ -62,10 +64,11 @@ enum ReadError {
 
 impl ClientConnection {
     /// Creates a new ClientConnection that takes ownership of the TcpStream.
-    pub fn new(write_socket: ClosableTcpStream, mut read_socket: ClosableTcpStream)
+    pub fn new(write_socket: RefinedTcpStream, mut read_socket: RefinedTcpStream)
                -> ClientConnection
     {
         let remote_addr = read_socket.peer_addr();
+        let secure = read_socket.secure();
 
         let mut source = SequentialReaderBuilder::new(BufReader::with_capacity(1024, read_socket));
         let first_header = source.next().unwrap();
@@ -76,6 +79,7 @@ impl ClientConnection {
             remote_addr: remote_addr,
             next_header_source: first_header,
             no_more_requests: false,
+            secure: secure,
         }
     }
 
@@ -97,11 +101,8 @@ impl ClientConnection {
 
             if byte == b'\n' && prev_byte_was_cr {
                 buf.pop();  // removing the '\r'
-                return match AsciiString::from_bytes(buf) {
-                    Ok(s) => Ok(s),
-                    Err(_) => return Err(IoError::new(ErrorKind::InvalidInput,
-                                                      "Header is not in ASCII"))
-                }
+                return AsciiString::from_ascii(buf)
+                    .map_err(|_| IoError::new(ErrorKind::InvalidInput, "Header is not in ASCII"))
             }
 
             prev_byte_was_cr = byte == b'\r';
@@ -152,7 +153,7 @@ impl ClientConnection {
         ::std::mem::swap(&mut self.next_header_source, &mut data_source);
 
         // building the next reader
-        let request = try!(::request::new_request(method, path, version.clone(),
+        let request = try!(::request::new_request(self.secure, method, path, version.clone(),
                 headers, self.remote_addr.as_ref().unwrap().clone(), data_source, writer)
             .map_err(|e| {
                 use request;
@@ -220,33 +221,35 @@ impl Iterator for ClientConnection {
             };
 
             // checking HTTP version
-            if *rq.get_http_version() > (1, 1) {
+            if *rq.http_version() > (1, 1) {
                 let writer = self.sink.next().unwrap();
                 let response =
                     Response::from_string("This server only supports HTTP versions 1.0 and 1.1"
-                        .to_string()).with_status_code(StatusCode(505));
+                        .to_owned()).with_status_code(StatusCode(505));
                 response.raw_print(writer, HTTPVersion(1, 1), &[], false, None).ok();
                 continue
             }
 
             // updating the status of the connection
             {
-                let connection_header = rq.get_headers().iter()
+                let connection_header = rq.headers().iter()
                     .find(|h| h.field.equiv(&"Connection"))
-                    .map(|h| AsRef::<str>::as_ref(h.value.as_ref()));
+                    .map(|h| h.value.as_str());
 
-                match connection_header {
-                    Some(val) if val.eq_ignore_ascii_case("close") =>
+                let lowercase = connection_header.map(|h| h.to_ascii_lowercase());
+
+                match lowercase {
+                    Some(ref val) if val.contains("close") =>
                         self.no_more_requests = true,
 
-                    Some(ref val) if val.eq_ignore_ascii_case("upgrade") =>
+                    Some(ref val) if val.contains("upgrade") =>
                         self.no_more_requests = true,
 
-                    Some(ref val) if !val.eq_ignore_ascii_case("keep-alive") &&
-                                    *rq.get_http_version() == HTTPVersion(1, 0) =>
+                    Some(ref val) if !val.contains("keep-alive") &&
+                                    *rq.http_version() == HTTPVersion(1, 0) =>
                         self.no_more_requests = true,
 
-                    None if *rq.get_http_version() == HTTPVersion(1, 0) =>
+                    None if *rq.http_version() == HTTPVersion(1, 0) =>
                         self.no_more_requests = true,
 
                     _ => ()
@@ -261,13 +264,13 @@ impl Iterator for ClientConnection {
 
 /// Parses a "HTTP/1.1" string.
 fn parse_http_version(version: &str) -> Result<HTTPVersion, ReadError> {
-    let elems = version.splitn(2, '/').map(|e| e.to_string()).collect::<Vec<String>>();
+    let elems = version.splitn(2, '/').map(|e| e.to_owned()).collect::<Vec<String>>();
     if elems.len() != 2 {
         return Err(ReadError::WrongRequestLine)
     }
 
     let elems = elems[1].splitn(2, '.')
-        .map(|e| e.to_string()).collect::<Vec<String>>();
+        .map(|e| e.to_owned()).collect::<Vec<String>>();
     if elems.len() != 2 {
         return Err(ReadError::WrongRequestLine)
     }
@@ -300,7 +303,7 @@ fn parse_request_line(line: &str) -> Result<(Method, String, HTTPVersion), ReadE
 
     let version = try!(parse_http_version(version));
 
-    Ok((method, path.to_string(), version))
+    Ok((method, path.to_owned(), version))
 }
 
 #[cfg(test)]
@@ -313,7 +316,7 @@ mod test {
                 Ok(v) => v
             };
 
-        assert!(method.equiv(&"get"));
+        assert!(method == ::Method::Get);
         assert!(path == "/hello");
         assert!(ver == ::common::HTTPVersion(1, 1));
 

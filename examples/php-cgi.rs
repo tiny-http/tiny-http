@@ -1,7 +1,7 @@
 extern crate ascii;
 extern crate tiny_http;
 
-use ascii::AsciiCast;
+use ascii::AsAsciiStr;
 
 /**!
 
@@ -20,20 +20,20 @@ fn handle(rq: tiny_http::Request, script: &str) {
         //.stdin(Ignored)
         //.extra_io(Ignored)
         .env("AUTH_TYPE", "")
-        .env("CONTENT_LENGTH", format!("{}", rq.get_body_length().unwrap_or(0)))
+        .env("CONTENT_LENGTH", format!("{}", rq.body_length().unwrap_or(0)))
         .env("CONTENT_TYPE", "")
         .env("GATEWAY_INTERFACE", "CGI/1.1")
         .env("PATH_INFO", "")
         .env("PATH_TRANSLATED", "")
-        .env("QUERY_STRING", format!("{}", rq.get_url()))
-        .env("REMOTE_ADDR", format!("{}", rq.get_remote_addr()))
+        .env("QUERY_STRING", format!("{}", rq.url()))
+        .env("REMOTE_ADDR", format!("{}", rq.remote_addr()))
         .env("REMOTE_HOST", "")
         .env("REMOTE_IDENT", "")
         .env("REMOTE_USER", "")
-        .env("REQUEST_METHOD", format!("{}", rq.get_method()))
+        .env("REQUEST_METHOD", format!("{}", rq.method()))
         .env("SCRIPT_NAME", script)
         .env("SERVER_NAME", "tiny-http php-cgi example")
-        .env("SERVER_PORT", format!("{}", rq.get_remote_addr().port()))
+        .env("SERVER_PORT", format!("{}", rq.remote_addr().port()))
         .env("SERVER_PROTOCOL", "HTTP/1.1")
         .env("SERVER_SOFTWARE", "tiny-http php-cgi example")
         .output()
@@ -49,12 +49,12 @@ fn handle(rq: tiny_http::Request, script: &str) {
             let mut writer: &mut Write = &mut *writer;
 
             (write!(writer, "HTTP/1.1 200 OK\r\n")).unwrap();
-            (write!(writer, "{}", php.stdout.clone().to_ascii().unwrap().to_string())).unwrap();
+            (write!(writer, "{}", php.stdout.clone().as_ascii_str().unwrap())).unwrap();
 
             writer.flush().unwrap();
         },
         _ => {
-            println!("Error in script execution: {}", php.stderr.clone().to_ascii().unwrap().to_string());
+            println!("Error in script execution: {}", php.stderr.clone().as_ascii_str().unwrap());
         }
     }
 }
@@ -70,7 +70,7 @@ fn main() {
         args.nth(1).unwrap()
     };
 
-    let server = Arc::new(tiny_http::ServerBuilder::new().with_port(9975).build().unwrap());
+    let server = Arc::new(tiny_http::Server::http("0.0.0.0:9975").unwrap());
     println!("Now listening on port 9975");
 
     let num_cpus = 4;  // TODO: dynamically generate this value

@@ -12,9 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common::{Header, HTTPVersion, StatusCode};
+use common::{Header, HTTPVersion, StatusCode, HTTPDate};
 
-use std::ascii::AsciiExt;
 use std::cmp::Ordering;
 use std::sync::mpsc::Receiver;
 
@@ -53,6 +52,7 @@ pub struct Response<R> where R: Read {
     status_code: StatusCode,
     headers: Vec<Header>,
     data_length: Option<usize>,
+    chunked_threshold: Option<usize>
 }
 
 /// A `Response` without a template parameter.
@@ -60,6 +60,7 @@ pub type ResponseBox = Response<Box<Read + Send>>;
 
 /// Transfer encoding to use when sending the message.
 /// Note that only *supported* encoding are listed here.
+#[derive(Copy, Clone)]
 enum TransferEncoding {
     Identity,
     Chunked,
@@ -81,8 +82,8 @@ impl FromStr for TransferEncoding {
 
 /// Builds a Date: header with the current date.
 fn build_date_header() -> Header {
-    // FIXME: right date
-    Header::from_bytes(&b"Date"[..], &b"Wed, 15 Nov 1995 06:25:24 GMT"[..]).unwrap()
+    let d = HTTPDate::new();
+    Header::from_bytes(&b"Date"[..], &d.to_string().into_bytes()[..]).unwrap()
 }
 
 fn write_message_header<W>(mut writer: W, http_version: &HTTPVersion,
@@ -94,14 +95,14 @@ fn write_message_header<W>(mut writer: W, http_version: &HTTPVersion,
         http_version.0,
         http_version.1,
         status_code.0,
-        status_code.get_default_reason_phrase()
+        status_code.default_reason_phrase()
     ));
 
     // writing headers
     for header in headers.iter() {
         try!(writer.write_all(header.field.as_str().as_ref()));
         try!(write!(&mut writer, ": "));
-        try!(writer.write_all(header.value.as_ref().as_ref()));
+        try!(writer.write_all(header.value.as_str().as_ref()));
         try!(write!(&mut writer, "\r\n"));
     }
 
@@ -112,7 +113,8 @@ fn write_message_header<W>(mut writer: W, http_version: &HTTPVersion,
 }
 
 fn choose_transfer_encoding(request_headers: &[Header], http_version: &HTTPVersion,
-                            entity_length: &Option<usize>, has_additional_headers: bool)
+                            entity_length: &Option<usize>, has_additional_headers: bool,
+                            chunked_threshold: usize)
     -> TransferEncoding
 {
     use util;
@@ -154,8 +156,8 @@ fn choose_transfer_encoding(request_headers: &[Header], http_version: &HTTPVersi
         });
 
     //
-    if user_request.is_some() {
-        return user_request.unwrap();
+    if let Some(user_request) = user_request {
+        return user_request;
     }
 
     // if we have additional headers, using chunked
@@ -164,8 +166,7 @@ fn choose_transfer_encoding(request_headers: &[Header], http_version: &HTTPVersi
     }
 
     // if we don't have a Content-Length, or if the Content-Length is too big, using chunks writer
-    let chunks_threshold = 32768;
-    if entity_length.as_ref().map_or(true, |val| *val >= chunks_threshold) {
+    if entity_length.as_ref().map_or(true, |val| *val >= chunked_threshold) {
         return TransferEncoding::Chunked;
     }
 
@@ -190,6 +191,7 @@ impl<R> Response<R> where R: Read {
             status_code: status_code,
             headers: Vec::with_capacity(16),
             data_length: data_length,
+            chunked_threshold: None,
         };
 
         for h in headers {
@@ -204,6 +206,23 @@ impl<R> Response<R> where R: Read {
         }
 
         response
+    }
+
+    /// Set a threshold for `Content-Length` where we chose chunked
+    /// transfer. Notice that chunked transfer might happen regardless of
+    /// this threshold, for instance when the request headers indicate
+    /// it is wanted or when there is no `Content-Length`.
+    pub fn with_chunked_threshold(mut self, length: usize) -> Response<R>{
+        self.chunked_threshold = Some(length);
+        self
+    }
+
+    /// The current `Content-Length` threshold for switching over to
+    /// chunked transfer. The default is 32768 bytes. Notice that
+    /// chunked transfer is mutually exclusive with sending a
+    /// `Content-Length` header as per the HTTP spec.
+    pub fn chunked_threshold(&self) -> usize {
+        self.chunked_threshold.unwrap_or(32768)
     }
 
     /// Adds a header to the list.
@@ -259,6 +278,7 @@ impl<R> Response<R> where R: Read {
             headers: self.headers,
             status_code: self.status_code,
             data_length: data_length,
+            chunked_threshold: None,
         }
     }
 
@@ -277,7 +297,8 @@ impl<R> Response<R> where R: Read {
                                -> IoResult<()>
     {
         let mut transfer_encoding = Some(choose_transfer_encoding(request_headers,
-                                    &http_version, &self.data_length, false /* TODO */));
+                                    &http_version, &self.data_length, false /* TODO */,
+                                    self.chunked_threshold()));
 
         // add `Date` if not in the headers
         if self.headers.iter().find(|h| h.field.equiv(&"Date")).is_none() {
@@ -298,6 +319,20 @@ impl<R> Response<R> where R: Read {
             transfer_encoding = None;
         }
 
+        // if the transfer encoding is identity, the content length must be known ; therefore if
+        // we don't know it, we buffer the entire response first here
+        // while this is an expensive operation, it is only ever needed for clients using HTTP 1.0
+        let (mut reader, data_length) = match (self.data_length, transfer_encoding) {
+            (Some(l), _) => (Box::new(self.reader) as Box<Read>, Some(l)),
+            (None, Some(TransferEncoding::Identity)) => {
+                let mut buf = Vec::new();
+                try!(self.reader.read_to_end(&mut buf));
+                let l = buf.len();
+                (Box::new(Cursor::new(buf)) as Box<Read>, Some(l))
+            },
+            _ => (Box::new(self.reader) as Box<Read>, None),
+        };
+
         // checking whether to ignore the body of the response
         let do_not_send_body = do_not_send_body ||
             match self.status_code.0 {
@@ -315,8 +350,8 @@ impl<R> Response<R> where R: Read {
             },
 
             Some(TransferEncoding::Identity) => {
-                assert!(self.data_length.is_some());
-                let data_length = self.data_length.unwrap();
+                assert!(data_length.is_some());
+                let data_length = data_length.unwrap();
 
                 self.headers.push(
                     Header::from_bytes(&b"Content-Length"[..], format!("{}", data_length).as_bytes()).unwrap()
@@ -338,18 +373,18 @@ impl<R> Response<R> where R: Read {
                     use chunked_transfer::Encoder;
 
                     let mut writer = Encoder::new(writer);
-                    try!(io::copy(&mut self.reader, &mut writer));
+                    try!(io::copy(&mut reader, &mut writer));
                 },
 
                 Some(TransferEncoding::Identity) => {
                     use util::EqualReader;
 
-                    assert!(self.data_length.is_some());
-                    let data_length = self.data_length.unwrap();
+                    assert!(data_length.is_some());
+                    let data_length = data_length.unwrap();
 
                     if data_length >= 1 {
                         let (mut equ_reader, _) =
-                            EqualReader::new(self.reader.by_ref(), data_length);
+                            EqualReader::new(reader.by_ref(), data_length);
                         try!(io::copy(&mut equ_reader, &mut writer));
                     }
                 },
@@ -371,6 +406,7 @@ impl<R> Response<R> where R: Read + Send + 'static {
             status_code: self.status_code,
             headers: self.headers,
             data_length: self.data_length,
+            chunked_threshold: None,
         }
     }
 }
@@ -448,6 +484,7 @@ impl Clone for Response<io::Empty> {
             status_code: self.status_code.clone(),
             headers: self.headers.clone(),
             data_length: self.data_length.clone(),
+            chunked_threshold: self.chunked_threshold.clone(),
         }
     }
 }

@@ -1,5 +1,6 @@
 use std::path::Path;
 use std::fs;
+use ascii::AsciiString;
 
 extern crate ascii;
 extern crate tiny_http;
@@ -24,9 +25,8 @@ fn get_content_type(path: &Path) -> &'static str {
 }
 
 fn main() {
-    use ascii::AsciiCast;
-    let server = tiny_http::ServerBuilder::new().with_random_port().build().unwrap();
-    let port = server.get_server_addr().port();
+    let server = tiny_http::Server::http("0.0.0.0:8000").unwrap();
+    let port = server.server_addr().port();
     println!("Now listening on port {}", port);
 
     loop {
@@ -37,7 +37,7 @@ fn main() {
 
         println!("{:?}", rq);
 
-        let url = rq.get_url().to_string();
+        let url = rq.url().to_string();
         let path = Path::new(&url);
         let file = fs::File::open(&path);
 
@@ -47,15 +47,15 @@ fn main() {
             let response = response.with_header(
                 tiny_http::Header {
                     field: "Content-Type".parse().unwrap(),
-                    value: get_content_type(&path).to_ascii().unwrap().to_ascii_string()
+                    value: AsciiString::from_ascii(get_content_type(&path)).unwrap(),
                 }
             );
 
-            rq.respond(response);
+            let _ = rq.respond(response);
 
         } else {
             let rep = tiny_http::Response::new_empty(tiny_http::StatusCode(404));
-            rq.respond(rep);
+            let _ = rq.respond(rep);
         }
     }
 }

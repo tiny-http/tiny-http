@@ -12,11 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use ascii::{AsciiString, AsciiStr};
-use std::ascii::AsciiExt;
+use ascii::{AsciiString, AsciiStr, FromAsciiError};
 use std::fmt::{self, Display, Formatter};
 use std::str::{FromStr};
 use std::cmp::Ordering;
+
+use chrono::*;
 
 /// Status code of a request or response.
 #[derive(Eq, PartialEq, Clone, Debug, Ord, PartialOrd)]
@@ -25,12 +26,13 @@ pub struct StatusCode(pub u16);
 impl StatusCode {
     /// Returns the default reason phrase for this status code.
     /// For example the status code 404 corresponds to "Not Found".
-    pub fn get_default_reason_phrase(&self) -> &'static str {
+    pub fn default_reason_phrase(&self) -> &'static str {
         match self.0 {
             100 => "Continue",
             101 => "Switching Protocols",
             102 => "Processing",
-            118 => "Connection timed out",
+            103 => "Early Hints",
+
             200 => "OK",
             201 => "Created",
             202 => "Accepted",
@@ -39,7 +41,9 @@ impl StatusCode {
             205 => "Reset Content",
             206 => "Partial Content",
             207 => "Multi-Status",
-            210 => "Content Different",
+            208 => "Already Reported",
+            226 => "IM Used",
+
             300 => "Multiple Choices",
             301 => "Moved Permanently",
             302 => "Found",
@@ -47,6 +51,8 @@ impl StatusCode {
             304 => "Not Modified",
             305 => "Use Proxy",
             307 => "Temporary Redirect",
+            308 => "Permanent Redirect",
+
             400 => "Bad Request",
             401 => "Unauthorized",
             402 => "Payment Required",
@@ -55,22 +61,37 @@ impl StatusCode {
             405 => "Method Not Allowed",
             406 => "Not Acceptable",
             407 => "Proxy Authentication Required",
-            408 => "Request Time-out",
+            408 => "Request Timeout",
             409 => "Conflict",
             410 => "Gone",
             411 => "Length Required",
             412 => "Precondition Failed",
-            413 => "Request Entity Too Large",
-            414 => "Reques-URI Too Large",
+            413 => "Payload Too Large",
+            414 => "URI Too Long",
             415 => "Unsupported Media Type",
-            416 => "Request range not satisfiable",
+            416 => "Range Not Satisfiable",
             417 => "Expectation Failed",
+            421 => "Misdirected Request",
+            422 => "Unprocessable Entity",
+            423 => "Locked",
+            424 => "Failed Dependency",
+            426 => "Upgrade Required",
+            428 => "Precondition Required",
+            429 => "Too Many Requests",
+            431 => "Request Header Fields Too Large",
+            451 => "Unavailable For Legal Reasons",
+
             500 => "Internal Server Error",
             501 => "Not Implemented",
             502 => "Bad Gateway",
             503 => "Service Unavailable",
-            504 => "Gateway Time-out",
-            505 => "HTTP Version not supported",
+            504 => "Gateway Timeout",
+            505 => "HTTP Version Not Supported",
+            506 => "Variant Also Negotiates",
+            507 => "Insufficient Storage",
+            508 => "Loop Detected",
+            510 => "Not Extended",
+            511 => "Network Authentication Required",
             _ => "Unknown"
         }
     }
@@ -162,7 +183,7 @@ impl Header {
                                     B2: Into<Vec<u8>> + AsRef<[u8]>
     {
         let header = try!(HeaderField::from_bytes(header).or(Err(())));
-        let value = try!(AsciiString::from_bytes(value).or(Err(())));
+        let value = try!(AsciiString::from_ascii(value).or(Err(())));
 
         Ok(Header { field: header, value: value })
     }
@@ -188,10 +209,7 @@ impl FromStr for Header {
             _ => return Err(())
         };
 
-        let value = match AsciiStr::from_str(value.trim()) {
-            Some(v) => v.to_ascii_string(),
-            None => return Err(())
-        };
+        let value = try!(AsciiString::from_ascii(value.trim()).map_err(|_| () ));
 
         Ok(Header {
             field: field,
@@ -213,8 +231,8 @@ impl Display for Header {
 pub struct HeaderField(AsciiString);
 
 impl HeaderField {
-    pub fn from_bytes<B>(bytes: B) -> Result<HeaderField, B> where B: Into<Vec<u8>> + AsRef<[u8]> {
-        AsciiString::from_bytes(bytes).map(|s| HeaderField(s))
+    pub fn from_bytes<B>(bytes: B) -> Result<HeaderField, FromAsciiError<B>> where B: Into<Vec<u8>> + AsRef<[u8]> {
+        AsciiString::from_ascii(bytes).map(HeaderField)
     }
 
     pub fn as_str<'a>(&'a self) -> &'a AsciiStr {
@@ -230,7 +248,7 @@ impl FromStr for HeaderField {
     type Err = ();
 
     fn from_str(s: &str) -> Result<HeaderField, ()> {
-        AsciiStr::from_str(s.trim()).map(|s| HeaderField(s.to_ascii_string())).ok_or(())
+        AsciiString::from_ascii(s.trim()).map(HeaderField).map_err(|_| () )
     }
 }
 
@@ -252,21 +270,57 @@ impl PartialEq for HeaderField {
 impl Eq for HeaderField {}
 
 
-/// HTTP method (eg. `GET`, `POST`, etc.)
+/// HTTP request methods
 ///
-/// The user chooses the method he wants.
-///
-/// Comparaison between two `Method`s ignores case.
+/// As per [RFC 7231](https://tools.ietf.org/html/rfc7231#section-4.1) and
+/// [RFC 5789](https://tools.ietf.org/html/rfc5789)
 #[derive(Debug, Clone)]
-pub struct Method(AsciiString);
+pub enum Method {
+    /// `GET`
+    Get,
+
+    /// `HEAD`
+    Head,
+
+    /// `POST`
+    Post,
+
+    /// `PUT`
+    Put,
+
+    /// `DELETE`
+    Delete,
+
+    /// `CONNECT`
+    Connect,
+
+    /// `OPTIONS`
+    Options,
+
+    /// `TRACE`
+    Trace,
+
+    /// `PATCH`
+    Patch,
+
+    /// Request methods not standardized by the IETF
+    NonStandard(AsciiString),
+}
 
 impl Method {
-    fn as_str(&self) -> &AsciiStr {
-        match self { &Method(ref s) => s }
-    }
-
-    pub fn equiv(&self, other: &'static str) -> bool {
-        other.eq_ignore_ascii_case(self.as_str().as_str())
+    pub fn as_str(&self) -> &str {
+        match *self {
+            Method::Get => "GET",
+            Method::Head => "HEAD",
+            Method::Post => "POST",
+            Method::Put => "PUT",
+            Method::Delete => "DELETE",
+            Method::Connect => "CONNECT",
+            Method::Options => "OPTIONS",
+            Method::Trace => "TRACE",
+            Method::Patch => "PATCH",
+            Method::NonStandard(ref s) => s.as_str(),
+        }
     }
 }
 
@@ -274,21 +328,46 @@ impl FromStr for Method {
     type Err = ();
 
     fn from_str(s: &str) -> Result<Method, ()> {
-        <AsciiString as FromStr>::from_str(s).map(|s| Method(s))
+        Ok(match s {
+            s if s.eq_ignore_ascii_case("GET") => Method::Get,
+            s if s.eq_ignore_ascii_case("HEAD") => Method::Head,
+            s if s.eq_ignore_ascii_case("POST") => Method::Post,
+            s if s.eq_ignore_ascii_case("PUT") => Method::Put,
+            s if s.eq_ignore_ascii_case("DELETE") => Method::Delete,
+            s if s.eq_ignore_ascii_case("CONNECT") => Method::Connect,
+            s if s.eq_ignore_ascii_case("OPTIONS") => Method::Options,
+            s if s.eq_ignore_ascii_case("TRACE") => Method::Trace,
+            s if s.eq_ignore_ascii_case("PATCH") => Method::Patch,
+            s => {
+                let ascii_string = try!(AsciiString::from_ascii(s).map_err(|_| () ));
+                Method::NonStandard(ascii_string)
+            }
+        })
     }
 }
 
 impl Display for Method {
     fn fmt(&self, formatter: &mut Formatter) -> Result<(), fmt::Error> {
-        write!(formatter, "{}", self.0)
+        write!(formatter, "{}", self.as_str())
     }
 }
 
 impl PartialEq for Method {
     fn eq(&self, other: &Method) -> bool {
-        let self_str: &str = self.0.as_str().as_ref();
-        let other_str: &str = other.0.as_str().as_ref();
-        self_str.eq_ignore_ascii_case(other_str)
+        match (self, other) {
+            (&Method::NonStandard(ref s1), &Method::NonStandard(ref s2)) =>
+                s1.as_str().eq_ignore_ascii_case(s2.as_str()),
+            (&Method::Get, &Method::Get) => true,
+            (&Method::Head, &Method::Head) => true,
+            (&Method::Post, &Method::Post) => true,
+            (&Method::Put, &Method::Put) => true,
+            (&Method::Delete, &Method::Delete) => true,
+            (&Method::Connect, &Method::Connect) => true,
+            (&Method::Options, &Method::Options) => true,
+            (&Method::Trace, &Method::Trace) => true,
+            (&Method::Patch, &Method::Patch) => true,
+            _ => false,
+        }
     }
 }
 
@@ -350,6 +429,23 @@ impl From<(u8, u8)> for HTTPVersion {
         HTTPVersion(major, minor)
     }
 }
+/// Represents the current date, expressed in RFC 1123 format, e.g. Sun, 06 Nov 1994 08:49:37 GMT
+pub struct HTTPDate {
+    d: DateTime<Utc>
+}
+
+impl HTTPDate {
+    pub fn new() -> HTTPDate {
+        HTTPDate {d: Utc::now(),}
+    }
+}
+
+impl ToString for HTTPDate {
+    fn to_string(&self) -> String {
+        self.d.format("%a, %e %b %Y %H:%M:%S GMT").to_string()
+    }
+}
+
 
 
 #[cfg(test)]

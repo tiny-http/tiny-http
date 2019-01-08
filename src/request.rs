@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::ascii::AsciiExt;
-
 use std::io::Error as IoError;
 use std::io::{self, Cursor, Read, Write, ErrorKind};
 
@@ -66,6 +64,9 @@ pub struct Request {
 
     remote_addr: SocketAddr,
 
+    // true if HTTPS, false if HTTP
+    secure: bool,
+
     method: Method,
 
     path: String,
@@ -104,7 +105,7 @@ impl From<IoError> for RequestCreationError {
 /// It is the responsibility of the `Request` to read only the data of the request and not further.
 ///
 /// The `Write` object will be used by the `Request` to write the response.
-pub fn new_request<R, W>(method: Method, path: String,
+pub fn new_request<R, W>(secure: bool, method: Method, path: String,
                          version: HTTPVersion, headers: Vec<Header>,
                          remote_addr: SocketAddr, mut source_data: R, writer: W)
                          -> Result<Request, RequestCreationError>
@@ -129,7 +130,7 @@ pub fn new_request<R, W>(method: Method, path: String,
 
     // true if the client sent a `Expect: 100-continue` header
     let expects_continue = {
-        match headers.iter().find(|h: &&Header| h.field.equiv(&"Expect")).map(|h| AsRef::<str>::as_ref(h.value.as_ref())) {
+        match headers.iter().find(|h: &&Header| h.field.equiv(&"Expect")).map(|h| h.value.as_str()) {
             None => false,
             Some(v) if v.eq_ignore_ascii_case("100-continue")
                 => true,
@@ -139,9 +140,8 @@ pub fn new_request<R, W>(method: Method, path: String,
 
     // true if the client sent a `Connection: upgrade` header
     let connection_upgrade = {
-        match headers.iter().find(|h: &&Header| h.field.equiv(&"Connection")).map(|h| AsRef::<str>::as_ref(h.value.as_ref())) {
-            None => false,
-            Some(v) if v.eq_ignore_ascii_case("upgrade")
+        match headers.iter().find(|h: &&Header| h.field.equiv(&"Connection")).map(|h| h.value.as_str()) {
+            Some(v) if v.to_ascii_lowercase().contains("upgrade")
                 => true,
             _ => false
         }
@@ -200,6 +200,7 @@ pub fn new_request<R, W>(method: Method, path: String,
         data_reader: Some(reader),
         response_writer: Some(Box::new(writer) as Box<Write + Send + 'static>),
         remote_addr: remote_addr,
+        secure: secure,
         method: method,
         path: path,
         http_version: version,
@@ -210,27 +211,33 @@ pub fn new_request<R, W>(method: Method, path: String,
 }
 
 impl Request {
+    /// Returns true if the request was made through HTTPS.
+    #[inline]
+    pub fn secure(&self) -> bool {
+        self.secure
+    }
+
     /// Returns the method requested by the client (eg. `GET`, `POST`, etc.).
     #[inline]
-    pub fn get_method(&self) -> &Method {
+    pub fn method(&self) -> &Method {
         &self.method
     }
 
     /// Returns the resource requested by the client.
     #[inline]
-    pub fn get_url(&self) -> &str {
+    pub fn url(&self) -> &str {
         &self.path
     }
 
     /// Returns a list of all headers sent by the client.
     #[inline]
-    pub fn get_headers(&self) -> &[Header] {
+    pub fn headers(&self) -> &[Header] {
         &self.headers
     }
 
     /// Returns the HTTP version of the request.
     #[inline]
-    pub fn get_http_version(&self) -> &HTTPVersion {
+    pub fn http_version(&self) -> &HTTPVersion {
         &self.http_version
     }
 
@@ -238,17 +245,20 @@ impl Request {
     ///
     /// Returns `None` if the length is unknown.
     #[inline]
-    pub fn get_body_length(&self) -> Option<usize> {
+    pub fn body_length(&self) -> Option<usize> {
         self.body_length
     }
 
-    /// Returns the length of the body in bytes.
+    /// Returns the address of the client that sent this request.
+    ///
+    /// Note that this is gathered from the socket. If you receive the request from a proxy,
+    /// this function will return the address of the proxy and not the address of the actual
+    /// user.
     #[inline]
-    pub fn get_remote_addr(&self) -> &SocketAddr {
+    pub fn remote_addr(&self) -> &SocketAddr {
         &self.remote_addr
     }
 
-/*      // FIXME: reimplement this
     /// Sends a response with a `Connection: upgrade` header, then turns the `Request` into a `Stream`.
     ///
     /// The main purpose of this function is to support websockets.
@@ -258,17 +268,17 @@ impl Request {
     /// If you call this on a non-websocket request, tiny-http will wait until this `Stream` object
     ///  is destroyed before continuing to read or write on the socket. Therefore you should always
     ///  destroy it as soon as possible.
-    pub fn upgrade<R: Read>(mut self, protocol: &str, response: Response<R>) -> Box<Read + Write + Send> {
+    pub fn upgrade<R: Read>(mut self, protocol: &str, response: Response<R>) -> Box<ReadWrite + Send> {
         use util::CustomStream;
 
-        response.raw_print(self.response_writer.as_mut().unwrap().by_ref(), self.http_version,
-                           self.headers, false, Some(protocol)).ok();   // TODO: unused result
+        response.raw_print(self.response_writer.as_mut().unwrap().by_ref(), self.http_version.clone(),
+                           &self.headers, false, Some(protocol)).ok();   // TODO: unused result
 
         self.response_writer.as_mut().unwrap().flush().ok();    // TODO: unused result
 
         let stream = CustomStream::new(self.into_reader_impl(), self.into_writer_impl());
-        Box::new(stream) as Box<Read + Write + Send>
-    }*/
+        Box::new(stream) as Box<ReadWrite + Send>
+    }
 
     /// Allows to read the body of the request.
     ///
@@ -281,7 +291,7 @@ impl Request {
     /// # use std::io::Read;
     /// # fn get_content_type(_: &tiny_http::Request) -> &'static str { "" }
     /// # fn main() {
-    /// # let server = tiny_http::ServerBuilder::new().build().unwrap();
+    /// # let server = tiny_http::Server::http("0.0.0.0:0").unwrap();
     /// let mut request = server.recv().unwrap();
     ///
     /// if get_content_type(&request) == "application/json" {
@@ -332,8 +342,7 @@ impl Request {
         writer.unwrap()
     }
 
-    // TODO: unused
-    /*fn into_reader_impl(&mut self) -> AnyReader {
+    fn into_reader_impl(&mut self) -> Box<Read + Send + 'static> {
         use std::mem;
 
         assert!(self.data_reader.is_some());
@@ -341,18 +350,25 @@ impl Request {
         let mut reader = None;
         mem::swap(&mut self.data_reader, &mut reader);
         reader.unwrap()
-    }*/
+    }
 
     /// Sends a response to this request.
     #[inline]
-    pub fn respond<R>(mut self, response: Response<R>) where R: Read {
+    pub fn respond<R>(mut self, response: Response<R>) -> Result<(), IoError>
+        where R: Read
+    {
         self.respond_impl(response)
     }
 
-    fn respond_impl<R>(&mut self, response: Response<R>) where R: Read {
+    fn respond_impl<R>(&mut self, response: Response<R>) -> Result<(), IoError>
+        where R: Read
+    {
+        // Droping the request reader now so that further requests can start processing immediately.
+        self.data_reader = None;
+
         let mut writer = self.into_writer_impl();
 
-        let do_not_send_body = self.method.equiv(&"HEAD");
+        let do_not_send_body = self.method == Method::Head;
 
         match response.raw_print(writer.by_ref(),
                                  self.http_version.clone(), &self.headers,
@@ -363,11 +379,10 @@ impl Request {
             Err(ref err) if err.kind() == ErrorKind::ConnectionAborted => (),
             Err(ref err) if err.kind() == ErrorKind::ConnectionRefused => (),
             Err(ref err) if err.kind() == ErrorKind::ConnectionReset => (),
-            Err(ref err) =>
-                println!("error while sending answer: {}", err)     // TODO: handle better?
+            Err(err) => return Err(err)
         };
 
-        writer.flush().ok();
+        writer.flush()
     }
 }
 
@@ -379,12 +394,21 @@ impl fmt::Debug for Request {
 
 impl Drop for Request {
     fn drop(&mut self) {
+        // Droping the request reader now so that further requests can start processing immediately.
+        self.data_reader = None;
+
         if self.response_writer.is_some() {
             let response = Response::empty(500);
-            self.respond_impl(response);
+            let _ = self.respond_impl(response);        // ignoring any potential error
         }
     }
 }
+
+/// Dummy trait that regroups the `Read` and `Write` traits.
+///
+/// Automatically implemented on all types that implement both `Read` and `Write`.
+pub trait ReadWrite: Read + Write {}
+impl<T> ReadWrite for T where T: Read + Write {}
 
 #[cfg(test)]
 mod tests {

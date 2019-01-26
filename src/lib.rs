@@ -120,6 +120,7 @@ extern crate openssl;
 
 use std::error::Error;
 use std::io::Error as IoError;
+use std::io::ErrorKind as IoErrorKind;
 use std::io::Result as IoResult;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
@@ -375,8 +376,9 @@ impl Server {
     /// Blocks until an HTTP request has been submitted and returns it.
     pub fn recv(&self) -> IoResult<Request> {
         match self.messages.pop() {
-            Message::Error(err) => return Err(err),
-            Message::NewRequest(rq) => return Ok(rq),
+            Some(Message::Error(err)) => return Err(err),
+            Some(Message::NewRequest(rq)) => return Ok(rq),
+            None => return Err(IoError::new(IoErrorKind::Other, "thread unblocked")),
         }
     }
 
@@ -396,6 +398,13 @@ impl Server {
             Some(Message::NewRequest(rq)) => return Ok(Some(rq)),
             None => return Ok(None)
         }
+    }
+
+    /// Unblock thread stuck in recv() or incoming_requests().
+    /// If there are several such threads, only one is unblocked.
+    /// This method allows graceful shutdown of server.
+    pub fn unblock(&self) {
+        self.messages.unblock();
     }
 }
 

@@ -193,6 +193,7 @@ pub struct ServerConfig<A> where A: ToSocketAddrs {
     pub addr: A,
 
     /// If `Some`, then the server will use SSL to encode the communications.
+    #[cfg(feature = "ssl")]
     pub ssl: Option<SslConfig>,
 }
 
@@ -214,11 +215,56 @@ pub enum NewServerError {
     /// Indicates an OpenSSL error occurred while building an SSL context
     #[cfg(feature = "ssl")]
     Ssl(openssl::error::ErrorStack),
+}
 
-    /// Building a server with SSL requires enabling the `ssl` feature in
-    /// tiny-http.
-    #[cfg(not(feature = "ssl"))]
-    SslFeatureRequired,
+#[cfg(feature = "ssl")]
+type SslContext = openssl::ssl::SslContext;
+#[cfg(not(feature = "ssl"))]
+type SslContext = ();
+
+#[cfg(feature = "ssl")]
+fn create_ssl_context(server_config: &mut ServerConfig<impl ToSocketAddrs>)
+    -> Result<Option<SslContext>, NewServerError>
+{
+    fn ssl_ctx_builder(config: &mut SslConfig)
+        -> Result<openssl::ssl::SslContextBuilder, openssl::error::ErrorStack>
+    {
+        use openssl::ssl;
+        use openssl::x509::X509;
+        use openssl::pkey::PKey;
+        use openssl::ssl::SslVerifyMode;
+
+        let mut ctxt = try!(SslContext::builder(ssl::SslMethod::tls()));
+        try!(ctxt.set_cipher_list("DEFAULT"));
+        let certificate = try!(X509::from_pem(&config.certificate[..]));
+        try!(ctxt.set_certificate(&certificate));
+        let private_key = try!(PKey::private_key_from_pem(&config.private_key[..]));
+        try!(ctxt.set_private_key(&private_key));
+        ctxt.set_verify(SslVerifyMode::NONE);
+        try!(ctxt.check_private_key());
+
+        // let's wipe the certificate and private key from memory, because we're
+        // better safe than sorry
+        for b in &mut config.certificate { *b = 0; }
+        for b in &mut config.private_key { *b = 0; }
+
+        Ok(ctxt)
+    }
+
+    match server_config.ssl {
+        Some(ref mut config) =>
+            Ok(Some(ssl_ctx_builder(config)
+                .map_err(NewServerError::Ssl)?
+                .build())),
+        None => Ok(None),
+    }
+}
+
+#[cfg(not(feature = "ssl"))]
+fn create_ssl_context(_server_config: &ServerConfig<impl ToSocketAddrs>)
+    -> Result<Option<SslContext>, NewServerError>
+{
+    Ok(None)
 }
 
 impl Server {
@@ -229,6 +275,7 @@ impl Server {
     {
         Server::new(ServerConfig {
             addr: addr,
+            #[cfg(feature = "ssl")]
             ssl: None,
         })
     }
@@ -247,7 +294,7 @@ impl Server {
     }
 
     /// Builds a new server that listens on the specified address.
-    pub fn new<A>(config: ServerConfig<A>) -> Result<Server, NewServerError>
+    pub fn new<A>(mut config: ServerConfig<A>) -> Result<Server, NewServerError>
         where A: ToSocketAddrs
     {
         // building the "close" variable
@@ -255,7 +302,7 @@ impl Server {
 
         // building the TcpListener
         let (server, local_addr) = {
-            let listener = net::TcpListener::bind(config.addr)
+            let listener = net::TcpListener::bind(&config.addr)
                 .map_err(NewServerError::Io)?;
             let local_addr = listener.local_addr()
                 .map_err(NewServerError::Io)?;
@@ -264,46 +311,8 @@ impl Server {
         };
 
         // building the SSL capabilities
-        #[cfg(feature = "ssl")]
-        type SslContext = openssl::ssl::SslContext;
-        #[cfg(not(feature = "ssl"))]
-        type SslContext = ();
-        let ssl: Option<SslContext> = match config.ssl {
-            #[cfg(feature = "ssl")]
-            Some(mut config) => {
-                fn setup_ssl_ctxt(config: &mut SslConfig)
-                    -> Result<openssl::ssl::SslContextBuilder, openssl::error::ErrorStack>
-                {
-                    use openssl::ssl;
-                    use openssl::x509::X509;
-                    use openssl::pkey::PKey;
-                    use openssl::ssl::SslVerifyMode;
 
-                    let mut ctxt = try!(SslContext::builder(ssl::SslMethod::tls()));
-                    try!(ctxt.set_cipher_list("DEFAULT"));
-                    let certificate = try!(X509::from_pem(&config.certificate[..]));
-                    try!(ctxt.set_certificate(&certificate));
-                    let private_key = try!(PKey::private_key_from_pem(&config.private_key[..]));
-                    try!(ctxt.set_private_key(&private_key));
-                    ctxt.set_verify(SslVerifyMode::NONE);
-                    try!(ctxt.check_private_key());
-
-                    // let's wipe the certificate and private key from memory, because we're
-                    // better safe than sorry
-                    for b in &mut config.certificate { *b = 0; }
-                    for b in &mut config.private_key { *b = 0; }
-
-                    Ok(ctxt)
-                }
-
-                let ctxt = setup_ssl_ctxt(&mut config).map_err(NewServerError::Ssl)?;
-
-                Some(ctxt.build())
-            },
-            #[cfg(not(feature = "ssl"))]
-            Some(_) => return Err(NewServerError::SslFeatureRequired),
-            None => None,
-        };
+        let ssl: Option<SslContext> = create_ssl_context(&mut config)?;
 
         // creating a task where server.accept() is continuously called
         // and ClientConnection objects are pushed in the messages queue

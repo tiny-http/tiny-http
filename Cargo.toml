@@ -24,3 +24,4 @@ log = "0.4"
 [dev-dependencies]
 rustc-serialize = "0.3"
 sha1 = "0.6.0"
+time = "0.1.42"

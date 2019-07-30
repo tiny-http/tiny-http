@@ -83,6 +83,11 @@ impl ClientConnection {
         }
     }
 
+    /// true if the connection is HTTPS
+    pub fn secure(&self) -> bool {
+        self.secure
+    }
+
     /// Reads the next line from self.next_header_source.
     ///
     /// Reads until `CRLF` is reached. The next read will start

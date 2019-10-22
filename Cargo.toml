@@ -6,7 +6,7 @@ authors = ["pierre.krieger1708@gmail.com",
 description = "Low level HTTP server library"
 documentation = "https://tiny-http.github.io/tiny-http/tiny_http/index.html"
 keywords = ["http", "server", "web"]
-license = "Apache-2.0"
+license = "MIT OR Apache-2.0"
 repository = "https://github.com/tiny-http/tiny-http"
 
 [features]

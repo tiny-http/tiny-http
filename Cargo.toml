@@ -14,7 +14,7 @@ default = []
 ssl = ["openssl"]
 
 [dependencies]
-ascii = "0.8"
+ascii = "1.0"
 chunked_transfer = "0.3"
 openssl = { version = "0.10", optional = true }
 url = "1.7"

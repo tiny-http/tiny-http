@@ -17,7 +17,7 @@ ssl = ["openssl"]
 ascii = "1.0"
 chunked_transfer = "0.3"
 openssl = { version = "0.10", optional = true }
-url = "1.7"
+url = "2"
 chrono = "0.4"
 log = "0.4"
 

@@ -15,7 +15,7 @@ ssl = ["openssl"]
 
 [dependencies]
 ascii = "1.0"
-chunked_transfer = "0.3"
+chunked_transfer = "1"
 openssl = { version = "0.10", optional = true }
 url = "2"
 chrono = "0.4"

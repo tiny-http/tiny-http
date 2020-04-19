@@ -1,5 +1,30 @@
 # Changes
 
+## 0.7.0
+
+* [Fix HTTPS deadlock](https://github.com/tiny-http/tiny-http/pull/151)
+* [Relicense to MIT/Apache-2.0](https://github.com/tiny-http/tiny-http/pull/163)
+* [Update `ascii` dependency](https://github.com/tiny-http/tiny-http/pull/165)
+* [Fix typo in README](https://github.com/tiny-http/tiny-http/pull/171)
+* [Fix compilation errors in benchmark](https://github.com/tiny-http/tiny-http/pull/170)
+* [Update `url` dependency](https://github.com/tiny-http/tiny-http/pull/168)
+* [Update `chunked_transfer` dependency](https://github.com/tiny-http/tiny-http/pull/166)
+
+## 0.6.2
+
+* [Remove AsciiExt usage](https://github.com/tiny-http/tiny-http/pull/152)
+* [Remove unused EncodingDecoder](https://github.com/tiny-http/tiny-http/pull/153)
+
+## 0.6.1
+
+* [Fix documentation typo](https://github.com/tiny-http/tiny-http/pull/148)
+* [Expose chunked_threshold on Response](https://github.com/tiny-http/tiny-http/pull/150)
+
+## 0.6.0
+
+* [Bump dependencies](https://github.com/tiny-http/tiny-http/pull/142)
+* [Fix `next_header_source` alignment](https://github.com/tiny-http/tiny-http/pull/140)
+
 ## 0.5.9
 
 * Expanded and changed status code description mapping according to IANA registry:

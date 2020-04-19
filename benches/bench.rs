@@ -1,22 +1,24 @@
-#![feature(phase)]
+#![feature(test)]
 
-extern crate tiny_http;
+extern crate fdlimit;
 extern crate test;
-extern crate time;
+extern crate tiny_http;
 
+use std::io::Write;
 use std::process::Command;
+use tiny_http::Method;
 
 #[test]
 #[ignore]
 // TODO: obtain time
 fn curl_bench() {
     let server = tiny_http::Server::http("0.0.0.0:0").unwrap();
-    let port = server.server_addr().port;
+    let port = server.server_addr().port();
     let num_requests = 10usize;
 
     match Command::new("curl")
         .arg("-s")
-        .arg(format!("http://localhost:{}/?[1-{}]", port, num_requests).as_slice())
+        .arg(format!("http://localhost:{}/?[1-{}]", port, num_requests))
         .output()
     {
         Ok(p) => p,
@@ -28,19 +30,17 @@ fn curl_bench() {
 
 #[bench]
 fn sequential_requests(bencher: &mut test::Bencher) {
-    ::std::io::test::raise_fd_limit();
-
     let server = tiny_http::Server::http("0.0.0.0:0").unwrap();
-    let port = server.server_addr().port;
+    let port = server.server_addr().port();
 
-    let mut stream = std::io::net::tcp::TcpStream::connect("127.0.0.1", port).unwrap();
+    let mut stream = std::net::TcpStream::connect(("127.0.0.1", port)).unwrap();
 
-    bencher.auto_bench(|_| {
+    bencher.iter(|| {
         (write!(stream, "GET / HTTP/1.1\r\nHost: localhost\r\n\r\n")).unwrap();
 
         let request = server.recv().unwrap();
 
-        assert!(request.method().equiv(&"get"));
+        assert_eq!(request.method(), &Method::Get);
 
         request.respond(tiny_http::Response::new_empty(tiny_http::StatusCode(204)));
     });
@@ -48,16 +48,16 @@ fn sequential_requests(bencher: &mut test::Bencher) {
 
 #[bench]
 fn parallel_requests(bencher: &mut test::Bencher) {
-    ::std::io::test::raise_fd_limit();
+    fdlimit::raise_fd_limit();
 
     let server = tiny_http::Server::http("0.0.0.0:0").unwrap();
-    let port = server.server_addr().port;
+    let port = server.server_addr().port();
 
-    bencher.bench_n(5, |_| {
+    bencher.iter(|| {
         let mut streams = Vec::new();
 
         for _ in 0..1000usize {
-            let mut stream = std::io::net::tcp::TcpStream::connect("127.0.0.1", port).unwrap();
+            let mut stream = std::net::TcpStream::connect(("127.0.0.1", port)).unwrap();
             (write!(stream, "GET / HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n")).unwrap();
             streams.push(stream);
         }
@@ -68,7 +68,7 @@ fn parallel_requests(bencher: &mut test::Bencher) {
                 Some(rq) => rq
             };
 
-            assert!(request.method().equiv(&"get"));
+            assert_eq!(request.method(), &Method::Get);
 
             request.respond(tiny_http::Response::new_empty(tiny_http::StatusCode(204)));
         }

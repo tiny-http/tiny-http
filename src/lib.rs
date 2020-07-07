@@ -117,8 +117,9 @@ use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
 
-use client::ClientConnection;
+pub use client::ClientConnection;
 use util::MessagesQueue;
+pub use util::Stream;
 
 pub use common::{HTTPVersion, Header, HeaderField, Method, StatusCode};
 pub use request::{ReadWrite, Request};
@@ -297,26 +298,23 @@ impl Server {
             while !inside_close_trigger.load(Relaxed) {
                 let new_client = match server.accept() {
                     Ok((sock, _)) => {
-                        use util::RefinedTcpStream;
-                        let (read_closable, write_closable) = match ssl {
-                            None => RefinedTcpStream::new(sock),
+                        let stream = match ssl {
+                            None => sock,
                             #[cfg(feature = "ssl")]
                             Some(ref ssl) => {
                                 let ssl = openssl::ssl::Ssl::new(ssl).expect("Couldn't create ssl");
                                 // trying to apply SSL over the connection
                                 // if an error occurs, we just close the socket and resume listening
-                                let sock = match ssl.accept(sock) {
+                                match ssl.accept(sock) {
                                     Ok(s) => s,
                                     Err(_) => continue,
-                                };
-
-                                RefinedTcpStream::new(sock)
+                                }
                             }
                             #[cfg(not(feature = "ssl"))]
                             Some(_) => unreachable!(),
                         };
 
-                        Ok(ClientConnection::new(write_closable, read_closable))
+                        Ok(ClientConnection::new(stream))
                     }
                     Err(e) => Err(e),
                 };

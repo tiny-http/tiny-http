@@ -13,7 +13,7 @@ occupied).
 let server = tiny_http::Server::http("0.0.0.0:0").unwrap();
 ```
 
-A newly-created `Server` will immediatly start listening for incoming connections and HTTP
+A newly-created `Server` will immediately start listening for incoming connections and HTTP
 requests.
 
 ## Receiving requests
@@ -131,7 +131,7 @@ mod util;
 
 /// The main class of this library.
 ///
-/// Destroying this object will immediatly close the listening socket and the reading
+/// Destroying this object will immediately close the listening socket and the reading
 ///  part of all the client's connections. Requests that have already been returned by
 ///  the `recv()` function will not close and the responses will be transferred to the client.
 pub struct Server {

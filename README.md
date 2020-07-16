@@ -72,8 +72,8 @@ Tiny-http was designed with speed in mind:
  will wait for it to be read before processing the next request. Tiny-http will never wait for
  a request to be answered to read the next one.
  - When a client connection has sent its last request (by sending `Connection: close` header),
- the thread will immediatly stop reading from this client and can be reclaimed, even when the
- request has not yet been answered. The reading part of the socket will also be immediatly closed.
+ the thread will immediately stop reading from this client and can be reclaimed, even when the
+ request has not yet been answered. The reading part of the socket will also be immediately closed.
  - Decoding the client's request is done lazily. If you don't read the request's body, it will not
  be decoded.
 

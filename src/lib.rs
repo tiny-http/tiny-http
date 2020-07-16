@@ -104,7 +104,6 @@ extern crate chrono;
 #[cfg(feature = "ssl")]
 extern crate openssl;
 
-use std::error::Error;
 use std::io::Error as IoError;
 use std::io::Result as IoResult;
 use std::sync::Arc;
@@ -181,6 +180,7 @@ pub struct ServerConfig<A> where A: ToSocketAddrs {
     pub addr: A,
 
     /// If `Some`, then the server will use SSL to encode the communications.
+    #[cfg(feature = "ssl")]
     pub ssl: Option<SslConfig>,
 }
 
@@ -193,14 +193,76 @@ pub struct SslConfig {
     pub private_key: Vec<u8>,
 }
 
+/// Error type returned by `Server::new`, `Server::http`, and `Server::https`
+#[derive(Debug)]
+pub enum NewServerError {
+    /// Indicates an IO error occurred while starting the server
+    Io(IoError),
+
+    /// Indicates an OpenSSL error occurred while building an SSL context
+    #[cfg(feature = "ssl")]
+    Ssl(openssl::error::ErrorStack),
+}
+
+#[cfg(feature = "ssl")]
+type SslContext = openssl::ssl::SslContext;
+#[cfg(not(feature = "ssl"))]
+type SslContext = ();
+
+#[cfg(feature = "ssl")]
+fn create_ssl_context(server_config: &mut ServerConfig<impl ToSocketAddrs>)
+    -> Result<Option<SslContext>, NewServerError>
+{
+    fn ssl_ctx_builder(config: &mut SslConfig)
+        -> Result<openssl::ssl::SslContextBuilder, openssl::error::ErrorStack>
+    {
+        use openssl::ssl;
+        use openssl::x509::X509;
+        use openssl::pkey::PKey;
+        use openssl::ssl::SslVerifyMode;
+
+        let mut ctxt = try!(SslContext::builder(ssl::SslMethod::tls()));
+        try!(ctxt.set_cipher_list("DEFAULT"));
+        let certificate = try!(X509::from_pem(&config.certificate[..]));
+        try!(ctxt.set_certificate(&certificate));
+        let private_key = try!(PKey::private_key_from_pem(&config.private_key[..]));
+        try!(ctxt.set_private_key(&private_key));
+        ctxt.set_verify(SslVerifyMode::NONE);
+        try!(ctxt.check_private_key());
+
+        // let's wipe the certificate and private key from memory, because we're
+        // better safe than sorry
+        for b in &mut config.certificate { *b = 0; }
+        for b in &mut config.private_key { *b = 0; }
+
+        Ok(ctxt)
+    }
+
+    match server_config.ssl {
+        Some(ref mut config) =>
+            Ok(Some(ssl_ctx_builder(config)
+                .map_err(NewServerError::Ssl)?
+                .build())),
+        None => Ok(None),
+    }
+}
+
+#[cfg(not(feature = "ssl"))]
+fn create_ssl_context(_server_config: &ServerConfig<impl ToSocketAddrs>)
+    -> Result<Option<SslContext>, NewServerError>
+{
+    Ok(None)
+}
+
 impl Server {
     /// Shortcut for a simple server on a specific address.
     #[inline]
-    pub fn http<A>(addr: A) -> Result<Server, Box<Error + Send + Sync + 'static>>
+    pub fn http<A>(addr: A) -> Result<Server, NewServerError>
         where A: ToSocketAddrs
     {
         Server::new(ServerConfig {
             addr: addr,
+            #[cfg(feature = "ssl")]
             ssl: None,
         })
     }
@@ -209,7 +271,7 @@ impl Server {
     #[cfg(feature = "ssl")]
     #[inline]
     pub fn https<A>(addr: A, config: SslConfig)
-                    -> Result<Server, Box<Error + Send + Sync + 'static>>
+                    -> Result<Server, NewServerError>
         where A: ToSocketAddrs
     {
         Server::new(ServerConfig {
@@ -219,7 +281,7 @@ impl Server {
     }
 
     /// Builds a new server that listens on the specified address.
-    pub fn new<A>(config: ServerConfig<A>) -> Result<Server, Box<Error + Send + Sync + 'static>>
+    pub fn new<A>(mut config: ServerConfig<A>) -> Result<Server, NewServerError>
         where A: ToSocketAddrs
     {
         // building the "close" variable
@@ -227,46 +289,17 @@ impl Server {
 
         // building the TcpListener
         let (server, local_addr) = {
-            let listener = try!(net::TcpListener::bind(config.addr));
-            let local_addr = try!(listener.local_addr());
+            let listener = net::TcpListener::bind(&config.addr)
+                .map_err(NewServerError::Io)?;
+            let local_addr = listener.local_addr()
+                .map_err(NewServerError::Io)?;
             debug!("Server listening on {}", local_addr);
             (listener, local_addr)
         };
 
         // building the SSL capabilities
-        #[cfg(feature = "ssl")]
-        type SslContext = openssl::ssl::SslContext;
-        #[cfg(not(feature = "ssl"))]
-        type SslContext = ();
-        let ssl: Option<SslContext> = match config.ssl {
-            #[cfg(feature = "ssl")]
-            Some(mut config) => {
-                use openssl::ssl;
-                use openssl::x509::X509;
-                use openssl::pkey::PKey;
-                use openssl::ssl::SslVerifyMode;
 
-                let mut ctxt = try!(SslContext::builder(ssl::SslMethod::tls()));
-                try!(ctxt.set_cipher_list("DEFAULT"));
-                let certificate = try!(X509::from_pem(&config.certificate[..]));
-                try!(ctxt.set_certificate(&certificate));
-                let private_key = try!(PKey::private_key_from_pem(&config.private_key[..]));
-                try!(ctxt.set_private_key(&private_key));
-                ctxt.set_verify(SslVerifyMode::NONE);
-                try!(ctxt.check_private_key());
-
-                // let's wipe the certificate and private key from memory, because we're
-                // better safe than sorry
-                for b in &mut config.certificate { *b = 0; }
-                for b in &mut config.private_key { *b = 0; }
-
-                Some(ctxt.build())
-            },
-            #[cfg(not(feature = "ssl"))]
-            Some(_) => return Err("Building a server with SSL requires enabling the `ssl` feature \
-                                   in tiny-http".to_owned().into()),
-            None => None,
-        };
+        let ssl: Option<SslContext> = create_ssl_context(&mut config)?;
 
         // creating a task where server.accept() is continuously called
         // and ClientConnection objects are pushed in the messages queue

@@ -15,9 +15,7 @@ use std::str::FromStr;
 /// Some headers cannot be changed. Trying to define the value
 /// of one of these will have no effect:
 ///
-///  - `Accept-Ranges`
 ///  - `Connection`
-///  - `Content-Range`
 ///  - `Trailer`
 ///  - `Transfer-Encoding`
 ///  - `Upgrade`
@@ -240,9 +238,7 @@ where
         let header = header.into();
 
         // ignoring forbidden headers
-        if header.field.equiv(&"Accept-Ranges")
-            || header.field.equiv(&"Connection")
-            || header.field.equiv(&"Content-Range")
+        if header.field.equiv(&"Connection")
             || header.field.equiv(&"Trailer")
             || header.field.equiv(&"Transfer-Encoding")
             || header.field.equiv(&"Upgrade")

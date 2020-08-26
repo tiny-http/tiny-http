@@ -34,8 +34,8 @@ pub fn parse_header_value<'a>(input: &'a str) -> Vec<(&'a str, f32)> {
             let mut value = 1.0f32;
 
             for p in params {
-                if p.trim_left().starts_with("q=") {
-                    match FromStr::from_str(&p.trim_left()[2..].trim()) {
+                if p.trim_start().starts_with("q=") {
+                    match FromStr::from_str(&p.trim_start()[2..].trim()) {
                         Ok(val) => {
                             value = val;
                             break;

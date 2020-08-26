@@ -14,7 +14,7 @@ pub struct TaskPool {
 
 struct Sharing {
     // list of the tasks to be done by worker threads
-    todo: Mutex<VecDeque<Box<FnMut() + Send>>>,
+    todo: Mutex<VecDeque<Box<dyn FnMut() + Send>>>,
 
     // condvar that will be notified whenever a task is added to `todo`
     condvar: Condvar,
@@ -66,7 +66,7 @@ impl TaskPool {
 
     /// Executes a function in a thread.
     /// If no thread is available, spawns a new one.
-    pub fn spawn(&self, code: Box<FnMut() + Send>) {
+    pub fn spawn(&self, code: Box<dyn FnMut() + Send>) {
         let mut queue = self.sharing.todo.lock().unwrap();
 
         if self.sharing.waiting_tasks.load(Ordering::Acquire) == 0 {
@@ -77,7 +77,7 @@ impl TaskPool {
         }
     }
 
-    fn add_thread(&self, initial_fn: Option<Box<FnMut() + Send>>) {
+    fn add_thread(&self, initial_fn: Option<Box<dyn FnMut() + Send>>) {
         let sharing = self.sharing.clone();
 
         thread::spawn(move || {
@@ -90,7 +90,7 @@ impl TaskPool {
             }
 
             loop {
-                let mut task: Box<FnMut() + Send> = {
+                let mut task: Box<dyn FnMut() + Send> = {
                     let mut todo = sharing.todo.lock().unwrap();
 
                     let task;

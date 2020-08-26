@@ -61,12 +61,12 @@ impl ClientConnection {
         let first_header = source.next().unwrap();
 
         ClientConnection {
-            source: source,
+            source,
             sink: SequentialWriterBuilder::new(BufWriter::with_capacity(1024, write_socket)),
-            remote_addr: remote_addr,
+            remote_addr,
             next_header_source: first_header,
             no_more_requests: false,
-            secure: secure,
+            secure,
         }
     }
 
@@ -87,7 +87,7 @@ impl ClientConnection {
             let byte = self.next_header_source.by_ref().bytes().next();
 
             let byte = match byte {
-                Some(b) => try!(b),
+                Some(b) => b?,
                 None => return Err(IoError::new(ErrorKind::ConnectionAborted, "Unexpected EOF")),
             };
 
@@ -109,18 +109,22 @@ impl ClientConnection {
         let (method, path, version, headers) = {
             // reading the request line
             let (method, path, version) = {
-                let line = try!(self.read_next_line().map_err(|e| ReadError::ReadIoError(e)));
+                let line = self
+                    .read_next_line()
+                    .map_err(|e| ReadError::ReadIoError(e))?;
 
-                try!(parse_request_line(
-                    line.as_str().trim() // TODO: remove this conversion
-                ))
+                parse_request_line(
+                    line.as_str().trim(), // TODO: remove this conversion
+                )?
             };
 
             // getting all headers
             let headers = {
                 let mut headers = Vec::new();
                 loop {
-                    let line = try!(self.read_next_line().map_err(|e| ReadError::ReadIoError(e)));
+                    let line = self
+                        .read_next_line()
+                        .map_err(|e| ReadError::ReadIoError(e))?;
 
                     if line.len() == 0 {
                         break;
@@ -146,7 +150,7 @@ impl ClientConnection {
         ::std::mem::swap(&mut self.next_header_source, &mut data_source);
 
         // building the next reader
-        let request = try!(::request::new_request(
+        let request = ::request::new_request(
             self.secure,
             method,
             path,
@@ -154,7 +158,7 @@ impl ClientConnection {
             headers,
             self.remote_addr.as_ref().unwrap().clone(),
             data_source,
-            writer
+            writer,
         )
         .map_err(|e| {
             use request;
@@ -164,7 +168,7 @@ impl ClientConnection {
                     ReadError::ExpectationFailed(version)
                 }
             }
-        }));
+        })?;
 
         // return the request
         Ok(request)
@@ -316,7 +320,7 @@ fn parse_request_line(line: &str) -> Result<(Method, String, HTTPVersion), ReadE
         Err(()) => return Err(ReadError::WrongRequestLine),
     };
 
-    let version = try!(parse_http_version(version));
+    let version = parse_http_version(version)?;
 
     Ok((method, path.to_owned(), version))
 }

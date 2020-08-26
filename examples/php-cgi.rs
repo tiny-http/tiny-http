@@ -48,7 +48,7 @@ fn handle(rq: tiny_http::Request, script: &str) {
     match php.status {
         status if status.success() => {
             let mut writer = rq.into_writer();
-            let mut writer: &mut Write = &mut *writer;
+            let writer: &mut dyn Write = &mut *writer;
 
             (write!(writer, "HTTP/1.1 200 OK\r\n")).unwrap();
             (write!(writer, "{}", php.stdout.clone().as_ascii_str().unwrap())).unwrap();

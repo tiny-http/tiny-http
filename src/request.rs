@@ -45,10 +45,10 @@ use {HTTPVersion, Header, Method, Response, StatusCode};
 /// error" response will automatically be sent during the stack unwinding.
 pub struct Request {
     // where to read the body from
-    data_reader: Option<Box<Read + Send + 'static>>,
+    data_reader: Option<Box<dyn Read + Send + 'static>>,
 
     // if this writer is empty, then the request has been answered
-    response_writer: Option<Box<Write + Send + 'static>>,
+    response_writer: Option<Box<dyn Write + Send + 'static>>,
 
     remote_addr: SocketAddr,
 
@@ -181,10 +181,10 @@ where
     // content-length headers
     let reader = if connection_upgrade {
         // if we have a `Connection: upgrade`, always keeping the whole reader
-        Box::new(source_data) as Box<Read + Send + 'static>
+        Box::new(source_data) as Box<dyn Read + Send + 'static>
     } else if let Some(content_length) = content_length {
         if content_length == 0 {
-            Box::new(io::empty()) as Box<Read + Send + 'static>
+            Box::new(io::empty()) as Box<dyn Read + Send + 'static>
         } else if content_length <= 1024 && !expects_continue {
             // if the content-length is small enough, we just read everything into a buffer
 
@@ -192,7 +192,7 @@ where
             let mut offset = 0;
 
             while offset != content_length {
-                let read = try!(source_data.read(&mut buffer[offset..]));
+                let read = source_data.read(&mut buffer[offset..])?;
                 if read == 0 {
                     // the socket returned EOF, but we were before the expected content-length
                     // aborting
@@ -204,25 +204,25 @@ where
                 offset += read;
             }
 
-            Box::new(Cursor::new(buffer)) as Box<Read + Send + 'static>
+            Box::new(Cursor::new(buffer)) as Box<dyn Read + Send + 'static>
         } else {
             let (data_reader, _) = EqualReader::new(source_data, content_length); // TODO:
-            Box::new(data_reader) as Box<Read + Send + 'static>
+            Box::new(data_reader) as Box<dyn Read + Send + 'static>
         }
     } else if transfer_encoding.is_some() {
         // if a transfer-encoding was specified, then "chunked" is ALWAYS applied
         // over the message (RFC2616 #3.6)
-        Box::new(Decoder::new(source_data)) as Box<Read + Send + 'static>
+        Box::new(Decoder::new(source_data)) as Box<dyn Read + Send + 'static>
     } else {
         // if we have neither a Content-Length nor a Transfer-Encoding,
         // assuming that we have no data
         // TODO: could also be multipart/byteranges
-        Box::new(io::empty()) as Box<Read + Send + 'static>
+        Box::new(io::empty()) as Box<dyn Read + Send + 'static>
     };
 
     Ok(Request {
         data_reader: Some(reader),
-        response_writer: Some(Box::new(writer) as Box<Write + Send + 'static>),
+        response_writer: Some(Box::new(writer) as Box<dyn Write + Send + 'static>),
         remote_addr: remote_addr,
         secure: secure,
         method: method,
@@ -297,7 +297,7 @@ impl Request {
         mut self,
         protocol: &str,
         response: Response<R>,
-    ) -> Box<ReadWrite + Send> {
+    ) -> Box<dyn ReadWrite + Send> {
         use util::CustomStream;
 
         response
@@ -318,9 +318,9 @@ impl Request {
                 sender,
                 inner: stream,
             };
-            Box::new(stream) as Box<ReadWrite + Send>
+            Box::new(stream) as Box<dyn ReadWrite + Send>
         } else {
-            Box::new(stream) as Box<ReadWrite + Send>
+            Box::new(stream) as Box<dyn ReadWrite + Send>
         }
     }
 
@@ -349,7 +349,7 @@ impl Request {
     /// If the client sent a `Expect: 100-continue` header with the request, calling this
     ///  function will send back a `100 Continue` response.
     #[inline]
-    pub fn as_reader(&mut self) -> &mut Read {
+    pub fn as_reader(&mut self) -> &mut dyn Read {
         if self.must_send_continue {
             let msg = Response::new_empty(StatusCode(100));
             msg.raw_print(
@@ -378,20 +378,20 @@ impl Request {
     /// the writing of the next response.
     /// Therefore you should always destroy the `Writer` as soon as possible.
     #[inline]
-    pub fn into_writer(mut self) -> Box<Write + Send + 'static> {
+    pub fn into_writer(mut self) -> Box<dyn Write + Send + 'static> {
         let writer = self.into_writer_impl();
         if let Some(sender) = self.notify_when_responded.take() {
             let writer = NotifyOnDrop {
                 sender,
                 inner: writer,
             };
-            Box::new(writer) as Box<Write + Send + 'static>
+            Box::new(writer) as Box<dyn Write + Send + 'static>
         } else {
             writer
         }
     }
 
-    fn into_writer_impl(&mut self) -> Box<Write + Send + 'static> {
+    fn into_writer_impl(&mut self) -> Box<dyn Write + Send + 'static> {
         use std::mem;
 
         assert!(self.response_writer.is_some());
@@ -401,7 +401,7 @@ impl Request {
         writer.unwrap()
     }
 
-    fn into_reader_impl(&mut self) -> Box<Read + Send + 'static> {
+    fn into_reader_impl(&mut self) -> Box<dyn Read + Send + 'static> {
         use std::mem;
 
         assert!(self.data_reader.is_some());

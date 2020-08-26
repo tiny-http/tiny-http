@@ -87,7 +87,7 @@ fn main() {
                 }) {
                 None => {
                     // sending the HTML page
-                    request.respond(home_page(port));
+                    request.respond(home_page(port)).expect("Responded");
                     return;
                 }
                 _ => (),
@@ -102,7 +102,7 @@ fn main() {
             {
                 None => {
                     let response = tiny_http::Response::new_empty(tiny_http::StatusCode(400));
-                    request.respond(response);
+                    request.respond(response).expect("Responded");
                     return;
                 }
                 Some(k) => k,

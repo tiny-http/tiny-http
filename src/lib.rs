@@ -198,7 +198,7 @@ pub struct SslConfig {
 impl Server {
     /// Shortcut for a simple server on a specific address.
     #[inline]
-    pub fn http<A>(addr: A) -> Result<Server, Box<Error + Send + Sync + 'static>>
+    pub fn http<A>(addr: A) -> Result<Server, Box<dyn Error + Send + Sync + 'static>>
     where
         A: ToSocketAddrs,
     {
@@ -225,7 +225,7 @@ impl Server {
     }
 
     /// Builds a new server that listens on the specified address.
-    pub fn new<A>(config: ServerConfig<A>) -> Result<Server, Box<Error + Send + Sync + 'static>>
+    pub fn new<A>(config: ServerConfig<A>) -> Result<Server, Box<dyn Error + Send + Sync + 'static>>
     where
         A: ToSocketAddrs,
     {
@@ -234,8 +234,8 @@ impl Server {
 
         // building the TcpListener
         let (server, local_addr) = {
-            let listener = try!(net::TcpListener::bind(config.addr));
-            let local_addr = try!(listener.local_addr());
+            let listener = net::TcpListener::bind(config.addr)?;
+            let local_addr = listener.local_addr()?;
             debug!("Server listening on {}", local_addr);
             (listener, local_addr)
         };

@@ -169,8 +169,8 @@ impl Header {
         B1: Into<Vec<u8>> + AsRef<[u8]>,
         B2: Into<Vec<u8>> + AsRef<[u8]>,
     {
-        let header = try!(HeaderField::from_bytes(header).or(Err(())));
-        let value = try!(AsciiString::from_ascii(value).or(Err(())));
+        let header = HeaderField::from_bytes(header).or(Err(()))?;
+        let value = AsciiString::from_ascii(value).or(Err(()))?;
 
         Ok(Header {
             field: header,
@@ -198,7 +198,7 @@ impl FromStr for Header {
             _ => return Err(()),
         };
 
-        let value = try!(AsciiString::from_ascii(value.trim()).map_err(|_| ()));
+        let value = AsciiString::from_ascii(value.trim()).map_err(|_| ())?;
 
         Ok(Header {
             field: field,
@@ -334,7 +334,7 @@ impl FromStr for Method {
             s if s.eq_ignore_ascii_case("TRACE") => Method::Trace,
             s if s.eq_ignore_ascii_case("PATCH") => Method::Patch,
             s => {
-                let ascii_string = try!(AsciiString::from_ascii(s).map_err(|_| ()));
+                let ascii_string = AsciiString::from_ascii(s).map_err(|_| ())?;
                 Method::NonStandard(ascii_string)
             }
         })

@@ -1,8 +1,8 @@
-use std::sync::{Arc, Mutex, Condvar};
-use std::sync::atomic::{Ordering, AtomicUsize};
 use std::collections::VecDeque;
-use std::time::Duration;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{Arc, Condvar, Mutex};
 use std::thread;
+use std::time::Duration;
 
 /// Manages a collection of threads.
 ///
@@ -30,7 +30,7 @@ struct Sharing {
 static MIN_THREADS: usize = 4;
 
 struct Registration<'a> {
-    nb: &'a AtomicUsize
+    nb: &'a AtomicUsize,
 }
 
 impl<'a> Registration<'a> {
@@ -71,7 +71,6 @@ impl TaskPool {
 
         if self.sharing.waiting_tasks.load(Ordering::Acquire) == 0 {
             self.add_thread(Some(code));
-
         } else {
             queue.push_back(code);
             self.sharing.condvar.notify_one();
@@ -102,19 +101,18 @@ impl TaskPool {
                         }
                         let _waiting_guard = Registration::new(&sharing.waiting_tasks);
 
-                        let received = if sharing.active_tasks.load(Ordering::Acquire)
-                                                <= MIN_THREADS
-                        {
-                            todo = sharing.condvar.wait(todo).unwrap();
-                            true
-
-                        } else {
-                            let (new_lock, waitres) = sharing.condvar
-                                                             .wait_timeout(todo, Duration::from_millis(5000))
-                                                             .unwrap();
-                            todo = new_lock;
-                            !waitres.timed_out()
-                        };
+                        let received =
+                            if sharing.active_tasks.load(Ordering::Acquire) <= MIN_THREADS {
+                                todo = sharing.condvar.wait(todo).unwrap();
+                                true
+                            } else {
+                                let (new_lock, waitres) = sharing
+                                    .condvar
+                                    .wait_timeout(todo, Duration::from_millis(5000))
+                                    .unwrap();
+                                todo = new_lock;
+                                !waitres.timed_out()
+                            };
 
                         if !received && todo.is_empty() {
                             return;
@@ -132,7 +130,9 @@ impl TaskPool {
 
 impl Drop for TaskPool {
     fn drop(&mut self) {
-        self.sharing.active_tasks.store(999999999, Ordering::Release);
+        self.sharing
+            .active_tasks
+            .store(999999999, Ordering::Release);
         self.sharing.condvar.notify_all();
     }
 }

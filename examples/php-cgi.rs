@@ -12,15 +12,18 @@ Usage: php-cgi <php-script-path>
 */
 
 fn handle(rq: tiny_http::Request, script: &str) {
-    use std::process::Command;
     use std::io::Write;
+    use std::process::Command;
 
     let php = Command::new("php-cgi")
         .arg(script)
         //.stdin(Ignored)
         //.extra_io(Ignored)
         .env("AUTH_TYPE", "")
-        .env("CONTENT_LENGTH", format!("{}", rq.body_length().unwrap_or(0)))
+        .env(
+            "CONTENT_LENGTH",
+            format!("{}", rq.body_length().unwrap_or(0)),
+        )
         .env("CONTENT_TYPE", "")
         .env("GATEWAY_INTERFACE", "CGI/1.1")
         .env("PATH_INFO", "")
@@ -39,7 +42,6 @@ fn handle(rq: tiny_http::Request, script: &str) {
         .output()
         .unwrap();
 
-
     // note: this is not a good implementation
     // cgi returns the status code in the headers ; also many headers will be missing
     //  in the response
@@ -52,28 +54,34 @@ fn handle(rq: tiny_http::Request, script: &str) {
             (write!(writer, "{}", php.stdout.clone().as_ascii_str().unwrap())).unwrap();
 
             writer.flush().unwrap();
-        },
+        }
         _ => {
-            println!("Error in script execution: {}", php.stderr.clone().as_ascii_str().unwrap());
+            println!(
+                "Error in script execution: {}",
+                php.stderr.clone().as_ascii_str().unwrap()
+            );
         }
     }
 }
 
 fn main() {
+    use std::env;
     use std::sync::Arc;
     use std::thread::spawn;
-    use std::env;
 
     let php_script = {
         let mut args = env::args();
-        if args.len() < 2 { println!("Usage: php-cgi <php-script-path>"); return }
+        if args.len() < 2 {
+            println!("Usage: php-cgi <php-script-path>");
+            return;
+        }
         args.nth(1).unwrap()
     };
 
     let server = Arc::new(tiny_http::Server::http("0.0.0.0:9975").unwrap());
     println!("Now listening on port 9975");
 
-    let num_cpus = 4;  // TODO: dynamically generate this value
+    let num_cpus = 4; // TODO: dynamically generate this value
     for _ in 0..num_cpus {
         let server = server.clone();
         let php_script = php_script.clone();

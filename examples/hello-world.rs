@@ -9,7 +9,7 @@ fn main() {
 
     let mut handles = Vec::new();
 
-    for _ in 0 .. 4 {
+    for _ in 0..4 {
         let server = server.clone();
 
         handles.push(thread::spawn(move || {

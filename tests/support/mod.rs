@@ -12,7 +12,7 @@ pub fn new_one_server_one_client() -> (tiny_http::Server, TcpStream) {
 }
 
 /// Creates a "hello world" server with a client connected to the server.
-/// 
+///
 /// The server will automatically close after 3 seconds.
 pub fn new_client_to_hello_world_server() -> TcpStream {
     let server = tiny_http::Server::http("0.0.0.0:0").unwrap();
@@ -27,8 +27,8 @@ pub fn new_client_to_hello_world_server() -> TcpStream {
                 Some(rq) => {
                     let response = tiny_http::Response::from_string("hello world".to_string());
                     rq.respond(response).unwrap();
-                },
-                _ => ()
+                }
+                _ => (),
             };
 
             thread::sleep(Duration::from_millis(20));

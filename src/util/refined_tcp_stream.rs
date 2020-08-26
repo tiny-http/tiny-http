@@ -1,11 +1,11 @@
-use std::io::{Read, Write};
 use std::io::Result as IoResult;
-use std::net::{SocketAddr, TcpStream, Shutdown};
+use std::io::{Read, Write};
+use std::net::{Shutdown, SocketAddr, TcpStream};
 
 #[cfg(feature = "ssl")]
-use std::sync::{Arc, Mutex};
-#[cfg(feature = "ssl")]
 use openssl::ssl::SslStream;
+#[cfg(feature = "ssl")]
+use std::sync::{Arc, Mutex};
 
 pub struct RefinedTcpStream {
     stream: Stream,
@@ -36,7 +36,8 @@ impl From<SslStream<TcpStream>> for Stream {
 
 impl RefinedTcpStream {
     pub fn new<S>(stream: S) -> (RefinedTcpStream, RefinedTcpStream)
-        where S: Into<Stream>
+    where
+        S: Into<Stream>,
     {
         let stream = stream.into();
 
@@ -87,7 +88,12 @@ impl Drop for RefinedTcpStream {
                 // ignoring outcome
                 Stream::Http(ref mut stream) => stream.shutdown(Shutdown::Read).ok(),
                 #[cfg(feature = "ssl")]
-                Stream::Https(ref mut stream) => stream.lock().unwrap().get_mut().shutdown(Shutdown::Read).ok(),
+                Stream::Https(ref mut stream) => stream
+                    .lock()
+                    .unwrap()
+                    .get_mut()
+                    .shutdown(Shutdown::Read)
+                    .ok(),
             };
         }
 
@@ -96,7 +102,12 @@ impl Drop for RefinedTcpStream {
                 // ignoring outcome
                 Stream::Http(ref mut stream) => stream.shutdown(Shutdown::Write).ok(),
                 #[cfg(feature = "ssl")]
-                Stream::Https(ref mut stream) => stream.lock().unwrap().get_mut().shutdown(Shutdown::Write).ok(),
+                Stream::Https(ref mut stream) => stream
+                    .lock()
+                    .unwrap()
+                    .get_mut()
+                    .shutdown(Shutdown::Write)
+                    .ok(),
             };
         }
     }

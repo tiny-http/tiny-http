@@ -1,10 +1,10 @@
-use common::{Header, HTTPVersion, StatusCode, HTTPDate};
+use common::{HTTPDate, HTTPVersion, Header, StatusCode};
 
 use std::cmp::Ordering;
 use std::sync::mpsc::Receiver;
 
-use std::io::{self, Read, Write, Cursor};
 use std::io::Result as IoResult;
+use std::io::{self, Cursor, Read, Write};
 
 use std::fs::File;
 
@@ -33,12 +33,15 @@ use std::str::FromStr;
 ///     header will be equivalent to modifying the size of the data but the header
 ///     itself may not be present in the final result.
 ///
-pub struct Response<R> where R: Read {
+pub struct Response<R>
+where
+    R: Read,
+{
     reader: R,
     status_code: StatusCode,
     headers: Vec<Header>,
     data_length: Option<usize>,
-    chunked_threshold: Option<usize>
+    chunked_threshold: Option<usize>,
 }
 
 /// A `Response` without a template parameter.
@@ -72,12 +75,19 @@ fn build_date_header() -> Header {
     Header::from_bytes(&b"Date"[..], &d.to_string().into_bytes()[..]).unwrap()
 }
 
-fn write_message_header<W>(mut writer: W, http_version: &HTTPVersion,
-                           status_code: &StatusCode, headers: &[Header])
-                           -> IoResult<()> where W: Write
+fn write_message_header<W>(
+    mut writer: W,
+    http_version: &HTTPVersion,
+    status_code: &StatusCode,
+    headers: &[Header],
+) -> IoResult<()>
+where
+    W: Write,
 {
     // writing status line
-    try!(write!(&mut writer, "HTTP/{}.{} {} {}\r\n",
+    try!(write!(
+        &mut writer,
+        "HTTP/{}.{} {} {}\r\n",
         http_version.0,
         http_version.1,
         status_code.0,
@@ -98,11 +108,13 @@ fn write_message_header<W>(mut writer: W, http_version: &HTTPVersion,
     Ok(())
 }
 
-fn choose_transfer_encoding(request_headers: &[Header], http_version: &HTTPVersion,
-                            entity_length: &Option<usize>, has_additional_headers: bool,
-                            chunked_threshold: usize)
-    -> TransferEncoding
-{
+fn choose_transfer_encoding(
+    request_headers: &[Header],
+    http_version: &HTTPVersion,
+    entity_length: &Option<usize>,
+    has_additional_headers: bool,
+    chunked_threshold: usize,
+) -> TransferEncoding {
     use util;
 
     // HTTP 1.0 doesn't support other encoding
@@ -111,17 +123,16 @@ fn choose_transfer_encoding(request_headers: &[Header], http_version: &HTTPVersi
     }
 
     // parsing the request's TE header
-    let user_request = request_headers.iter()
+    let user_request = request_headers
+        .iter()
         // finding TE
         .find(|h| h.field.equiv(&"TE"))
-
         // getting its value
         .map(|h| h.value.clone())
-
         // getting the corresponding TransferEncoding
         .and_then(|value| {
             // getting list of requested elements
-            let mut parse = util::parse_header_value(value.as_str());     // TODO: remove conversion
+            let mut parse = util::parse_header_value(value.as_str()); // TODO: remove conversion
 
             // sorting elements by most priority
             parse.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(Ordering::Equal));
@@ -129,11 +140,13 @@ fn choose_transfer_encoding(request_headers: &[Header], http_version: &HTTPVersi
             // trying to parse each requested encoding
             for value in parse.iter() {
                 // q=0 are ignored
-                if value.1 <= 0.0 { continue }
+                if value.1 <= 0.0 {
+                    continue;
+                }
 
                 match <TransferEncoding as FromStr>::from_str(value.0) {
                     Ok(te) => return Some(te),
-                    _ => ()     // unrecognized/unsupported encoding
+                    _ => (), // unrecognized/unsupported encoding
                 };
             }
 
@@ -152,7 +165,10 @@ fn choose_transfer_encoding(request_headers: &[Header], http_version: &HTTPVersi
     }
 
     // if we don't have a Content-Length, or if the Content-Length is too big, using chunks writer
-    if entity_length.as_ref().map_or(true, |val| *val >= chunked_threshold) {
+    if entity_length
+        .as_ref()
+        .map_or(true, |val| *val >= chunked_threshold)
+    {
         return TransferEncoding::Chunked;
     }
 
@@ -160,18 +176,23 @@ fn choose_transfer_encoding(request_headers: &[Header], http_version: &HTTPVersi
     TransferEncoding::Identity
 }
 
-impl<R> Response<R> where R: Read {
+impl<R> Response<R>
+where
+    R: Read,
+{
     /// Creates a new Response object.
     ///
     /// The `additional_headers` argument is a receiver that
     ///  may provide headers even after the response has been sent.
     ///
     /// All the other arguments are straight-forward.
-    pub fn new(status_code: StatusCode, headers: Vec<Header>,
-               data: R, data_length: Option<usize>,
-               additional_headers: Option<Receiver<Header>>)
-                -> Response<R>
-    {
+    pub fn new(
+        status_code: StatusCode,
+        headers: Vec<Header>,
+        data: R,
+        data_length: Option<usize>,
+        additional_headers: Option<Receiver<Header>>,
+    ) -> Response<R> {
         let mut response = Response {
             reader: data,
             status_code: status_code,
@@ -198,7 +219,7 @@ impl<R> Response<R> where R: Read {
     /// transfer. Notice that chunked transfer might happen regardless of
     /// this threshold, for instance when the request headers indicate
     /// it is wanted or when there is no `Content-Length`.
-    pub fn with_chunked_threshold(mut self, length: usize) -> Response<R>{
+    pub fn with_chunked_threshold(mut self, length: usize) -> Response<R> {
         self.chunked_threshold = Some(length);
         self
     }
@@ -213,16 +234,19 @@ impl<R> Response<R> where R: Read {
 
     /// Adds a header to the list.
     /// Does all the checks.
-    pub fn add_header<H>(&mut self, header: H) where H: Into<Header> {
+    pub fn add_header<H>(&mut self, header: H)
+    where
+        H: Into<Header>,
+    {
         let header = header.into();
 
         // ignoring forbidden headers
-        if header.field.equiv(&"Accept-Ranges") ||
-           header.field.equiv(&"Connection") ||
-           header.field.equiv(&"Content-Range") ||
-           header.field.equiv(&"Trailer") ||
-           header.field.equiv(&"Transfer-Encoding") ||
-           header.field.equiv(&"Upgrade")
+        if header.field.equiv(&"Accept-Ranges")
+            || header.field.equiv(&"Connection")
+            || header.field.equiv(&"Content-Range")
+            || header.field.equiv(&"Trailer")
+            || header.field.equiv(&"Transfer-Encoding")
+            || header.field.equiv(&"Upgrade")
         {
             return;
         }
@@ -231,7 +255,7 @@ impl<R> Response<R> where R: Read {
         if header.field.equiv(&"Content-Length") {
             match <usize as FromStr>::from_str(header.value.as_str()) {
                 Ok(val) => self.data_length = Some(val),
-                Err(_) => ()      // wrong value for content-length
+                Err(_) => (), // wrong value for content-length
             };
 
             return;
@@ -245,20 +269,29 @@ impl<R> Response<R> where R: Read {
     /// Some headers cannot be modified and some other have a
     ///  special behavior. See the documentation above.
     #[inline]
-    pub fn with_header<H>(mut self, header: H) -> Response<R> where H: Into<Header> {
+    pub fn with_header<H>(mut self, header: H) -> Response<R>
+    where
+        H: Into<Header>,
+    {
         self.add_header(header.into());
         self
     }
 
     /// Returns the same request, but with a different status code.
     #[inline]
-    pub fn with_status_code<S>(mut self, code: S) -> Response<R> where S: Into<StatusCode> {
+    pub fn with_status_code<S>(mut self, code: S) -> Response<R>
+    where
+        S: Into<StatusCode>,
+    {
         self.status_code = code.into();
         self
     }
 
     /// Returns the same request, but with different data.
-    pub fn with_data<S>(self, reader: S, data_length: Option<usize>) -> Response<S> where S: Read {
+    pub fn with_data<S>(self, reader: S, data_length: Option<usize>) -> Response<S>
+    where
+        S: Read,
+    {
         Response {
             reader: reader,
             headers: self.headers,
@@ -277,31 +310,55 @@ impl<R> Response<R> where R: Read {
     ///  decide which features (most notably, encoding) to use.
     ///
     /// Note: does not flush the writer.
-    pub fn raw_print<W: Write>(mut self, mut writer: W, http_version: HTTPVersion,
-                               request_headers: &[Header], do_not_send_body: bool,
-                               upgrade: Option<&str>)
-                               -> IoResult<()>
-    {
-        let mut transfer_encoding = Some(choose_transfer_encoding(request_headers,
-                                    &http_version, &self.data_length, false /* TODO */,
-                                    self.chunked_threshold()));
+    pub fn raw_print<W: Write>(
+        mut self,
+        mut writer: W,
+        http_version: HTTPVersion,
+        request_headers: &[Header],
+        do_not_send_body: bool,
+        upgrade: Option<&str>,
+    ) -> IoResult<()> {
+        let mut transfer_encoding = Some(choose_transfer_encoding(
+            request_headers,
+            &http_version,
+            &self.data_length,
+            false, /* TODO */
+            self.chunked_threshold(),
+        ));
 
         // add `Date` if not in the headers
-        if self.headers.iter().find(|h| h.field.equiv(&"Date")).is_none() {
+        if self
+            .headers
+            .iter()
+            .find(|h| h.field.equiv(&"Date"))
+            .is_none()
+        {
             self.headers.insert(0, build_date_header());
         }
 
         // add `Server` if not in the headers
-        if self.headers.iter().find(|h| h.field.equiv(&"Server")).is_none() {
-            self.headers.insert(0,
-                Header::from_bytes(&b"Server"[..], &b"tiny-http (Rust)"[..]).unwrap()
+        if self
+            .headers
+            .iter()
+            .find(|h| h.field.equiv(&"Server"))
+            .is_none()
+        {
+            self.headers.insert(
+                0,
+                Header::from_bytes(&b"Server"[..], &b"tiny-http (Rust)"[..]).unwrap(),
             );
         }
 
         // handling upgrade
         if let Some(upgrade) = upgrade {
-            self.headers.insert(0, Header::from_bytes(&b"Upgrade"[..], upgrade.as_bytes()).unwrap());
-            self.headers.insert(0, Header::from_bytes(&b"Connection"[..], &b"upgrade"[..]).unwrap());
+            self.headers.insert(
+                0,
+                Header::from_bytes(&b"Upgrade"[..], upgrade.as_bytes()).unwrap(),
+            );
+            self.headers.insert(
+                0,
+                Header::from_bytes(&b"Connection"[..], &b"upgrade"[..]).unwrap(),
+            );
             transfer_encoding = None;
         }
 
@@ -315,52 +372,57 @@ impl<R> Response<R> where R: Read {
                 try!(self.reader.read_to_end(&mut buf));
                 let l = buf.len();
                 (Box::new(Cursor::new(buf)) as Box<Read>, Some(l))
-            },
+            }
             _ => (Box::new(self.reader) as Box<Read>, None),
         };
 
         // checking whether to ignore the body of the response
-        let do_not_send_body = do_not_send_body ||
-            match self.status_code.0 {
+        let do_not_send_body = do_not_send_body
+            || match self.status_code.0 {
                 // sattus code 1xx, 204 and 304 MUST not include a body
                 100...199 | 204 | 304 => true,
-                _ => false
+                _ => false,
             };
 
         // preparing headers for transfer
         match transfer_encoding {
-            Some(TransferEncoding::Chunked) => {
-                self.headers.push(
-                    Header::from_bytes(&b"Transfer-Encoding"[..], &b"chunked"[..]).unwrap()
-                )
-            },
+            Some(TransferEncoding::Chunked) => self
+                .headers
+                .push(Header::from_bytes(&b"Transfer-Encoding"[..], &b"chunked"[..]).unwrap()),
 
             Some(TransferEncoding::Identity) => {
                 assert!(data_length.is_some());
                 let data_length = data_length.unwrap();
 
                 self.headers.push(
-                    Header::from_bytes(&b"Content-Length"[..], format!("{}", data_length).as_bytes()).unwrap()
+                    Header::from_bytes(
+                        &b"Content-Length"[..],
+                        format!("{}", data_length).as_bytes(),
+                    )
+                    .unwrap(),
                 )
-            },
+            }
 
-            _ => ()
+            _ => (),
         };
 
         // sending headers
-        try!(write_message_header(writer.by_ref(), &http_version,
-            &self.status_code, &self.headers));
+        try!(write_message_header(
+            writer.by_ref(),
+            &http_version,
+            &self.status_code,
+            &self.headers
+        ));
 
         // sending the body
         if !do_not_send_body {
             match transfer_encoding {
-
                 Some(TransferEncoding::Chunked) => {
                     use chunked_transfer::Encoder;
 
                     let mut writer = Encoder::new(writer);
                     try!(io::copy(&mut reader, &mut writer));
-                },
+                }
 
                 Some(TransferEncoding::Identity) => {
                     use util::EqualReader;
@@ -369,14 +431,12 @@ impl<R> Response<R> where R: Read {
                     let data_length = data_length.unwrap();
 
                     if data_length >= 1 {
-                        let (mut equ_reader, _) =
-                            EqualReader::new(reader.by_ref(), data_length);
+                        let (mut equ_reader, _) = EqualReader::new(reader.by_ref(), data_length);
                         try!(io::copy(&mut equ_reader, &mut writer));
                     }
-                },
+                }
 
-                _ => ()
-
+                _ => (),
             }
         }
 
@@ -384,7 +444,10 @@ impl<R> Response<R> where R: Read {
     }
 }
 
-impl<R> Response<R> where R: Read + Send + 'static {
+impl<R> Response<R>
+where
+    R: Read + Send + 'static,
+{
     /// Turns this response into a `Response<Box<Read + Send>>`.
     pub fn boxed(self) -> ResponseBox {
         Response {
@@ -416,7 +479,10 @@ impl Response<File> {
 }
 
 impl Response<Cursor<Vec<u8>>> {
-    pub fn from_data<D>(data: D) -> Response<Cursor<Vec<u8>>> where D: Into<Vec<u8>> {
+    pub fn from_data<D>(data: D) -> Response<Cursor<Vec<u8>>>
+    where
+        D: Into<Vec<u8>>,
+    {
         let data = data.into();
         let data_len = data.len();
 
@@ -429,14 +495,18 @@ impl Response<Cursor<Vec<u8>>> {
         )
     }
 
-    pub fn from_string<S>(data: S) -> Response<Cursor<Vec<u8>>> where S: Into<String> {
+    pub fn from_string<S>(data: S) -> Response<Cursor<Vec<u8>>>
+    where
+        S: Into<String>,
+    {
         let data = data.into();
         let data_len = data.len();
 
         Response::new(
             StatusCode(200),
             vec![
-                Header::from_bytes(&b"Content-Type"[..], &b"text/plain; charset=UTF-8"[..]).unwrap()
+                Header::from_bytes(&b"Content-Type"[..], &b"text/plain; charset=UTF-8"[..])
+                    .unwrap(),
             ],
             Cursor::new(data.into_bytes()),
             Some(data_len),
@@ -447,7 +517,10 @@ impl Response<Cursor<Vec<u8>>> {
 
 impl Response<io::Empty> {
     /// Builds an empty `Response` with the given status code.
-    pub fn empty<S>(status_code: S) -> Response<io::Empty> where S: Into<StatusCode> {
+    pub fn empty<S>(status_code: S) -> Response<io::Empty>
+    where
+        S: Into<StatusCode>,
+    {
         Response::new(
             status_code.into(),
             Vec::with_capacity(0),

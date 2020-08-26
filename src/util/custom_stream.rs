@@ -6,7 +6,11 @@ pub struct CustomStream<R, W> {
     writer: W,
 }
 
-impl<R, W> CustomStream<R, W> where R: Read, W: Write {
+impl<R, W> CustomStream<R, W>
+where
+    R: Read,
+    W: Write,
+{
     pub fn new(reader: R, writer: W) -> CustomStream<R, W> {
         CustomStream {
             reader: reader,
@@ -15,13 +19,19 @@ impl<R, W> CustomStream<R, W> where R: Read, W: Write {
     }
 }
 
-impl<R, W> Read for CustomStream<R, W> where R: Read {
+impl<R, W> Read for CustomStream<R, W>
+where
+    R: Read,
+{
     fn read(&mut self, buf: &mut [u8]) -> IoResult<usize> {
         self.reader.read(buf)
     }
 }
 
-impl<R, W> Write for CustomStream<R, W> where W: Write {
+impl<R, W> Write for CustomStream<R, W>
+where
+    W: Write,
+{
     fn write(&mut self, buf: &[u8]) -> IoResult<usize> {
         self.writer.write(buf)
     }

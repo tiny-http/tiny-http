@@ -1,6 +1,6 @@
-use std::path::Path;
-use std::fs;
 use ascii::AsciiString;
+use std::fs;
+use std::path::Path;
 
 extern crate ascii;
 extern crate tiny_http;
@@ -8,7 +8,7 @@ extern crate tiny_http;
 fn get_content_type(path: &Path) -> &'static str {
     let extension = match path.extension() {
         None => return "text/plain",
-        Some(e) => e
+        Some(e) => e,
     };
 
     match extension.to_str().unwrap() {
@@ -20,7 +20,7 @@ fn get_content_type(path: &Path) -> &'static str {
         "htm" => "text/html; charset=utf8",
         "html" => "text/html; charset=utf8",
         "txt" => "text/plain; charset=utf8",
-        _ => "text/plain; charset=utf8"
+        _ => "text/plain; charset=utf8",
     }
 }
 
@@ -32,7 +32,7 @@ fn main() {
     loop {
         let rq = match server.recv() {
             Ok(rq) => rq,
-            Err(_) => break
+            Err(_) => break,
         };
 
         println!("{:?}", rq);
@@ -44,15 +44,12 @@ fn main() {
         if file.is_ok() {
             let response = tiny_http::Response::from_file(file.unwrap());
 
-            let response = response.with_header(
-                tiny_http::Header {
-                    field: "Content-Type".parse().unwrap(),
-                    value: AsciiString::from_ascii(get_content_type(&path)).unwrap(),
-                }
-            );
+            let response = response.with_header(tiny_http::Header {
+                field: "Content-Type".parse().unwrap(),
+                value: AsciiString::from_ascii(get_content_type(&path)).unwrap(),
+            });
 
             let _ = rq.respond(response);
-
         } else {
             let rep = tiny_http::Response::new_empty(tiny_http::StatusCode(404));
             let _ = rq.respond(rep);

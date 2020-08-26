@@ -1,20 +1,26 @@
-use std::sync::mpsc::channel;
-use std::io::Result as IoResult;
-use std::sync::mpsc::{Sender, Receiver};
 use std::io::Read;
+use std::io::Result as IoResult;
+use std::sync::mpsc::channel;
+use std::sync::mpsc::{Receiver, Sender};
 
 /// A `Reader` that reads exactly the number of bytes from a sub-reader.
-/// 
+///
 /// If the limit is reached, it returns EOF. If the limit is not reached
 /// when the destructor is called, the remaining bytes will be read and
 /// thrown away.
-pub struct EqualReader<R> where R: Read {
+pub struct EqualReader<R>
+where
+    R: Read,
+{
     reader: R,
     size: usize,
     last_read_signal: Sender<IoResult<()>>,
 }
 
-impl<R> EqualReader<R> where R: Read {
+impl<R> EqualReader<R>
+where
+    R: Read,
+{
     pub fn new(reader: R, size: usize) -> (EqualReader<R>, Receiver<IoResult<()>>) {
         let (tx, rx) = channel();
 
@@ -28,7 +34,10 @@ impl<R> EqualReader<R> where R: Read {
     }
 }
 
-impl<R> Read for EqualReader<R> where R: Read {
+impl<R> Read for EqualReader<R>
+where
+    R: Read,
+{
     fn read(&mut self, buf: &mut [u8]) -> IoResult<usize> {
         if self.size == 0 {
             return Ok(0);
@@ -37,27 +46,41 @@ impl<R> Read for EqualReader<R> where R: Read {
         let buf = if buf.len() < self.size {
             buf
         } else {
-            &mut buf[.. self.size]
+            &mut buf[..self.size]
         };
 
         match self.reader.read(buf) {
-            Ok(len) => { self.size -= len; Ok(len) },
-            err @ Err(_) => err
+            Ok(len) => {
+                self.size -= len;
+                Ok(len)
+            }
+            err @ Err(_) => err,
         }
     }
 }
 
-impl<R> Drop for EqualReader<R> where R: Read {
+impl<R> Drop for EqualReader<R>
+where
+    R: Read,
+{
     fn drop(&mut self) {
         let mut remaining_to_read = self.size;
 
         while remaining_to_read > 0 {
-            let mut buf = vec![0 ; remaining_to_read];
+            let mut buf = vec![0; remaining_to_read];
 
             match self.reader.read(&mut buf) {
-                Err(e) => { self.last_read_signal.send(Err(e)).ok(); break; }
-                Ok(0) => { self.last_read_signal.send(Ok(())).ok(); break; },
-                Ok(other) => { remaining_to_read -= other; }
+                Err(e) => {
+                    self.last_read_signal.send(Err(e)).ok();
+                    break;
+                }
+                Ok(0) => {
+                    self.last_read_signal.send(Ok(())).ok();
+                    break;
+                }
+                Ok(other) => {
+                    remaining_to_read -= other;
+                }
             }
         }
     }

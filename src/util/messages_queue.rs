@@ -1,13 +1,19 @@
 use std::collections::VecDeque;
+use std::sync::{Arc, Condvar, Mutex};
 use std::time::{Duration, Instant};
-use std::sync::{Arc, Mutex, Condvar};
 
-pub struct MessagesQueue<T> where T: Send {
+pub struct MessagesQueue<T>
+where
+    T: Send,
+{
     queue: Mutex<VecDeque<T>>,
     condvar: Condvar,
 }
 
-impl<T> MessagesQueue<T> where T: Send {
+impl<T> MessagesQueue<T>
+where
+    T: Send,
+{
     pub fn with_capacity(capacity: usize) -> Arc<MessagesQueue<T>> {
         Arc::new(MessagesQueue {
             queue: Mutex::new(VecDeque::with_capacity(capacity)),
@@ -54,9 +60,13 @@ impl<T> MessagesQueue<T> where T: Send {
             let (_queue, result) = self.condvar.wait_timeout(queue, timeout).unwrap();
             queue = _queue;
             let sleep_time = now.elapsed();
-            duration = if duration > sleep_time { duration - sleep_time } else { Duration::from_millis(0) };
-            if result.timed_out() ||
-               (duration.as_secs() == 0 && duration.subsec_nanos() < 1000000) {
+            duration = if duration > sleep_time {
+                duration - sleep_time
+            } else {
+                Duration::from_millis(0)
+            };
+            if result.timed_out() || (duration.as_secs() == 0 && duration.subsec_nanos() < 1000000)
+            {
                 return None;
             }
         }

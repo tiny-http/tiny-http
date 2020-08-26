@@ -109,9 +109,7 @@ impl ClientConnection {
         let (method, path, version, headers) = {
             // reading the request line
             let (method, path, version) = {
-                let line = self
-                    .read_next_line()
-                    .map_err(|e| ReadError::ReadIoError(e))?;
+                let line = self.read_next_line().map_err(ReadError::ReadIoError)?;
 
                 parse_request_line(
                     line.as_str().trim(), // TODO: remove this conversion
@@ -122,11 +120,9 @@ impl ClientConnection {
             let headers = {
                 let mut headers = Vec::new();
                 loop {
-                    let line = self
-                        .read_next_line()
-                        .map_err(|e| ReadError::ReadIoError(e))?;
+                    let line = self.read_next_line().map_err(ReadError::ReadIoError)?;
 
-                    if line.len() == 0 {
+                    if line.is_empty() {
                         break;
                     };
                     headers.push(match FromStr::from_str(line.as_str().trim()) {
@@ -156,7 +152,7 @@ impl ClientConnection {
             path,
             version.clone(),
             headers,
-            self.remote_addr.as_ref().unwrap().clone(),
+            *self.remote_addr.as_ref().unwrap(),
             data_source,
             writer,
         )

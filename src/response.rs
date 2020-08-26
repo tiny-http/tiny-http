@@ -144,10 +144,9 @@ fn choose_transfer_encoding(
                     continue;
                 }
 
-                match <TransferEncoding as FromStr>::from_str(value.0) {
-                    Ok(te) => return Some(te),
-                    _ => (), // unrecognized/unsupported encoding
-                };
+                if let Ok(te) = TransferEncoding::from_str(value.0) {
+                    return Some(te);
+                }
             }
 
             // encoding not found
@@ -195,9 +194,9 @@ where
     ) -> Response<R> {
         let mut response = Response {
             reader: data,
-            status_code: status_code,
+            status_code,
             headers: Vec::with_capacity(16),
-            data_length: data_length,
+            data_length,
             chunked_threshold: None,
         };
 
@@ -253,10 +252,9 @@ where
 
         // if the header is Content-Length, setting the data length
         if header.field.equiv(&"Content-Length") {
-            match <usize as FromStr>::from_str(header.value.as_str()) {
-                Ok(val) => self.data_length = Some(val),
-                Err(_) => (), // wrong value for content-length
-            };
+            if let Ok(val) = usize::from_str(header.value.as_str()) {
+                self.data_length = Some(val)
+            }
 
             return;
         }
@@ -293,10 +291,10 @@ where
         S: Read,
     {
         Response {
-            reader: reader,
+            reader,
             headers: self.headers,
             status_code: self.status_code,
-            data_length: data_length,
+            data_length,
             chunked_threshold: None,
         }
     }
@@ -542,8 +540,8 @@ impl Clone for Response<io::Empty> {
             reader: io::empty(),
             status_code: self.status_code.clone(),
             headers: self.headers.clone(),
-            data_length: self.data_length.clone(),
-            chunked_threshold: self.chunked_threshold.clone(),
+            data_length: self.data_length,
+            chunked_threshold: self.chunked_threshold,
         }
     }
 }

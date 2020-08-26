@@ -54,7 +54,7 @@ impl RefinedTcpStream {
         };
 
         let write = RefinedTcpStream {
-            stream: stream,
+            stream,
             close_read: false,
             close_write: true,
         };

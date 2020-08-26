@@ -174,7 +174,7 @@ impl Header {
 
         Ok(Header {
             field: header,
-            value: value,
+            value,
         })
     }
 }
@@ -200,10 +200,7 @@ impl FromStr for Header {
 
         let value = AsciiString::from_ascii(value.trim()).map_err(|_| ())?;
 
-        Ok(Header {
-            field: field,
-            value: value,
-        })
+        Ok(Header { field, value })
     }
 }
 
@@ -227,9 +224,9 @@ impl HeaderField {
         AsciiString::from_ascii(bytes).map(HeaderField)
     }
 
-    pub fn as_str<'a>(&'a self) -> &'a AsciiStr {
+    pub fn as_str(&self) -> &AsciiStr {
         match self {
-            &HeaderField(ref s) => s,
+            HeaderField(ref s) => s,
         }
     }
 
@@ -376,7 +373,7 @@ pub struct HTTPVersion(pub u8, pub u8);
 impl Display for HTTPVersion {
     fn fmt(&self, formatter: &mut Formatter) -> Result<(), fmt::Error> {
         let (major, minor) = match self {
-            &HTTPVersion(m, n) => (m, n),
+            HTTPVersion(m, n) => (m, n),
         };
         write!(formatter, "{}.{}", major, minor)
     }
@@ -384,12 +381,8 @@ impl Display for HTTPVersion {
 
 impl PartialOrd for HTTPVersion {
     fn partial_cmp(&self, other: &HTTPVersion) -> Option<Ordering> {
-        let (my_major, my_minor) = match self {
-            &HTTPVersion(m, n) => (m, n),
-        };
-        let (other_major, other_minor) = match other {
-            &HTTPVersion(m, n) => (m, n),
-        };
+        let HTTPVersion(my_major, my_minor) = *self;
+        let HTTPVersion(other_major, other_minor) = *other;
 
         if my_major != other_major {
             return my_major.partial_cmp(&other_major);

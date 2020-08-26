@@ -26,26 +26,20 @@ pub fn parse_header_value<'a>(input: &'a str) -> Vec<(&'a str, f32)> {
         .filter_map(|elem| {
             let mut params = elem.split(';');
 
-            let t = params.next();
-            if t.is_none() {
-                return None;
-            }
+            let t = params.next()?;
 
             let mut value = 1.0f32;
 
             for p in params {
                 if p.trim_start().starts_with("q=") {
-                    match FromStr::from_str(&p.trim_start()[2..].trim()) {
-                        Ok(val) => {
-                            value = val;
-                            break;
-                        }
-                        _ => (),
+                    if let Ok(val) = f32::from_str(&p.trim_start()[2..].trim()) {
+                        value = val;
+                        break;
                     }
                 }
             }
 
-            Some((t.unwrap().trim(), value))
+            Some((t.trim(), value))
         })
         .collect()
 }

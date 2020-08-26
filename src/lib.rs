@@ -202,10 +202,7 @@ impl Server {
     where
         A: ToSocketAddrs,
     {
-        Server::new(ServerConfig {
-            addr: addr,
-            ssl: None,
-        })
+        Server::new(ServerConfig { addr, ssl: None })
     }
 
     /// Shortcut for an HTTPS server on a specific address.
@@ -357,7 +354,7 @@ impl Server {
 
         // result
         Ok(Server {
-            messages: messages,
+            messages,
             close: close_trigger,
             listening_addr: local_addr,
         })
@@ -374,7 +371,7 @@ impl Server {
     /// Returns the address the server is listening to.
     #[inline]
     pub fn server_addr(&self) -> net::SocketAddr {
-        self.listening_addr.clone()
+        self.listening_addr
     }
 
     /// Returns the number of clients currently connected to the server.
@@ -386,26 +383,26 @@ impl Server {
     /// Blocks until an HTTP request has been submitted and returns it.
     pub fn recv(&self) -> IoResult<Request> {
         match self.messages.pop() {
-            Message::Error(err) => return Err(err),
-            Message::NewRequest(rq) => return Ok(rq),
+            Message::Error(err) => Err(err),
+            Message::NewRequest(rq) => Ok(rq),
         }
     }
 
     /// Same as `recv()` but doesn't block longer than timeout
     pub fn recv_timeout(&self, timeout: Duration) -> IoResult<Option<Request>> {
         match self.messages.pop_timeout(timeout) {
-            Some(Message::Error(err)) => return Err(err),
-            Some(Message::NewRequest(rq)) => return Ok(Some(rq)),
-            None => return Ok(None),
+            Some(Message::Error(err)) => Err(err),
+            Some(Message::NewRequest(rq)) => Ok(Some(rq)),
+            None => Ok(None),
         }
     }
 
     /// Same as `recv()` but doesn't block.
     pub fn try_recv(&self) -> IoResult<Option<Request>> {
         match self.messages.try_pop() {
-            Some(Message::Error(err)) => return Err(err),
-            Some(Message::NewRequest(rq)) => return Ok(Some(rq)),
-            None => return Ok(None),
+            Some(Message::Error(err)) => Err(err),
+            Some(Message::NewRequest(rq)) => Ok(Some(rq)),
+            None => Ok(None),
         }
     }
 }

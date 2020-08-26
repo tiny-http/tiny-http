@@ -36,7 +36,7 @@ struct Registration<'a> {
 impl<'a> Registration<'a> {
     fn new(nb: &'a AtomicUsize) -> Registration<'a> {
         nb.fetch_add(1, Ordering::Release);
-        Registration { nb: nb }
+        Registration { nb }
     }
 }
 
@@ -84,8 +84,7 @@ impl TaskPool {
             let sharing = sharing;
             let _active_guard = Registration::new(&sharing.active_tasks);
 
-            if initial_fn.is_some() {
-                let mut f = initial_fn.unwrap();
+            if let Some(mut f) = initial_fn {
                 f();
             }
 

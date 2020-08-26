@@ -25,8 +25,8 @@ where
         let (tx, rx) = channel();
 
         let r = EqualReader {
-            reader: reader,
-            size: size,
+            reader,
+            size,
             last_read_signal: tx,
         };
 

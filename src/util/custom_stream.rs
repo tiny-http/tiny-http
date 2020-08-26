@@ -12,10 +12,7 @@ where
     W: Write,
 {
     pub fn new(reader: R, writer: W) -> CustomStream<R, W> {
-        CustomStream {
-            reader: reader,
-            writer: writer,
-        }
+        CustomStream { reader, writer }
     }
 }
 

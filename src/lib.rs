@@ -97,9 +97,9 @@ let _ = request.respond(response);
 extern crate log;
 
 extern crate ascii;
+extern crate chrono;
 extern crate chunked_transfer;
 extern crate url;
-extern crate chrono;
 
 #[cfg(feature = "ssl")]
 extern crate openssl;
@@ -107,21 +107,21 @@ extern crate openssl;
 use std::error::Error;
 use std::io::Error as IoError;
 use std::io::Result as IoResult;
-use std::sync::Arc;
-use std::sync::atomic::AtomicBool;
-use std::sync::mpsc;
-use std::thread;
 use std::net;
-use std::net::{ToSocketAddrs, TcpStream, Shutdown};
-use std::time::Duration;
+use std::net::{Shutdown, TcpStream, ToSocketAddrs};
+use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering::Relaxed;
+use std::sync::mpsc;
+use std::sync::Arc;
+use std::thread;
+use std::time::Duration;
 
 use client::ClientConnection;
 use util::MessagesQueue;
 
-pub use common::{Header, HeaderField, HTTPVersion, Method, StatusCode};
-pub use request::{Request, ReadWrite};
-pub use response::{ResponseBox, Response};
+pub use common::{HTTPVersion, Header, HeaderField, Method, StatusCode};
+pub use request::{ReadWrite, Request};
+pub use response::{Response, ResponseBox};
 
 mod client;
 mod common;
@@ -165,18 +165,20 @@ impl From<Request> for Message {
 
 // this trait is to make sure that Server implements Share and Send
 #[doc(hidden)]
-trait MustBeShareDummy : Sync + Send {}
+trait MustBeShareDummy: Sync + Send {}
 #[doc(hidden)]
 impl MustBeShareDummy for Server {}
 
-
 pub struct IncomingRequests<'a> {
-    server: &'a Server
+    server: &'a Server,
 }
 
 /// Represents the parameters required to create a server.
 #[derive(Debug, Clone)]
-pub struct ServerConfig<A> where A: ToSocketAddrs {
+pub struct ServerConfig<A>
+where
+    A: ToSocketAddrs,
+{
     /// The addresses to listen to.
     pub addr: A,
 
@@ -196,21 +198,22 @@ pub struct SslConfig {
 impl Server {
     /// Shortcut for a simple server on a specific address.
     #[inline]
-    pub fn http<A>(addr: A) -> Result<Server, Box<Error + Send + Sync + 'static>>
-        where A: ToSocketAddrs
+    pub fn http<A>(addr: A) -> Result<Server, Box<dyn Error + Send + Sync + 'static>>
+    where
+        A: ToSocketAddrs,
     {
-        Server::new(ServerConfig {
-            addr: addr,
-            ssl: None,
-        })
+        Server::new(ServerConfig { addr, ssl: None })
     }
 
     /// Shortcut for an HTTPS server on a specific address.
     #[cfg(feature = "ssl")]
     #[inline]
-    pub fn https<A>(addr: A, config: SslConfig)
-                    -> Result<Server, Box<Error + Send + Sync + 'static>>
-        where A: ToSocketAddrs
+    pub fn https<A>(
+        addr: A,
+        config: SslConfig,
+    ) -> Result<Server, Box<Error + Send + Sync + 'static>>
+    where
+        A: ToSocketAddrs,
     {
         Server::new(ServerConfig {
             addr: addr,
@@ -219,16 +222,17 @@ impl Server {
     }
 
     /// Builds a new server that listens on the specified address.
-    pub fn new<A>(config: ServerConfig<A>) -> Result<Server, Box<Error + Send + Sync + 'static>>
-        where A: ToSocketAddrs
+    pub fn new<A>(config: ServerConfig<A>) -> Result<Server, Box<dyn Error + Send + Sync + 'static>>
+    where
+        A: ToSocketAddrs,
     {
         // building the "close" variable
         let close_trigger = Arc::new(AtomicBool::new(false));
 
         // building the TcpListener
         let (server, local_addr) = {
-            let listener = try!(net::TcpListener::bind(config.addr));
-            let local_addr = try!(listener.local_addr());
+            let listener = net::TcpListener::bind(config.addr)?;
+            let local_addr = listener.local_addr()?;
             debug!("Server listening on {}", local_addr);
             (listener, local_addr)
         };
@@ -241,10 +245,10 @@ impl Server {
         let ssl: Option<SslContext> = match config.ssl {
             #[cfg(feature = "ssl")]
             Some(mut config) => {
-                use openssl::ssl;
-                use openssl::x509::X509;
                 use openssl::pkey::PKey;
+                use openssl::ssl;
                 use openssl::ssl::SslVerifyMode;
+                use openssl::x509::X509;
 
                 let mut ctxt = try!(SslContext::builder(ssl::SslMethod::tls()));
                 try!(ctxt.set_cipher_list("DEFAULT"));
@@ -257,14 +261,24 @@ impl Server {
 
                 // let's wipe the certificate and private key from memory, because we're
                 // better safe than sorry
-                for b in &mut config.certificate { *b = 0; }
-                for b in &mut config.private_key { *b = 0; }
+                for b in &mut config.certificate {
+                    *b = 0;
+                }
+                for b in &mut config.private_key {
+                    *b = 0;
+                }
 
                 Some(ctxt.build())
-            },
+            }
             #[cfg(not(feature = "ssl"))]
-            Some(_) => return Err("Building a server with SSL requires enabling the `ssl` feature \
-                                   in tiny-http".to_owned().into()),
+            Some(_) => {
+                return Err(
+                    "Building a server with SSL requires enabling the `ssl` feature \
+                                   in tiny-http"
+                        .to_owned()
+                        .into(),
+                )
+            }
             None => None,
         };
 
@@ -284,9 +298,7 @@ impl Server {
                     Ok((sock, _)) => {
                         use util::RefinedTcpStream;
                         let (read_closable, write_closable) = match ssl {
-                            None => {
-                                RefinedTcpStream::new(sock)
-                            },
+                            None => RefinedTcpStream::new(sock),
                             #[cfg(feature = "ssl")]
                             Some(ref ssl) => {
                                 let ssl = openssl::ssl::Ssl::new(ssl).expect("Couldn't create ssl");
@@ -294,17 +306,17 @@ impl Server {
                                 // if an error occurs, we just close the socket and resume listening
                                 let sock = match ssl.accept(sock) {
                                     Ok(s) => s,
-                                    Err(_) => continue
+                                    Err(_) => continue,
                                 };
 
                                 RefinedTcpStream::new(sock)
-                            },
+                            }
                             #[cfg(not(feature = "ssl"))]
                             Some(_) => unreachable!(),
                         };
 
                         Ok(ClientConnection::new(write_closable, read_closable))
-                    },
+                    }
                     Err(e) => Err(e),
                 };
 
@@ -328,7 +340,7 @@ impl Server {
                                 }
                             }
                         }));
-                    },
+                    }
 
                     Err(e) => {
                         error!("Error accepting new client: {}", e);
@@ -342,7 +354,7 @@ impl Server {
 
         // result
         Ok(Server {
-            messages: messages,
+            messages,
             close: close_trigger,
             listening_addr: local_addr,
         })
@@ -359,7 +371,7 @@ impl Server {
     /// Returns the address the server is listening to.
     #[inline]
     pub fn server_addr(&self) -> net::SocketAddr {
-        self.listening_addr.clone()
+        self.listening_addr
     }
 
     /// Returns the number of clients currently connected to the server.
@@ -371,26 +383,26 @@ impl Server {
     /// Blocks until an HTTP request has been submitted and returns it.
     pub fn recv(&self) -> IoResult<Request> {
         match self.messages.pop() {
-            Message::Error(err) => return Err(err),
-            Message::NewRequest(rq) => return Ok(rq),
+            Message::Error(err) => Err(err),
+            Message::NewRequest(rq) => Ok(rq),
         }
     }
 
     /// Same as `recv()` but doesn't block longer than timeout
     pub fn recv_timeout(&self, timeout: Duration) -> IoResult<Option<Request>> {
         match self.messages.pop_timeout(timeout) {
-            Some(Message::Error(err)) => return Err(err),
-            Some(Message::NewRequest(rq)) => return Ok(Some(rq)),
-            None => return Ok(None)
+            Some(Message::Error(err)) => Err(err),
+            Some(Message::NewRequest(rq)) => Ok(Some(rq)),
+            None => Ok(None),
         }
     }
 
     /// Same as `recv()` but doesn't block.
     pub fn try_recv(&self) -> IoResult<Option<Request>> {
         match self.messages.try_pop() {
-            Some(Message::Error(err)) => return Err(err),
-            Some(Message::NewRequest(rq)) => return Ok(Some(rq)),
-            None => return Ok(None)
+            Some(Message::Error(err)) => Err(err),
+            Some(Message::NewRequest(rq)) => Ok(Some(rq)),
+            None => Ok(None),
         }
     }
 }

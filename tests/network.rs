@@ -1,7 +1,7 @@
 extern crate tiny_http;
 
-use std::net::{TcpStream, Shutdown};
 use std::io::{Read, Write};
+use std::net::{Shutdown, TcpStream};
 use std::thread;
 use std::time::Duration;
 
@@ -86,7 +86,11 @@ fn pipelining_test() {
 
     (write!(client, "GET / HTTP/1.1\r\nHost: localhost\r\n\r\n")).unwrap();
     (write!(client, "GET /hello HTTP/1.1\r\nHost: localhost\r\n\r\n")).unwrap();
-    (write!(client, "GET /world HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n")).unwrap();
+    (write!(
+        client,
+        "GET /world HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n"
+    ))
+    .unwrap();
 
     // client.set_keepalive(Some(2)).unwrap(); FIXME: reenable this
     let mut data = String::new();
@@ -105,12 +109,16 @@ fn server_crash_results_in_response() {
         // oops, server crash
     });
 
-    (write!(client, "GET / HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n")).unwrap();
+    (write!(
+        client,
+        "GET / HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n"
+    ))
+    .unwrap();
 
     // client.set_keepalive(Some(2)).unwrap(); FIXME: reenable this
     let mut content = String::new();
     client.read_to_string(&mut content).unwrap();
-    assert!(&content[9..].starts_with("5"));   // 5xx status code
+    assert!(&content[9..].starts_with("5")); // 5xx status code
 }
 
 #[test]
@@ -118,20 +126,26 @@ fn responses_reordered() {
     let (server, mut client) = support::new_one_server_one_client();
 
     (write!(client, "GET / HTTP/1.1\r\nHost: localhost\r\n\r\n")).unwrap();
-    (write!(client, "GET / HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n")).unwrap();
+    (write!(
+        client,
+        "GET / HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n"
+    ))
+    .unwrap();
 
     thread::spawn(move || {
         let rq1 = server.recv().unwrap();
         let rq2 = server.recv().unwrap();
 
         thread::spawn(move || {
-            rq2.respond(tiny_http::Response::from_string(format!("second request"))).unwrap();
+            rq2.respond(tiny_http::Response::from_string(format!("second request")))
+                .unwrap();
         });
 
         thread::sleep(Duration::from_millis(100));
 
         thread::spawn(move || {
-            rq1.respond(tiny_http::Response::from_string(format!("first request"))).unwrap();
+            rq1.respond(tiny_http::Response::from_string(format!("first request")))
+                .unwrap();
         });
     });
 
@@ -173,7 +187,6 @@ fn connection_timeout() {
     tx_stop.send(());
 }
 */
-
 
 #[test]
 fn chunked_threshold() {

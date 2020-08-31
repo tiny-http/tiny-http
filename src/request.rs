@@ -1,15 +1,15 @@
 use std::io::Error as IoError;
-use std::io::{self, Cursor, Read, Write, ErrorKind};
+use std::io::{self, Cursor, ErrorKind, Read, Write};
 
-use std::net::SocketAddr;
 use std::fmt;
+use std::net::SocketAddr;
 use std::str::FromStr;
 
 use std::sync::mpsc::Sender;
 
-use {Header, HTTPVersion, Method, Response, StatusCode};
-use util::EqualReader;
 use chunked_transfer::Decoder;
+use util::EqualReader;
+use {HTTPVersion, Header, Method, Response, StatusCode};
 
 /// Represents an HTTP request made by a client.
 ///
@@ -45,10 +45,10 @@ use chunked_transfer::Decoder;
 /// error" response will automatically be sent during the stack unwinding.
 pub struct Request {
     // where to read the body from
-    data_reader: Option<Box<Read + Send + 'static>>,
+    data_reader: Option<Box<dyn Read + Send + 'static>>,
 
     // if this writer is empty, then the request has been answered
-    response_writer: Option<Box<Write + Send + 'static>>,
+    response_writer: Option<Box<dyn Write + Send + 'static>>,
 
     remote_addr: SocketAddr,
 
@@ -120,14 +120,23 @@ impl From<IoError> for RequestCreationError {
 /// It is the responsibility of the `Request` to read only the data of the request and not further.
 ///
 /// The `Write` object will be used by the `Request` to write the response.
-pub fn new_request<R, W>(secure: bool, method: Method, path: String,
-                         version: HTTPVersion, headers: Vec<Header>,
-                         remote_addr: SocketAddr, mut source_data: R, writer: W)
-                         -> Result<Request, RequestCreationError>
-                         where R: Read + Send + 'static, W: Write + Send + 'static
+pub fn new_request<R, W>(
+    secure: bool,
+    method: Method,
+    path: String,
+    version: HTTPVersion,
+    headers: Vec<Header>,
+    remote_addr: SocketAddr,
+    mut source_data: R,
+    writer: W,
+) -> Result<Request, RequestCreationError>
+where
+    R: Read + Send + 'static,
+    W: Write + Send + 'static,
 {
     // finding the transfer-encoding header
-    let transfer_encoding = headers.iter()
+    let transfer_encoding = headers
+        .iter()
         .find(|h: &&Header| h.field.equiv(&"Transfer-Encoding"))
         .map(|h| h.value.clone());
 
@@ -136,90 +145,90 @@ pub fn new_request<R, W>(secure: bool, method: Method, path: String,
         // if transfer-encoding is specified, the Content-Length
         // header must be ignored (RFC2616 #4.4)
         None
-
     } else {
-        headers.iter()
-               .find(|h: &&Header| h.field.equiv(&"Content-Length"))
-               .and_then(|h| FromStr::from_str(h.value.as_str()).ok())
+        headers
+            .iter()
+            .find(|h: &&Header| h.field.equiv(&"Content-Length"))
+            .and_then(|h| FromStr::from_str(h.value.as_str()).ok())
     };
 
     // true if the client sent a `Expect: 100-continue` header
     let expects_continue = {
-        match headers.iter().find(|h: &&Header| h.field.equiv(&"Expect")).map(|h| h.value.as_str()) {
+        match headers
+            .iter()
+            .find(|h: &&Header| h.field.equiv(&"Expect"))
+            .map(|h| h.value.as_str())
+        {
             None => false,
-            Some(v) if v.eq_ignore_ascii_case("100-continue")
-                => true,
-            _ => return Err(RequestCreationError::ExpectationFailed)
+            Some(v) if v.eq_ignore_ascii_case("100-continue") => true,
+            _ => return Err(RequestCreationError::ExpectationFailed),
         }
     };
 
     // true if the client sent a `Connection: upgrade` header
     let connection_upgrade = {
-        match headers.iter().find(|h: &&Header| h.field.equiv(&"Connection")).map(|h| h.value.as_str()) {
-            Some(v) if v.to_ascii_lowercase().contains("upgrade")
-                => true,
-            _ => false
+        match headers
+            .iter()
+            .find(|h: &&Header| h.field.equiv(&"Connection"))
+            .map(|h| h.value.as_str())
+        {
+            Some(v) if v.to_ascii_lowercase().contains("upgrade") => true,
+            _ => false,
         }
     };
 
     // we wrap `source_data` around a reading whose nature depends on the transfer-encoding and
     // content-length headers
-    let reader =
-        if connection_upgrade {
-            // if we have a `Connection: upgrade`, always keeping the whole reader
-            Box::new(source_data) as Box<Read + Send + 'static>
+    let reader = if connection_upgrade {
+        // if we have a `Connection: upgrade`, always keeping the whole reader
+        Box::new(source_data) as Box<dyn Read + Send + 'static>
+    } else if let Some(content_length) = content_length {
+        if content_length == 0 {
+            Box::new(io::empty()) as Box<dyn Read + Send + 'static>
+        } else if content_length <= 1024 && !expects_continue {
+            // if the content-length is small enough, we just read everything into a buffer
 
-        } else if let Some(content_length) = content_length {
-            if content_length == 0 {
-                Box::new(io::empty()) as Box<Read + Send + 'static>
+            let mut buffer = vec![0; content_length];
+            let mut offset = 0;
 
-            } else if content_length <= 1024 && !expects_continue {
-                // if the content-length is small enough, we just read everything into a buffer
-
-                let mut buffer = vec![0; content_length];
-                let mut offset = 0;
-
-                while offset != content_length {
-                    let read = try!(source_data.read(&mut buffer[offset..]));
-                    if read == 0 {
-                        // the socket returned EOF, but we were before the expected content-length
-                        // aborting
-                        let info = "Connection has been closed before we received enough data";
-                        let err = IoError::new(ErrorKind::ConnectionAborted, info);
-                        return Err(RequestCreationError::CreationIoError(err));
-                    }
-
-                    offset += read;
+            while offset != content_length {
+                let read = source_data.read(&mut buffer[offset..])?;
+                if read == 0 {
+                    // the socket returned EOF, but we were before the expected content-length
+                    // aborting
+                    let info = "Connection has been closed before we received enough data";
+                    let err = IoError::new(ErrorKind::ConnectionAborted, info);
+                    return Err(RequestCreationError::CreationIoError(err));
                 }
 
-                Box::new(Cursor::new(buffer)) as Box<Read + Send + 'static>
-
-            } else {
-                let (data_reader, _) = EqualReader::new(source_data, content_length);   // TODO:
-                Box::new(data_reader) as Box<Read + Send + 'static>
+                offset += read;
             }
 
-        } else if transfer_encoding.is_some() {
-            // if a transfer-encoding was specified, then "chunked" is ALWAYS applied
-            // over the message (RFC2616 #3.6)
-            Box::new(Decoder::new(source_data)) as Box<Read + Send + 'static>
-
+            Box::new(Cursor::new(buffer)) as Box<dyn Read + Send + 'static>
         } else {
-            // if we have neither a Content-Length nor a Transfer-Encoding,
-            // assuming that we have no data
-            // TODO: could also be multipart/byteranges
-            Box::new(io::empty()) as Box<Read + Send + 'static>
-        };
+            let (data_reader, _) = EqualReader::new(source_data, content_length); // TODO:
+            Box::new(data_reader) as Box<dyn Read + Send + 'static>
+        }
+    } else if transfer_encoding.is_some() {
+        // if a transfer-encoding was specified, then "chunked" is ALWAYS applied
+        // over the message (RFC2616 #3.6)
+        Box::new(Decoder::new(source_data)) as Box<dyn Read + Send + 'static>
+    } else {
+        // if we have neither a Content-Length nor a Transfer-Encoding,
+        // assuming that we have no data
+        // TODO: could also be multipart/byteranges
+        Box::new(io::empty()) as Box<dyn Read + Send + 'static>
+    };
 
     Ok(Request {
         data_reader: Some(reader),
-        response_writer: Some(Box::new(writer) as Box<Write + Send + 'static>),
-        remote_addr: remote_addr,
-        secure: secure,
-        method: method,
-        path: path,
+        response_writer: Some(Box::new(writer) as Box<dyn Write + Send + 'static>),
+        remote_addr,
+        secure,
+        method,
+        path,
         http_version: version,
-        headers: headers,
+        headers,
         body_length: content_length,
         must_send_continue: expects_continue,
         notify_when_responded: None,
@@ -284,20 +293,34 @@ impl Request {
     /// If you call this on a non-websocket request, tiny-http will wait until this `Stream` object
     ///  is destroyed before continuing to read or write on the socket. Therefore you should always
     ///  destroy it as soon as possible.
-    pub fn upgrade<R: Read>(mut self, protocol: &str, response: Response<R>) -> Box<ReadWrite + Send> {
+    pub fn upgrade<R: Read>(
+        mut self,
+        protocol: &str,
+        response: Response<R>,
+    ) -> Box<dyn ReadWrite + Send> {
         use util::CustomStream;
 
-        response.raw_print(self.response_writer.as_mut().unwrap().by_ref(), self.http_version.clone(),
-                           &self.headers, false, Some(protocol)).ok();   // TODO: unused result
+        response
+            .raw_print(
+                self.response_writer.as_mut().unwrap().by_ref(),
+                self.http_version.clone(),
+                &self.headers,
+                false,
+                Some(protocol),
+            )
+            .ok(); // TODO: unused result
 
-        self.response_writer.as_mut().unwrap().flush().ok();    // TODO: unused result
+        self.response_writer.as_mut().unwrap().flush().ok(); // TODO: unused result
 
         let stream = CustomStream::new(self.into_reader_impl(), self.into_writer_impl());
         if let Some(sender) = self.notify_when_responded.take() {
-            let stream = NotifyOnDrop { sender, inner: stream };
-            Box::new(stream) as Box<ReadWrite + Send>
+            let stream = NotifyOnDrop {
+                sender,
+                inner: stream,
+            };
+            Box::new(stream) as Box<dyn ReadWrite + Send>
         } else {
-            Box::new(stream) as Box<ReadWrite + Send>
+            Box::new(stream) as Box<dyn ReadWrite + Send>
         }
     }
 
@@ -326,11 +349,17 @@ impl Request {
     /// If the client sent a `Expect: 100-continue` header with the request, calling this
     ///  function will send back a `100 Continue` response.
     #[inline]
-    pub fn as_reader(&mut self) -> &mut Read {
+    pub fn as_reader(&mut self) -> &mut dyn Read {
         if self.must_send_continue {
             let msg = Response::new_empty(StatusCode(100));
-            msg.raw_print(self.response_writer.as_mut().unwrap().by_ref(),
-                          self.http_version.clone(), &self.headers, true, None).ok();
+            msg.raw_print(
+                self.response_writer.as_mut().unwrap().by_ref(),
+                self.http_version.clone(),
+                &self.headers,
+                true,
+                None,
+            )
+            .ok();
             self.response_writer.as_mut().unwrap().flush().ok();
             self.must_send_continue = false;
         }
@@ -349,17 +378,20 @@ impl Request {
     /// the writing of the next response.
     /// Therefore you should always destroy the `Writer` as soon as possible.
     #[inline]
-    pub fn into_writer(mut self) -> Box<Write + Send + 'static> {
+    pub fn into_writer(mut self) -> Box<dyn Write + Send + 'static> {
         let writer = self.into_writer_impl();
         if let Some(sender) = self.notify_when_responded.take() {
-            let writer = NotifyOnDrop { sender, inner: writer };
-            Box::new(writer) as Box<Write + Send + 'static>
+            let writer = NotifyOnDrop {
+                sender,
+                inner: writer,
+            };
+            Box::new(writer) as Box<dyn Write + Send + 'static>
         } else {
             writer
         }
     }
 
-    fn into_writer_impl(&mut self) -> Box<Write + Send + 'static> {
+    fn into_writer_impl(&mut self) -> Box<dyn Write + Send + 'static> {
         use std::mem;
 
         assert!(self.response_writer.is_some());
@@ -369,7 +401,7 @@ impl Request {
         writer.unwrap()
     }
 
-    fn into_reader_impl(&mut self) -> Box<Read + Send + 'static> {
+    fn into_reader_impl(&mut self) -> Box<dyn Read + Send + 'static> {
         use std::mem;
 
         assert!(self.data_reader.is_some());
@@ -382,7 +414,8 @@ impl Request {
     /// Sends a response to this request.
     #[inline]
     pub fn respond<R>(mut self, response: Response<R>) -> Result<(), IoError>
-        where R: Read
+    where
+        R: Read,
     {
         let res = self.respond_impl(response);
         if let Some(sender) = self.notify_when_responded.take() {
@@ -392,7 +425,8 @@ impl Request {
     }
 
     fn respond_impl<R>(&mut self, response: Response<R>) -> Result<(), IoError>
-        where R: Read
+    where
+        R: Read,
     {
         // Droping the request reader now so that further requests can start processing immediately.
         self.data_reader = None;
@@ -401,16 +435,19 @@ impl Request {
 
         let do_not_send_body = self.method == Method::Head;
 
-        match response.raw_print(writer.by_ref(),
-                                 self.http_version.clone(), &self.headers,
-                                 do_not_send_body, None)
-        {
+        match response.raw_print(
+            writer.by_ref(),
+            self.http_version.clone(),
+            &self.headers,
+            do_not_send_body,
+            None,
+        ) {
             Ok(_) => (),
             Err(ref err) if err.kind() == ErrorKind::BrokenPipe => (),
             Err(ref err) if err.kind() == ErrorKind::ConnectionAborted => (),
             Err(ref err) if err.kind() == ErrorKind::ConnectionRefused => (),
             Err(ref err) if err.kind() == ErrorKind::ConnectionReset => (),
-            Err(err) => return Err(err)
+            Err(err) => return Err(err),
         };
 
         writer.flush()
@@ -424,7 +461,11 @@ impl Request {
 
 impl fmt::Debug for Request {
     fn fmt(&self, formatter: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        write!(formatter, "Request({} {} from {})", self.method, self.path, self.remote_addr)
+        write!(
+            formatter,
+            "Request({} {} from {})",
+            self.method, self.path, self.remote_addr
+        )
     }
 }
 
@@ -435,7 +476,7 @@ impl Drop for Request {
 
         if self.response_writer.is_some() {
             let response = Response::empty(500);
-            let _ = self.respond_impl(response);        // ignoring any potential error
+            let _ = self.respond_impl(response); // ignoring any potential error
             if let Some(sender) = self.notify_when_responded.take() {
                 sender.send(()).unwrap();
             }
@@ -457,6 +498,8 @@ mod tests {
     fn must_be_send() {
         #![allow(dead_code)]
         fn f<T: Send>(_: &T) {}
-        fn bar(rq: &Request) { f(rq); }
+        fn bar(rq: &Request) {
+            f(rq);
+        }
     }
 }

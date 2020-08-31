@@ -1,7 +1,7 @@
-use ascii::{AsciiString, AsciiStr, FromAsciiError};
-use std::fmt::{self, Display, Formatter};
-use std::str::{FromStr};
+use ascii::{AsciiStr, AsciiString, FromAsciiError};
 use std::cmp::Ordering;
+use std::fmt::{self, Display, Formatter};
+use std::str::FromStr;
 
 use chrono::*;
 
@@ -78,7 +78,7 @@ impl StatusCode {
             508 => "Loop Detected",
             510 => "Not Extended",
             511 => "Network Authentication Required",
-            _ => "Unknown"
+            _ => "Unknown",
         }
     }
 }
@@ -165,15 +165,18 @@ impl Header {
     /// let header = tiny_http::Header::from_bytes(&b"Content-Type"[..], &b"text/plain"[..]).unwrap();
     /// ```
     pub fn from_bytes<B1, B2>(header: B1, value: B2) -> Result<Header, ()>
-                              where B1: Into<Vec<u8>> + AsRef<[u8]>,
-                                    B2: Into<Vec<u8>> + AsRef<[u8]>
+    where
+        B1: Into<Vec<u8>> + AsRef<[u8]>,
+        B2: Into<Vec<u8>> + AsRef<[u8]>,
     {
-        let header = try!(HeaderField::from_bytes(header).or(Err(())));
-        let value = try!(AsciiString::from_ascii(value).or(Err(())));
+        let header = HeaderField::from_bytes(header).or(Err(()))?;
+        let value = AsciiString::from_ascii(value).or(Err(()))?;
 
-        Ok(Header { field: header, value: value })
+        Ok(Header {
+            field: header,
+            value,
+        })
     }
-
 }
 
 impl FromStr for Header {
@@ -187,20 +190,17 @@ impl FromStr for Header {
 
         let (field, value) = match (field, value) {
             (Some(f), Some(v)) => (f, v),
-            _ => return Err(())
+            _ => return Err(()),
         };
 
         let field = match FromStr::from_str(field) {
             Ok(f) => f,
-            _ => return Err(())
+            _ => return Err(()),
         };
 
-        let value = try!(AsciiString::from_ascii(value.trim()).map_err(|_| () ));
+        let value = AsciiString::from_ascii(value.trim()).map_err(|_| ())?;
 
-        Ok(Header {
-            field: field,
-            value: value,
-        })
+        Ok(Header { field, value })
     }
 }
 
@@ -217,12 +217,17 @@ impl Display for Header {
 pub struct HeaderField(AsciiString);
 
 impl HeaderField {
-    pub fn from_bytes<B>(bytes: B) -> Result<HeaderField, FromAsciiError<B>> where B: Into<Vec<u8>> + AsRef<[u8]> {
+    pub fn from_bytes<B>(bytes: B) -> Result<HeaderField, FromAsciiError<B>>
+    where
+        B: Into<Vec<u8>> + AsRef<[u8]>,
+    {
         AsciiString::from_ascii(bytes).map(HeaderField)
     }
 
-    pub fn as_str<'a>(&'a self) -> &'a AsciiStr {
-        match self { &HeaderField(ref s) => s }
+    pub fn as_str(&self) -> &AsciiStr {
+        match self {
+            HeaderField(ref s) => s,
+        }
     }
 
     pub fn equiv(&self, other: &'static str) -> bool {
@@ -234,7 +239,9 @@ impl FromStr for HeaderField {
     type Err = ();
 
     fn from_str(s: &str) -> Result<HeaderField, ()> {
-        AsciiString::from_ascii(s.trim()).map(HeaderField).map_err(|_| () )
+        AsciiString::from_ascii(s.trim())
+            .map(HeaderField)
+            .map_err(|_| ())
     }
 }
 
@@ -254,7 +261,6 @@ impl PartialEq for HeaderField {
 }
 
 impl Eq for HeaderField {}
-
 
 /// HTTP request methods
 ///
@@ -325,7 +331,7 @@ impl FromStr for Method {
             s if s.eq_ignore_ascii_case("TRACE") => Method::Trace,
             s if s.eq_ignore_ascii_case("PATCH") => Method::Patch,
             s => {
-                let ascii_string = try!(AsciiString::from_ascii(s).map_err(|_| () ));
+                let ascii_string = AsciiString::from_ascii(s).map_err(|_| ())?;
                 Method::NonStandard(ascii_string)
             }
         })
@@ -341,8 +347,9 @@ impl Display for Method {
 impl PartialEq for Method {
     fn eq(&self, other: &Method) -> bool {
         match (self, other) {
-            (&Method::NonStandard(ref s1), &Method::NonStandard(ref s2)) =>
-                s1.as_str().eq_ignore_ascii_case(s2.as_str()),
+            (&Method::NonStandard(ref s1), &Method::NonStandard(ref s2)) => {
+                s1.as_str().eq_ignore_ascii_case(s2.as_str())
+            }
             (&Method::Get, &Method::Get) => true,
             (&Method::Head, &Method::Head) => true,
             (&Method::Post, &Method::Post) => true,
@@ -359,25 +366,26 @@ impl PartialEq for Method {
 
 impl Eq for Method {}
 
-
 /// HTTP version (usually 1.0 or 1.1).
 #[derive(Debug, Clone, PartialEq, Eq, Ord)]
 pub struct HTTPVersion(pub u8, pub u8);
 
 impl Display for HTTPVersion {
     fn fmt(&self, formatter: &mut Formatter) -> Result<(), fmt::Error> {
-        let (major, minor) = match self { &HTTPVersion(m, n) => (m, n) };
+        let (major, minor) = match self {
+            HTTPVersion(m, n) => (m, n),
+        };
         write!(formatter, "{}.{}", major, minor)
     }
 }
 
 impl PartialOrd for HTTPVersion {
     fn partial_cmp(&self, other: &HTTPVersion) -> Option<Ordering> {
-        let (my_major, my_minor) = match self { &HTTPVersion(m, n) => (m, n) };
-        let (other_major, other_minor) = match other { &HTTPVersion(m, n) => (m, n) };
+        let HTTPVersion(my_major, my_minor) = *self;
+        let HTTPVersion(other_major, other_minor) = *other;
 
         if my_major != other_major {
-            return my_major.partial_cmp(&other_major)
+            return my_major.partial_cmp(&other_major);
         }
 
         my_minor.partial_cmp(&other_minor)
@@ -417,12 +425,12 @@ impl From<(u8, u8)> for HTTPVersion {
 }
 /// Represents the current date, expressed in RFC 1123 format, e.g. Sun, 06 Nov 1994 08:49:37 GMT
 pub struct HTTPDate {
-    d: DateTime<Utc>
+    d: DateTime<Utc>,
 }
 
 impl HTTPDate {
     pub fn new() -> HTTPDate {
-        HTTPDate {d: Utc::now(),}
+        HTTPDate { d: Utc::now() }
     }
 }
 
@@ -431,8 +439,6 @@ impl ToString for HTTPDate {
         self.d.format("%a, %e %b %Y %H:%M:%S GMT").to_string()
     }
 }
-
-
 
 #[cfg(test)]
 mod test {

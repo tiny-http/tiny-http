@@ -1,8 +1,8 @@
-use std::sync::{Arc, Mutex, Condvar};
-use std::sync::atomic::{Ordering, AtomicUsize};
 use std::collections::VecDeque;
-use std::time::Duration;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{Arc, Condvar, Mutex};
 use std::thread;
+use std::time::Duration;
 
 /// Manages a collection of threads.
 ///
@@ -14,7 +14,7 @@ pub struct TaskPool {
 
 struct Sharing {
     // list of the tasks to be done by worker threads
-    todo: Mutex<VecDeque<Box<FnMut() + Send>>>,
+    todo: Mutex<VecDeque<Box<dyn FnMut() + Send>>>,
 
     // condvar that will be notified whenever a task is added to `todo`
     condvar: Condvar,
@@ -30,13 +30,13 @@ struct Sharing {
 static MIN_THREADS: usize = 4;
 
 struct Registration<'a> {
-    nb: &'a AtomicUsize
+    nb: &'a AtomicUsize,
 }
 
 impl<'a> Registration<'a> {
     fn new(nb: &'a AtomicUsize) -> Registration<'a> {
         nb.fetch_add(1, Ordering::Release);
-        Registration { nb: nb }
+        Registration { nb }
     }
 }
 
@@ -66,32 +66,30 @@ impl TaskPool {
 
     /// Executes a function in a thread.
     /// If no thread is available, spawns a new one.
-    pub fn spawn(&self, code: Box<FnMut() + Send>) {
+    pub fn spawn(&self, code: Box<dyn FnMut() + Send>) {
         let mut queue = self.sharing.todo.lock().unwrap();
 
         if self.sharing.waiting_tasks.load(Ordering::Acquire) == 0 {
             self.add_thread(Some(code));
-
         } else {
             queue.push_back(code);
             self.sharing.condvar.notify_one();
         }
     }
 
-    fn add_thread(&self, initial_fn: Option<Box<FnMut() + Send>>) {
+    fn add_thread(&self, initial_fn: Option<Box<dyn FnMut() + Send>>) {
         let sharing = self.sharing.clone();
 
         thread::spawn(move || {
             let sharing = sharing;
             let _active_guard = Registration::new(&sharing.active_tasks);
 
-            if initial_fn.is_some() {
-                let mut f = initial_fn.unwrap();
+            if let Some(mut f) = initial_fn {
                 f();
             }
 
             loop {
-                let mut task: Box<FnMut() + Send> = {
+                let mut task: Box<dyn FnMut() + Send> = {
                     let mut todo = sharing.todo.lock().unwrap();
 
                     let task;
@@ -102,19 +100,18 @@ impl TaskPool {
                         }
                         let _waiting_guard = Registration::new(&sharing.waiting_tasks);
 
-                        let received = if sharing.active_tasks.load(Ordering::Acquire)
-                                                <= MIN_THREADS
-                        {
-                            todo = sharing.condvar.wait(todo).unwrap();
-                            true
-
-                        } else {
-                            let (new_lock, waitres) = sharing.condvar
-                                                             .wait_timeout(todo, Duration::from_millis(5000))
-                                                             .unwrap();
-                            todo = new_lock;
-                            !waitres.timed_out()
-                        };
+                        let received =
+                            if sharing.active_tasks.load(Ordering::Acquire) <= MIN_THREADS {
+                                todo = sharing.condvar.wait(todo).unwrap();
+                                true
+                            } else {
+                                let (new_lock, waitres) = sharing
+                                    .condvar
+                                    .wait_timeout(todo, Duration::from_millis(5000))
+                                    .unwrap();
+                                todo = new_lock;
+                                !waitres.timed_out()
+                            };
 
                         if !received && todo.is_empty() {
                             return;
@@ -132,7 +129,9 @@ impl TaskPool {
 
 impl Drop for TaskPool {
     fn drop(&mut self) {
-        self.sharing.active_tasks.store(999999999, Ordering::Release);
+        self.sharing
+            .active_tasks
+            .store(999999999, Ordering::Release);
         self.sharing.condvar.notify_all();
     }
 }

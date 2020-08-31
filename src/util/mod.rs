@@ -2,8 +2,8 @@ pub use self::custom_stream::CustomStream;
 pub use self::equal_reader::EqualReader;
 pub use self::messages_queue::MessagesQueue;
 pub use self::refined_tcp_stream::RefinedTcpStream;
-pub use self::sequential::{SequentialReaderBuilder, SequentialReader};
-pub use self::sequential::{SequentialWriterBuilder, SequentialWriter};
+pub use self::sequential::{SequentialReader, SequentialReaderBuilder};
+pub use self::sequential::{SequentialWriter, SequentialWriterBuilder};
 pub use self::task_pool::TaskPool;
 
 use std::str::FromStr;
@@ -17,30 +17,31 @@ mod task_pool;
 
 /// Parses a the value of a header.
 /// Suitable for `Accept-*`, `TE`, etc.
-/// 
-/// For example with `text/plain, image/png; q=1.5` this function would 
+///
+/// For example with `text/plain, image/png; q=1.5` this function would
 /// return `[ ("text/plain", 1.0), ("image/png", 1.5) ]`
 pub fn parse_header_value<'a>(input: &'a str) -> Vec<(&'a str, f32)> {
-    input.split(',').filter_map(|elem| {
-        let mut params = elem.split(';');
+    input
+        .split(',')
+        .filter_map(|elem| {
+            let mut params = elem.split(';');
 
-        let t = params.next();
-        if t.is_none() { return None; }
+            let t = params.next()?;
 
-        let mut value = 1.0f32;
+            let mut value = 1.0f32;
 
-        for p in params {
-            if p.trim_left().starts_with("q=") {
-                match FromStr::from_str(&p.trim_left()[2..].trim()) {
-                    Ok(val) => { value = val; break },
-                    _ => ()
+            for p in params {
+                if p.trim_start().starts_with("q=") {
+                    if let Ok(val) = f32::from_str(&p.trim_start()[2..].trim()) {
+                        value = val;
+                        break;
+                    }
                 }
             }
-        }
 
-        Some((t.unwrap().trim(), value))
-
-    }).collect()
+            Some((t.trim(), value))
+        })
+        .collect()
 }
 
 #[cfg(test)]

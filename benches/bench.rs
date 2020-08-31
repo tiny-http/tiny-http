@@ -22,7 +22,7 @@ fn curl_bench() {
         .output()
     {
         Ok(p) => p,
-        Err(_) => return,       // ignoring test
+        Err(_) => return, // ignoring test
     };
 
     drop(server);
@@ -58,14 +58,18 @@ fn parallel_requests(bencher: &mut test::Bencher) {
 
         for _ in 0..1000usize {
             let mut stream = std::net::TcpStream::connect(("127.0.0.1", port)).unwrap();
-            (write!(stream, "GET / HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n")).unwrap();
+            (write!(
+                stream,
+                "GET / HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n"
+            ))
+            .unwrap();
             streams.push(stream);
         }
 
         loop {
             let request = match server.try_recv().unwrap() {
                 None => break,
-                Some(rq) => rq
+                Some(rq) => rq,
             };
 
             assert_eq!(request.method(), &Method::Get);

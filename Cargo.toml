@@ -20,6 +20,7 @@ openssl = { version = "0.10", optional = true }
 url = "2"
 chrono = "0.4"
 log = "0.4"
+anysocket="0.1"
 
 [dev-dependencies]
 rustc-serialize = "0.3"

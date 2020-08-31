@@ -4,7 +4,7 @@ use std::io::Error as IoError;
 use std::io::Result as IoResult;
 use std::io::{BufReader, BufWriter, ErrorKind, Read};
 
-use std::net::SocketAddr;
+use anysocket::AbstractAddr as SocketAddr;
 use std::str::FromStr;
 
 use common::{HTTPVersion, Method};
@@ -152,7 +152,7 @@ impl ClientConnection {
             path,
             version.clone(),
             headers,
-            *self.remote_addr.as_ref().unwrap(),
+            self.remote_addr.as_ref().unwrap().clone(),
             data_source,
             writer,
         )

@@ -1,8 +1,8 @@
 use std::io::Error as IoError;
 use std::io::{self, Cursor, ErrorKind, Read, Write};
 
+use anysocket::AbstractAddr as SocketAddr;
 use std::fmt;
-use std::net::SocketAddr;
 use std::str::FromStr;
 
 use std::sync::mpsc::Sender;

@@ -101,14 +101,15 @@ extern crate chrono;
 extern crate chunked_transfer;
 extern crate url;
 
+extern crate anysocket;
+
 #[cfg(feature = "ssl")]
 extern crate openssl;
 
 use std::error::Error;
 use std::io::Error as IoError;
 use std::io::Result as IoResult;
-use std::net;
-use std::net::{Shutdown, TcpStream, ToSocketAddrs};
+use std::net::Shutdown;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering::Relaxed;
 use std::sync::mpsc;
@@ -122,6 +123,8 @@ use util::MessagesQueue;
 pub use common::{HTTPVersion, Header, HeaderField, Method, StatusCode};
 pub use request::{ReadWrite, Request};
 pub use response::{Response, ResponseBox};
+
+use anysocket::AbstractToSocketAddrs;
 
 mod client;
 mod common;
@@ -143,7 +146,7 @@ pub struct Server {
     messages: Arc<MessagesQueue<Message>>,
 
     // result of TcpListener::local_addr()
-    listening_addr: net::SocketAddr,
+    listening_addr: anysocket::AbstractAddr,
 }
 
 enum Message {
@@ -177,7 +180,7 @@ pub struct IncomingRequests<'a> {
 #[derive(Debug, Clone)]
 pub struct ServerConfig<A>
 where
-    A: ToSocketAddrs,
+    A: AbstractToSocketAddrs,
 {
     /// The addresses to listen to.
     pub addr: A,
@@ -200,7 +203,7 @@ impl Server {
     #[inline]
     pub fn http<A>(addr: A) -> Result<Server, Box<dyn Error + Send + Sync + 'static>>
     where
-        A: ToSocketAddrs,
+        A: AbstractToSocketAddrs,
     {
         Server::new(ServerConfig { addr, ssl: None })
     }
@@ -213,7 +216,7 @@ impl Server {
         config: SslConfig,
     ) -> Result<Server, Box<Error + Send + Sync + 'static>>
     where
-        A: ToSocketAddrs,
+        A: AbstractToSocketAddrs,
     {
         Server::new(ServerConfig {
             addr: addr,
@@ -224,14 +227,14 @@ impl Server {
     /// Builds a new server that listens on the specified address.
     pub fn new<A>(config: ServerConfig<A>) -> Result<Server, Box<dyn Error + Send + Sync + 'static>>
     where
-        A: ToSocketAddrs,
+        A: AbstractToSocketAddrs
     {
         // building the "close" variable
         let close_trigger = Arc::new(AtomicBool::new(false));
 
         // building the TcpListener
         let (server, local_addr) = {
-            let listener = net::TcpListener::bind(config.addr)?;
+            let listener = config.addr.bind_any()?;
             let local_addr = listener.local_addr()?;
             debug!("Server listening on {}", local_addr);
             (listener, local_addr)
@@ -370,8 +373,8 @@ impl Server {
 
     /// Returns the address the server is listening to.
     #[inline]
-    pub fn server_addr(&self) -> net::SocketAddr {
-        self.listening_addr
+    pub fn server_addr(&self) -> anysocket::AbstractAddr {
+        self.listening_addr.clone()
     }
 
     /// Returns the number of clients currently connected to the server.
@@ -418,7 +421,7 @@ impl Drop for Server {
     fn drop(&mut self) {
         self.close.store(true, Relaxed);
         // Connect briefly to ourselves to unblock the accept thread
-        let maybe_stream = TcpStream::connect(self.listening_addr);
+        let maybe_stream = self.listening_addr.connect_any();
         if let Ok(stream) = maybe_stream {
             let _ = stream.shutdown(Shutdown::Both);
         }

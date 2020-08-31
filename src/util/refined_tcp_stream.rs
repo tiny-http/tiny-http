@@ -1,6 +1,7 @@
 use std::io::Result as IoResult;
 use std::io::{Read, Write};
-use std::net::{Shutdown, SocketAddr, TcpStream};
+use std::net::Shutdown;
+use anysocket::AbstractStream;
 
 #[cfg(feature = "ssl")]
 use openssl::ssl::SslStream;
@@ -14,22 +15,22 @@ pub struct RefinedTcpStream {
 }
 
 pub enum Stream {
-    Http(TcpStream),
+    Http(AbstractStream),
     #[cfg(feature = "ssl")]
-    Https(Arc<Mutex<SslStream<TcpStream>>>),
+    Https(Arc<Mutex<SslStream<AbstractStream>>>),
 }
 
-impl From<TcpStream> for Stream {
+impl From<AbstractStream> for Stream {
     #[inline]
-    fn from(stream: TcpStream) -> Stream {
+    fn from(stream: AbstractStream) -> Stream {
         Stream::Http(stream)
     }
 }
 
 #[cfg(feature = "ssl")]
-impl From<SslStream<TcpStream>> for Stream {
+impl From<SslStream<AbstractStream>> for Stream {
     #[inline]
-    fn from(stream: SslStream<TcpStream>) -> Stream {
+    fn from(stream: SslStream<AbstractStream>) -> Stream {
         Stream::Https(Arc::new(Mutex::new(stream)))
     }
 }
@@ -72,7 +73,7 @@ impl RefinedTcpStream {
         }
     }
 
-    pub fn peer_addr(&mut self) -> IoResult<SocketAddr> {
+    pub fn peer_addr(&mut self) -> IoResult<anysocket::AbstractAddr> {
         match self.stream {
             Stream::Http(ref mut stream) => stream.peer_addr(),
             #[cfg(feature = "ssl")]

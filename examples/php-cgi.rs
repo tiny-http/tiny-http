@@ -36,7 +36,7 @@ fn handle(rq: tiny_http::Request, script: &str) {
         .env("REQUEST_METHOD", format!("{}", rq.method()))
         .env("SCRIPT_NAME", script)
         .env("SERVER_NAME", "tiny-http php-cgi example")
-        .env("SERVER_PORT", format!("{}", rq.remote_addr().port()))
+        .env("SERVER_PORT", format!("{}", rq.remote_addr().port().unwrap()))
         .env("SERVER_PROTOCOL", "HTTP/1.1")
         .env("SERVER_SOFTWARE", "tiny-http php-cgi example")
         .output()

@@ -433,6 +433,16 @@ where
 
         Ok(())
     }
+
+    /// Retrieves the current value of the `Response` status code
+    pub fn status_code(&self) -> StatusCode {
+        self.status_code.clone()
+    }
+
+    /// Retrieves the current value of the `Response` data length
+    pub fn data_length(&self) -> Option<usize> {
+        self.data_length
+    }
 }
 
 impl<R> Response<R>

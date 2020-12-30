@@ -419,14 +419,11 @@ where
                 }
 
                 Some(TransferEncoding::Identity) => {
-                    use util::EqualReader;
-
                     assert!(data_length.is_some());
                     let data_length = data_length.unwrap();
 
                     if data_length >= 1 {
-                        let (mut equ_reader, _) = EqualReader::new(reader.by_ref(), data_length);
-                        io::copy(&mut equ_reader, &mut writer)?;
+                        io::copy(&mut reader, &mut writer)?;
                     }
                 }
 

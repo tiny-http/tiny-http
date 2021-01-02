@@ -239,7 +239,7 @@ impl FromStr for HeaderField {
     type Err = ();
 
     fn from_str(s: &str) -> Result<HeaderField, ()> {
-        AsciiString::from_ascii(s.trim())
+        AsciiString::from_ascii(s)
             .map(HeaderField)
             .map_err(|_| ())
     }

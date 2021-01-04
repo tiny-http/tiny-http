@@ -435,22 +435,25 @@ impl Request {
 
         let do_not_send_body = self.method == Method::Head;
 
-        match response.raw_print(
+        Self::ignore_client_closing_errors(response.raw_print(
             writer.by_ref(),
             self.http_version.clone(),
             &self.headers,
             do_not_send_body,
             None,
-        ) {
-            Ok(_) => (),
-            Err(ref err) if err.kind() == ErrorKind::BrokenPipe => (),
-            Err(ref err) if err.kind() == ErrorKind::ConnectionAborted => (),
-            Err(ref err) if err.kind() == ErrorKind::ConnectionRefused => (),
-            Err(ref err) if err.kind() == ErrorKind::ConnectionReset => (),
-            Err(err) => return Err(err),
-        };
+        ))?;
 
-        writer.flush()
+        Self::ignore_client_closing_errors(writer.flush())
+    }
+
+    fn ignore_client_closing_errors(result: io::Result<()>) -> io::Result<()> {
+        result.or_else(|err| match err.kind() {
+            ErrorKind::BrokenPipe => Ok(()),
+            ErrorKind::ConnectionAborted => Ok(()),
+            ErrorKind::ConnectionRefused => Ok(()),
+            ErrorKind::ConnectionReset => Ok(()),
+            _ => Err(err),
+        })
     }
 
     pub(crate) fn with_notify_sender(mut self, sender: Sender<()>) -> Self {

@@ -212,7 +212,7 @@ impl Display for Header {
 
 /// Field of a header (eg. `Content-Type`, `Content-Length`, etc.)
 ///
-/// Comparaison between two `HeaderField`s ignores case.
+/// Comparison between two `HeaderField`s ignores case.
 #[derive(Debug, Clone)]
 pub struct HeaderField(AsciiString);
 
@@ -460,5 +460,14 @@ mod test {
 
         assert!(header.field.equiv(&"time"));
         assert!(header.value.as_str() == "20: 34");
+    }
+
+    // This tests reslstance to RUSTSEC-2020-0031: "HTTP Request smuggling
+    // through malformed Transfer Encoding headers"
+    // (https://rustsec.org/advisories/RUSTSEC-2020-0031.html).
+    #[test]
+    fn test_strict_headers() {
+        let smuggled = "Transfer-Encoding : chunked".parse::<Header>().unwrap();
+        assert!(!smuggled.field.equiv("Transfer-Encoding"));
     }
 }

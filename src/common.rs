@@ -266,7 +266,7 @@ impl Eq for HeaderField {}
 ///
 /// As per [RFC 7231](https://tools.ietf.org/html/rfc7231#section-4.1) and
 /// [RFC 5789](https://tools.ietf.org/html/rfc5789)
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Method {
     /// `GET`
     Get,
@@ -321,15 +321,15 @@ impl FromStr for Method {
 
     fn from_str(s: &str) -> Result<Method, ()> {
         Ok(match s {
-            s if s.eq_ignore_ascii_case("GET") => Method::Get,
-            s if s.eq_ignore_ascii_case("HEAD") => Method::Head,
-            s if s.eq_ignore_ascii_case("POST") => Method::Post,
-            s if s.eq_ignore_ascii_case("PUT") => Method::Put,
-            s if s.eq_ignore_ascii_case("DELETE") => Method::Delete,
-            s if s.eq_ignore_ascii_case("CONNECT") => Method::Connect,
-            s if s.eq_ignore_ascii_case("OPTIONS") => Method::Options,
-            s if s.eq_ignore_ascii_case("TRACE") => Method::Trace,
-            s if s.eq_ignore_ascii_case("PATCH") => Method::Patch,
+            "GET" => Method::Get,
+            "HEAD" => Method::Head,
+            "POST" => Method::Post,
+            "PUT" => Method::Put,
+            "DELETE" => Method::Delete,
+            "CONNECT" => Method::Connect,
+            "OPTIONS" => Method::Options,
+            "TRACE" => Method::Trace,
+            "PATCH" => Method::Patch,
             s => {
                 let ascii_string = AsciiString::from_ascii(s).map_err(|_| ())?;
                 Method::NonStandard(ascii_string)
@@ -343,28 +343,6 @@ impl Display for Method {
         write!(formatter, "{}", self.as_str())
     }
 }
-
-impl PartialEq for Method {
-    fn eq(&self, other: &Method) -> bool {
-        match (self, other) {
-            (&Method::NonStandard(ref s1), &Method::NonStandard(ref s2)) => {
-                s1.as_str().eq_ignore_ascii_case(s2.as_str())
-            }
-            (&Method::Get, &Method::Get) => true,
-            (&Method::Head, &Method::Head) => true,
-            (&Method::Post, &Method::Post) => true,
-            (&Method::Put, &Method::Put) => true,
-            (&Method::Delete, &Method::Delete) => true,
-            (&Method::Connect, &Method::Connect) => true,
-            (&Method::Options, &Method::Options) => true,
-            (&Method::Trace, &Method::Trace) => true,
-            (&Method::Patch, &Method::Patch) => true,
-            _ => false,
-        }
-    }
-}
-
-impl Eq for Method {}
 
 /// HTTP version (usually 1.0 or 1.1).
 #[derive(Debug, Clone, PartialEq, Eq, Ord)]

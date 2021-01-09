@@ -239,9 +239,13 @@ impl FromStr for HeaderField {
     type Err = ();
 
     fn from_str(s: &str) -> Result<HeaderField, ()> {
-        AsciiString::from_ascii(s)
-            .map(HeaderField)
-            .map_err(|_| ())
+        if s.contains(char::is_whitespace) {
+            Err(())
+        } else {
+            AsciiString::from_ascii(s)
+                .map(HeaderField)
+                .map_err(|_| ())
+        }
     }
 }
 
@@ -467,7 +471,12 @@ mod test {
     // (https://rustsec.org/advisories/RUSTSEC-2020-0031.html).
     #[test]
     fn test_strict_headers() {
-        let smuggled = "Transfer-Encoding : chunked".parse::<Header>().unwrap();
-        assert!(!smuggled.field.equiv("Transfer-Encoding"));
+        assert!("Transfer-Encoding : chunked".parse::<Header>().is_err());
+        assert!(" Transfer-Encoding: chunked".parse::<Header>().is_err());
+        assert!("Transfer Encoding: chunked".parse::<Header>().is_err());
+        assert!(" Transfer\tEncoding : chunked".parse::<Header>().is_err());
+        assert!("Transfer-Encoding: chunked".parse::<Header>().is_ok());
+        assert!("Transfer-Encoding: chunked ".parse::<Header>().is_ok());
+        assert!("Transfer-Encoding:   chunked ".parse::<Header>().is_ok());
     }
 }

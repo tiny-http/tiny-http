@@ -81,3 +81,15 @@ fn unsupported_expect_header() {
     client.read_to_string(&mut content).unwrap();
     assert!(&content[9..].starts_with("417"));   // 417 status code
 }
+
+#[test]
+fn invalid_header_name() {
+    let mut client = support::new_client_to_hello_world_server();
+
+    // note the space hidden in the Content-Length, which is invalid
+    (write!(client, "GET / HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\nContent-Type: text/plain; charset=utf8\r\nContent-Length : 5\r\n\r\nhello")).unwrap();
+
+    let mut content = String::new();
+    client.read_to_string(&mut content).unwrap();
+    assert!(&content[9..].starts_with("400 Bad Request")); // 400 status code
+}

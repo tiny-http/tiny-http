@@ -1,5 +1,15 @@
 # Changes
 
+## 0.8.0
+
+* [Fix RUSTSEC-2020-0031](https://github.com/tiny-http/tiny-http/pull/190)
+* [Filter out the same socket-closing errors on flush as on write](https://github.com/tiny-http/tiny-http/pull/192)
+* [response: Drop the use of EqualReader for TransferEncoding::Identity](https://github.com/tiny-http/tiny-http/pull/183)
+* [Add unblock method for graceful shutdown](https://github.com/tiny-http/tiny-http/pull/184)
+* [Response: Don't forget `chunked_threshold`](https://github.com/tiny-http/tiny-http/pull/177)
+* [Response: Allow manual handling of Range requests](https://github.com/tiny-http/tiny-http/pull/175)
+* [Feature | Getters for Response Status Code & Data Length Properties](https://github.com/tiny-http/tiny-http/pull/186)
+
 ## 0.7.0
 
 * [Fix HTTPS deadlock](https://github.com/tiny-http/tiny-http/pull/151)

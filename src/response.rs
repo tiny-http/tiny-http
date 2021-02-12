@@ -31,6 +31,11 @@ use std::str::FromStr;
 ///     header will be equivalent to modifying the size of the data but the header
 ///     itself may not be present in the final result.
 ///
+///  - `Content-Type`: You may only set this header to one value at a time. If you
+///     try to set it more than once, the existing value will be overwritten. This
+///     behavior differs from the default for most headers, which is to allow them to
+///     be set multiple times in the same response.
+///
 pub struct Response<R>
 where
     R: Read,
@@ -261,6 +266,19 @@ where
             }
 
             return;
+        // if the header is Content-Type and it's already set, overwrite it
+        } else if header.field.equiv(&"Content-Type") {
+            match self
+                .headers
+                .iter()
+                .position(|h| h.field.equiv(&"Content-Type"))
+            {
+                Some(p) => {
+                    self.headers[p].value = header.value;
+                    return;
+                }
+                None => (),
+            };
         }
 
         self.headers.push(header);

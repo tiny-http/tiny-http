@@ -107,6 +107,7 @@ where
 }
 
 fn choose_transfer_encoding(
+    status_code: StatusCode,
     request_headers: &[Header],
     http_version: &HTTPVersion,
     entity_length: &Option<usize>,
@@ -117,6 +118,13 @@ fn choose_transfer_encoding(
 
     // HTTP 1.0 doesn't support other encoding
     if *http_version <= (1, 0) {
+        return TransferEncoding::Identity;
+    }
+
+    // Per section 3.3.1 of RFC7230:
+    // A server MUST NOT send a Transfer-Encoding header field in any response with a status code
+    // of 1xx (Informational) or 204 (No Content).
+    if status_code.0 < 200 || status_code.0 == 204 {
         return TransferEncoding::Identity;
     }
 
@@ -313,6 +321,7 @@ where
         upgrade: Option<&str>,
     ) -> IoResult<()> {
         let mut transfer_encoding = Some(choose_transfer_encoding(
+            self.status_code,
             request_headers,
             &http_version,
             &self.data_length,

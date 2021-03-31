@@ -6,7 +6,7 @@ use std::str::FromStr;
 use chrono::*;
 
 /// Status code of a request or response.
-#[derive(Eq, PartialEq, Clone, Debug, Ord, PartialOrd)]
+#[derive(Eq, PartialEq, Copy, Clone, Debug, Ord, PartialOrd)]
 pub struct StatusCode(pub u16);
 
 impl StatusCode {

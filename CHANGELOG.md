@@ -1,5 +1,16 @@
 # Changes
 
+## 0.6.3
+* Resolve [RUSTSEC-2020-0031](https://rustsec.org/advisories/RUSTSEC-2020-0031.html) by preventing
+  HTTP request smuggling enabled by our normalisation of header values.
+
+## 0.6.2
+* Remove deprecated use of `AsciiExt` trait.
+* Expose `with_chunked_threshold` on `Response` for configuring exactly when chunking should begin.
+
+## 0.6.0
+* Bump dependencies
+
 ## 0.5.9
 
 * Expanded and changed status code description mapping according to IANA registry:

@@ -155,6 +155,26 @@ fn responses_reordered() {
     assert!(content.ends_with("second request"));
 }
 
+#[test]
+fn no_transfer_encoding_on_204() {
+    let (server, mut client) = support::new_one_server_one_client();
+
+    (write!(client, "GET / HTTP/1.1\r\nHost: localhost\r\nTE: chunked\r\nConnection: close\r\n\r\n")).unwrap();
+
+    thread::spawn(move || {
+        let rq = server.recv().unwrap();
+
+        let resp = tiny_http::Response::empty(tiny_http::StatusCode(204));
+        rq.respond(resp).unwrap();
+    });
+
+    let mut content = String::new();
+    client.read_to_string(&mut content).unwrap();
+
+    assert!(content.starts_with("HTTP/1.1 204"));
+    assert!(!content.contains("Transfer-Encoding: chunked"));
+}
+
 /* FIXME: uncomment and fix
 #[test]
 fn connection_timeout() {

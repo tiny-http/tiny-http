@@ -369,7 +369,7 @@ impl PartialEq for Method {
 impl Eq for Method {}
 
 /// HTTP version (usually 1.0 or 1.1).
-#[derive(Debug, Clone, PartialEq, Eq, Ord)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HTTPVersion(pub u8, pub u8);
 
 impl Display for HTTPVersion {
@@ -381,16 +381,22 @@ impl Display for HTTPVersion {
     }
 }
 
-impl PartialOrd for HTTPVersion {
-    fn partial_cmp(&self, other: &HTTPVersion) -> Option<Ordering> {
+impl Ord for HTTPVersion {
+    fn cmp(&self, other: &Self) -> Ordering {
         let HTTPVersion(my_major, my_minor) = *self;
         let HTTPVersion(other_major, other_minor) = *other;
 
         if my_major != other_major {
-            return my_major.partial_cmp(&other_major);
+            return my_major.cmp(&other_major);
         }
 
-        my_minor.partial_cmp(&other_minor)
+        my_minor.cmp(&other_minor)
+    }
+}
+
+impl PartialOrd for HTTPVersion {
+    fn partial_cmp(&self, other: &HTTPVersion) -> Option<Ordering> {
+        Some(self.cmp(other))
     }
 }
 

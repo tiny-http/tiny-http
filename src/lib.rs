@@ -227,15 +227,18 @@ impl Server {
     where
         A: ToSocketAddrs,
     {
-            let listener = net::TcpListener::bind(config.addr)?;
-            Self::from_listener(listener, config.ssl)
+        let listener = net::TcpListener::bind(config.addr)?;
+        Self::from_listener(listener, config.ssl)
     }
 
     /// Builds a new server using the specified TCP listener.
     ///
     /// This is useful if you've constructed TcpListener using some less usual method
     /// such as from systemd. For other cases, you probably want the `new()` function.
-    pub fn from_listener(listener: net::TcpListener, ssl_config: Option<SslConfig>) -> Result<Server, Box<dyn Error + Send + Sync + 'static>> {
+    pub fn from_listener(
+        listener: net::TcpListener,
+        ssl_config: Option<SslConfig>,
+    ) -> Result<Server, Box<dyn Error + Send + Sync + 'static>> {
         // building the "close" variable
         let close_trigger = Arc::new(AtomicBool::new(false));
 

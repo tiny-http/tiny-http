@@ -242,9 +242,7 @@ impl FromStr for HeaderField {
         if s.contains(char::is_whitespace) {
             Err(())
         } else {
-            AsciiString::from_ascii(s)
-                .map(HeaderField)
-                .map_err(|_| ())
+            AsciiString::from_ascii(s).map(HeaderField).map_err(|_| ())
         }
     }
 }

@@ -92,6 +92,8 @@ let _ = request.respond(response);
 #![crate_name = "tiny_http"]
 #![crate_type = "lib"]
 #![forbid(unsafe_code)]
+// matches!() only becomes stable in Rust 1.42
+#![allow(clippy::match_like_matches_macro)]
 
 #[macro_use]
 extern crate log;
@@ -395,9 +397,9 @@ impl Server {
     /// Blocks until an HTTP request has been submitted and returns it.
     pub fn recv(&self) -> IoResult<Request> {
         match self.messages.pop() {
-            Some(Message::Error(err)) => return Err(err),
-            Some(Message::NewRequest(rq)) => return Ok(rq),
-            None => return Err(IoError::new(IoErrorKind::Other, "thread unblocked")),
+            Some(Message::Error(err)) => Err(err),
+            Some(Message::NewRequest(rq)) => Ok(rq),
+            None => Err(IoError::new(IoErrorKind::Other, "thread unblocked")),
         }
     }
 

@@ -20,7 +20,7 @@ mod task_pool;
 ///
 /// For example with `text/plain, image/png; q=1.5` this function would
 /// return `[ ("text/plain", 1.0), ("image/png", 1.5) ]`
-pub fn parse_header_value<'a>(input: &'a str) -> Vec<(&'a str, f32)> {
+pub fn parse_header_value(input: &str) -> Vec<(&str, f32)> {
     input
         .split(',')
         .filter_map(|elem| {

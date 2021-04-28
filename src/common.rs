@@ -164,6 +164,7 @@ impl Header {
     /// ```
     /// let header = tiny_http::Header::from_bytes(&b"Content-Type"[..], &b"text/plain"[..]).unwrap();
     /// ```
+    #[allow(clippy::result_unit_err)]
     pub fn from_bytes<B1, B2>(header: B1, value: B2) -> Result<Header, ()>
     where
         B1: Into<Vec<u8>> + AsRef<[u8]>,
@@ -369,6 +370,7 @@ impl PartialEq for Method {
 impl Eq for Method {}
 
 /// HTTP version (usually 1.0 or 1.1).
+#[allow(clippy::upper_case_acronyms)]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HTTPVersion(pub u8, pub u8);
 
@@ -431,7 +433,9 @@ impl From<(u8, u8)> for HTTPVersion {
         HTTPVersion(major, minor)
     }
 }
+
 /// Represents the current date, expressed in RFC 1123 format, e.g. Sun, 06 Nov 1994 08:49:37 GMT
+#[allow(clippy::upper_case_acronyms)]
 pub struct HTTPDate {
     d: DateTime<Utc>,
 }

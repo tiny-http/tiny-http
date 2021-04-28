@@ -1,6 +1,6 @@
 [package]
 name = "tiny_http"
-version = "0.8.0"
+version = "0.8.1"
 authors = ["pierre.krieger1708@gmail.com",
            "Corey Farwell <coreyf@rwell.org>"]
 description = "Low level HTTP server library"
@@ -18,7 +18,7 @@ ascii = "1.0"
 chunked_transfer = "1"
 openssl = { version = "0.10", optional = true }
 url = "2"
-chrono = "0.4"
+chrono = { version = "0.4", default-features = false, features=["clock"] }
 log = "0.4"
 
 [dev-dependencies]

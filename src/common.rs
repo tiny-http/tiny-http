@@ -164,6 +164,7 @@ impl Header {
     /// ```
     /// let header = tiny_http::Header::from_bytes(&b"Content-Type"[..], &b"text/plain"[..]).unwrap();
     /// ```
+    #[allow(clippy::result_unit_err)]
     pub fn from_bytes<B1, B2>(header: B1, value: B2) -> Result<Header, ()>
     where
         B1: Into<Vec<u8>> + AsRef<[u8]>,
@@ -242,9 +243,7 @@ impl FromStr for HeaderField {
         if s.contains(char::is_whitespace) {
             Err(())
         } else {
-            AsciiString::from_ascii(s)
-                .map(HeaderField)
-                .map_err(|_| ())
+            AsciiString::from_ascii(s).map(HeaderField).map_err(|_| ())
         }
     }
 }
@@ -349,7 +348,8 @@ impl Display for Method {
 }
 
 /// HTTP version (usually 1.0 or 1.1).
-#[derive(Debug, Clone, PartialEq, Eq, Ord)]
+#[allow(clippy::upper_case_acronyms)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HTTPVersion(pub u8, pub u8);
 
 impl Display for HTTPVersion {
@@ -361,16 +361,22 @@ impl Display for HTTPVersion {
     }
 }
 
-impl PartialOrd for HTTPVersion {
-    fn partial_cmp(&self, other: &HTTPVersion) -> Option<Ordering> {
+impl Ord for HTTPVersion {
+    fn cmp(&self, other: &Self) -> Ordering {
         let HTTPVersion(my_major, my_minor) = *self;
         let HTTPVersion(other_major, other_minor) = *other;
 
         if my_major != other_major {
-            return my_major.partial_cmp(&other_major);
+            return my_major.cmp(&other_major);
         }
 
-        my_minor.partial_cmp(&other_minor)
+        my_minor.cmp(&other_minor)
+    }
+}
+
+impl PartialOrd for HTTPVersion {
+    fn partial_cmp(&self, other: &HTTPVersion) -> Option<Ordering> {
+        Some(self.cmp(other))
     }
 }
 
@@ -405,7 +411,9 @@ impl From<(u8, u8)> for HTTPVersion {
         HTTPVersion(major, minor)
     }
 }
+
 /// Represents the current date, expressed in RFC 1123 format, e.g. Sun, 06 Nov 1994 08:49:37 GMT
+#[allow(clippy::upper_case_acronyms)]
 pub struct HTTPDate {
     d: DateTime<Utc>,
 }

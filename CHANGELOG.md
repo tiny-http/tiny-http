@@ -1,5 +1,9 @@
 # Changes
 
+## 0.8.1
+
+* [Don't set Transfer-Encoding for 1xx or 204 Responses](https://github.com/tiny-http/tiny-http/pull/198)
+
 ## 0.8.0
 
 * [Fix RUSTSEC-2020-0031](https://github.com/tiny-http/tiny-http/pull/190)

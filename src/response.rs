@@ -445,7 +445,7 @@ where
 
     /// Retrieves the current value of the `Response` status code
     pub fn status_code(&self) -> StatusCode {
-        self.status_code.clone()
+        self.status_code
     }
 
     /// Retrieves the current value of the `Response` data length
@@ -550,7 +550,7 @@ impl Clone for Response<io::Empty> {
     fn clone(&self) -> Response<io::Empty> {
         Response {
             reader: io::empty(),
-            status_code: self.status_code.clone(),
+            status_code: self.status_code,
             headers: self.headers.clone(),
             data_length: self.data_length,
             chunked_threshold: self.chunked_threshold,

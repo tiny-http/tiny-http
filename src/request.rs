@@ -120,6 +120,7 @@ impl From<IoError> for RequestCreationError {
 /// It is the responsibility of the `Request` to read only the data of the request and not further.
 ///
 /// The `Write` object will be used by the `Request` to write the response.
+#[allow(clippy::too_many_arguments)]
 pub fn new_request<R, W>(
     secure: bool,
     method: Method,
@@ -312,7 +313,7 @@ impl Request {
 
         self.response_writer.as_mut().unwrap().flush().ok(); // TODO: unused result
 
-        let stream = CustomStream::new(self.into_reader_impl(), self.into_writer_impl());
+        let stream = CustomStream::new(self.extract_reader_impl(), self.extract_writer_impl());
         if let Some(sender) = self.notify_when_responded.take() {
             let stream = NotifyOnDrop {
                 sender,
@@ -379,7 +380,7 @@ impl Request {
     /// Therefore you should always destroy the `Writer` as soon as possible.
     #[inline]
     pub fn into_writer(mut self) -> Box<dyn Write + Send + 'static> {
-        let writer = self.into_writer_impl();
+        let writer = self.extract_writer_impl();
         if let Some(sender) = self.notify_when_responded.take() {
             let writer = NotifyOnDrop {
                 sender,
@@ -391,7 +392,11 @@ impl Request {
         }
     }
 
-    fn into_writer_impl(&mut self) -> Box<dyn Write + Send + 'static> {
+    /// Extract the response `Writer` object from the Request, dropping this `Writer` has the same side effects
+    /// as the object returned by `into_writer` above.
+    ///
+    /// This may only be called once on a single request.
+    fn extract_writer_impl(&mut self) -> Box<dyn Write + Send + 'static> {
         use std::mem;
 
         assert!(self.response_writer.is_some());
@@ -401,7 +406,10 @@ impl Request {
         writer.unwrap()
     }
 
-    fn into_reader_impl(&mut self) -> Box<dyn Read + Send + 'static> {
+    /// Extract the body `Reader` object from the Request.
+    ///
+    /// This may only be called once on a single request.
+    fn extract_reader_impl(&mut self) -> Box<dyn Read + Send + 'static> {
         use std::mem;
 
         assert!(self.data_reader.is_some());
@@ -431,7 +439,7 @@ impl Request {
         // Droping the request reader now so that further requests can start processing immediately.
         self.data_reader = None;
 
-        let mut writer = self.into_writer_impl();
+        let mut writer = self.extract_writer_impl();
 
         let do_not_send_body = self.method == Method::Head;
 

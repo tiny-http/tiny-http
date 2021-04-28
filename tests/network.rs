@@ -159,7 +159,11 @@ fn responses_reordered() {
 fn no_transfer_encoding_on_204() {
     let (server, mut client) = support::new_one_server_one_client();
 
-    (write!(client, "GET / HTTP/1.1\r\nHost: localhost\r\nTE: chunked\r\nConnection: close\r\n\r\n")).unwrap();
+    (write!(
+        client,
+        "GET / HTTP/1.1\r\nHost: localhost\r\nTE: chunked\r\nConnection: close\r\n\r\n"
+    ))
+    .unwrap();
 
     thread::spawn(move || {
         let rq = server.recv().unwrap();

@@ -18,63 +18,40 @@ jobs:
           command: clippy
           args: --all-features
 
-#      - name: Format
-#        uses: actions-rs/cargo@v1
-#        with:
-#          command: fmt
-#          args: -- --check
+      - name: Format
+        uses: actions-rs/cargo@v1
+        with:
+          command: fmt
+          args: -- --check
 
   test:
     name: Build & Test
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        rust:
+          - stable
+          - nightly
+          - 1.41.1
+        features:
+          - default
+          - ssl
     steps:
       - uses: actions/checkout@v2
-      - name: Install stable toolchain
+      - name: Install toolchain
         uses: actions-rs/toolchain@v1
         with:
-          toolchain: stable
-
-      - name: Build (Default Features)
-        uses: actions-rs/cargo@v1
-        with:
-          command: build
-
-      - name: Build (All Features)
-        uses: actions-rs/cargo@v1
-        with:
-          command: build
-          args: --all-features
-
-      - name: Test
-        uses: actions-rs/cargo@v1
-        with:
-          command: test
-          args: --all-features
-
-  test_msrv:
-    name: Test MSRV
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v2
-      - name: Install 1.41 toolchain
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: 1.41.1
+          toolchain: ${{ matrix.rust }}
           override: true
-
-      - name: Build (Default Features)
-        uses: actions-rs/cargo@v1
-        with:
-          command: build
 
       - name: Build
         uses: actions-rs/cargo@v1
         with:
           command: build
-          args: --all-features
+          args: --features ${{ matrix.features }}
 
       - name: Test
         uses: actions-rs/cargo@v1
         with:
           command: test
-          args: --all-features
+          args: --features ${{ matrix.features }}

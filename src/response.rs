@@ -268,17 +268,14 @@ where
             return;
         // if the header is Content-Type and it's already set, overwrite it
         } else if header.field.equiv(&"Content-Type") {
-            match self
+            if let Some(content_type_header) = self
                 .headers
-                .iter()
-                .position(|h| h.field.equiv(&"Content-Type"))
+                .iter_mut()
+                .find(|h| h.field.equiv("Content-Type"))
             {
-                Some(p) => {
-                    self.headers[p].value = header.value;
-                    return;
-                }
-                None => (),
-            };
+                content_type_header.value = header.value;
+                return;
+            }
         }
 
         self.headers.push(header);

@@ -93,3 +93,30 @@ fn invalid_header_name() {
     client.read_to_string(&mut content).unwrap();
     assert!(&content[9..].starts_with("400 Bad Request")); // 400 status code
 }
+
+#[test]
+fn custom_content_type_response_header() {
+    let (server, mut stream) = support::new_one_server_one_client();
+    write!(
+        stream,
+        "GET / HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n"
+    )
+    .unwrap();
+
+    let request = server.recv().unwrap();
+    request
+        .respond(
+            tiny_http::Response::from_string("{\"custom\": \"Content-Type\"}").with_header(
+                "Content-Type: application/json"
+                    .parse::<tiny_http::Header>()
+                    .unwrap(),
+            ),
+        )
+        .unwrap();
+
+    let mut content = String::new();
+    stream.read_to_string(&mut content).unwrap();
+
+    assert!(content.ends_with("{\"custom\": \"Content-Type\"}"));
+    assert_ne!(content.find("Content-Type: application/json"), None);
+}

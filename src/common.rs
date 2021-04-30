@@ -6,7 +6,7 @@ use std::str::FromStr;
 use chrono::*;
 
 /// Status code of a request or response.
-#[derive(Eq, PartialEq, Clone, Debug, Ord, PartialOrd)]
+#[derive(Eq, PartialEq, Copy, Clone, Debug, Ord, PartialOrd)]
 pub struct StatusCode(pub u16);
 
 impl StatusCode {
@@ -164,6 +164,7 @@ impl Header {
     /// ```
     /// let header = tiny_http::Header::from_bytes(&b"Content-Type"[..], &b"text/plain"[..]).unwrap();
     /// ```
+    #[allow(clippy::result_unit_err)]
     pub fn from_bytes<B1, B2>(header: B1, value: B2) -> Result<Header, ()>
     where
         B1: Into<Vec<u8>> + AsRef<[u8]>,
@@ -242,9 +243,7 @@ impl FromStr for HeaderField {
         if s.contains(char::is_whitespace) {
             Err(())
         } else {
-            AsciiString::from_ascii(s)
-                .map(HeaderField)
-                .map_err(|_| ())
+            AsciiString::from_ascii(s).map(HeaderField).map_err(|_| ())
         }
     }
 }
@@ -270,7 +269,7 @@ impl Eq for HeaderField {}
 ///
 /// As per [RFC 7231](https://tools.ietf.org/html/rfc7231#section-4.1) and
 /// [RFC 5789](https://tools.ietf.org/html/rfc5789)
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Method {
     /// `GET`
     Get,
@@ -325,15 +324,15 @@ impl FromStr for Method {
 
     fn from_str(s: &str) -> Result<Method, ()> {
         Ok(match s {
-            s if s.eq_ignore_ascii_case("GET") => Method::Get,
-            s if s.eq_ignore_ascii_case("HEAD") => Method::Head,
-            s if s.eq_ignore_ascii_case("POST") => Method::Post,
-            s if s.eq_ignore_ascii_case("PUT") => Method::Put,
-            s if s.eq_ignore_ascii_case("DELETE") => Method::Delete,
-            s if s.eq_ignore_ascii_case("CONNECT") => Method::Connect,
-            s if s.eq_ignore_ascii_case("OPTIONS") => Method::Options,
-            s if s.eq_ignore_ascii_case("TRACE") => Method::Trace,
-            s if s.eq_ignore_ascii_case("PATCH") => Method::Patch,
+            "GET" => Method::Get,
+            "HEAD" => Method::Head,
+            "POST" => Method::Post,
+            "PUT" => Method::Put,
+            "DELETE" => Method::Delete,
+            "CONNECT" => Method::Connect,
+            "OPTIONS" => Method::Options,
+            "TRACE" => Method::Trace,
+            "PATCH" => Method::Patch,
             s => {
                 let ascii_string = AsciiString::from_ascii(s).map_err(|_| ())?;
                 Method::NonStandard(ascii_string)
@@ -348,30 +347,9 @@ impl Display for Method {
     }
 }
 
-impl PartialEq for Method {
-    fn eq(&self, other: &Method) -> bool {
-        match (self, other) {
-            (&Method::NonStandard(ref s1), &Method::NonStandard(ref s2)) => {
-                s1.as_str().eq_ignore_ascii_case(s2.as_str())
-            }
-            (&Method::Get, &Method::Get) => true,
-            (&Method::Head, &Method::Head) => true,
-            (&Method::Post, &Method::Post) => true,
-            (&Method::Put, &Method::Put) => true,
-            (&Method::Delete, &Method::Delete) => true,
-            (&Method::Connect, &Method::Connect) => true,
-            (&Method::Options, &Method::Options) => true,
-            (&Method::Trace, &Method::Trace) => true,
-            (&Method::Patch, &Method::Patch) => true,
-            _ => false,
-        }
-    }
-}
-
-impl Eq for Method {}
-
 /// HTTP version (usually 1.0 or 1.1).
-#[derive(Debug, Clone, PartialEq, Eq, Ord)]
+#[allow(clippy::upper_case_acronyms)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HTTPVersion(pub u8, pub u8);
 
 impl Display for HTTPVersion {
@@ -383,16 +361,22 @@ impl Display for HTTPVersion {
     }
 }
 
-impl PartialOrd for HTTPVersion {
-    fn partial_cmp(&self, other: &HTTPVersion) -> Option<Ordering> {
+impl Ord for HTTPVersion {
+    fn cmp(&self, other: &Self) -> Ordering {
         let HTTPVersion(my_major, my_minor) = *self;
         let HTTPVersion(other_major, other_minor) = *other;
 
         if my_major != other_major {
-            return my_major.partial_cmp(&other_major);
+            return my_major.cmp(&other_major);
         }
 
-        my_minor.partial_cmp(&other_minor)
+        my_minor.cmp(&other_minor)
+    }
+}
+
+impl PartialOrd for HTTPVersion {
+    fn partial_cmp(&self, other: &HTTPVersion) -> Option<Ordering> {
+        Some(self.cmp(other))
     }
 }
 
@@ -427,7 +411,9 @@ impl From<(u8, u8)> for HTTPVersion {
         HTTPVersion(major, minor)
     }
 }
+
 /// Represents the current date, expressed in RFC 1123 format, e.g. Sun, 06 Nov 1994 08:49:37 GMT
+#[allow(clippy::upper_case_acronyms)]
 pub struct HTTPDate {
     d: DateTime<Utc>,
 }

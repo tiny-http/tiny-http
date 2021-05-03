@@ -78,6 +78,7 @@ pub struct Request {
 /// with no headers. To create a `MockRequest` with different parameters, use the builder pattern:
 ///
 /// ```
+/// # use tiny_http::{Method, MockRequest};
 /// let request = MockRequest::new()
 ///     .with_method(Method::Post)
 ///     .with_path("/api/widgets")
@@ -87,6 +88,23 @@ pub struct Request {
 /// Then, convert the `MockRequest` into a real `Request` and pass it to the server under test:
 ///
 /// ```
+/// # use tiny_http::{Method, MockRequest, Request, Response, Server, StatusCode};
+/// # use std::io::Cursor;
+/// # let request = MockRequest::new()
+/// #     .with_method(Method::Post)
+/// #     .with_path("/api/widgets")
+/// #     .with_body("42");
+/// # struct TestServer {
+/// #     listener: Server,
+/// # }
+/// # let server = TestServer {
+/// #     listener: Server::http("0.0.0.0:0").unwrap(),
+/// # };
+/// # impl TestServer {
+/// #     fn handle_request(&self, request: Request) -> Response<Cursor<Vec<u8>>> {
+/// #         Response::from_string("test")
+/// #     }
+/// # }
 /// let response = server.handle_request(request.into());
 /// assert_eq!(response.status_code(), StatusCode(200));
 /// ```

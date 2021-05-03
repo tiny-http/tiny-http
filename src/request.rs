@@ -159,8 +159,8 @@ impl MockRequest {
         self.http_version = version;
         self
     }
-    pub fn with_headers(mut self, headers: Vec<Header>) -> Self {
-        self.headers = headers;
+    pub fn with_header(mut self, header: Header) -> Self {
+        self.headers.push(header);
         self
     }
 }

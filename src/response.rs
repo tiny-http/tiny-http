@@ -234,6 +234,13 @@ where
         self
     }
 
+    /// Convert the response into the underlying `Read` type.
+    ///
+    /// This is mainly useful for testing as it must consume the `Response`.
+    pub fn into_reader(self) -> R {
+        self.reader
+    }
+
     /// The current `Content-Length` threshold for switching over to
     /// chunked transfer. The default is 32768 bytes. Notice that
     /// chunked transfer is mutually exclusive with sending a
@@ -466,6 +473,11 @@ where
     /// Retrieves the current value of the `Response` data length
     pub fn data_length(&self) -> Option<usize> {
         self.data_length
+    }
+
+    /// Retrieves the current list of `Response` headers
+    pub fn headers(&self) -> &[Header] {
+        &self.headers
     }
 }
 

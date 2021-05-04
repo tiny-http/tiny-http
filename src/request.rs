@@ -7,9 +7,10 @@ use std::str::FromStr;
 
 use std::sync::mpsc::Sender;
 
+use ascii::AsciiString;
 use chunked_transfer::Decoder;
 use util::EqualReader;
-use {HTTPVersion, Header, Method, Response, StatusCode};
+use {HTTPVersion, Header, HeaderField, Method, Response, StatusCode};
 
 /// Represents an HTTP request made by a client.
 ///
@@ -120,7 +121,19 @@ pub struct MockRequest {
 }
 
 impl From<MockRequest> for Request {
-    fn from(mock: MockRequest) -> Request {
+    fn from(mut mock: MockRequest) -> Request {
+        // if the user didn't set the Content-Length header, then set it for them
+        // otherwise, leave it alone (it may be under test)
+        if let None = mock
+            .headers
+            .iter_mut()
+            .find(|h| h.field.equiv("Content-Length"))
+        {
+            mock.headers.push(Header {
+                field: HeaderField::from_str("Content-Length").unwrap(),
+                value: AsciiString::from_ascii(mock.body.len().to_string()).unwrap(),
+            });
+        }
         new_request(
             mock.secure,
             mock.method,

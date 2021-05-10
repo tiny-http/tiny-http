@@ -127,7 +127,8 @@ impl From<MockRequest> for Request {
         if mock
             .headers
             .iter_mut()
-            .find(|h| h.field.equiv("Content-Length")).is_none()
+            .find(|h| h.field.equiv("Content-Length"))
+            .is_none()
         {
             mock.headers.push(Header {
                 field: HeaderField::from_str("Content-Length").unwrap(),

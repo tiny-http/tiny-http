@@ -1,5 +1,9 @@
 # Changes
 
+## 0.8.2
+
+* [Add TestRequest for writing server tests more easily](https://github.com/tiny-http/tiny-http/pull/203)
+
 ## 0.8.1
 
 * [Don't set Transfer-Encoding for 1xx or 204 Responses](https://github.com/tiny-http/tiny-http/pull/198)

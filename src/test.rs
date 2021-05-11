@@ -5,7 +5,7 @@ use std::str::FromStr;
 
 /// A simpler version of [`Request`] that is useful for testing. No data actually goes anywhere.
 ///
-/// By default, `TestRequest` pretends to be an unsecure GET request for the server root (`/`)
+/// By default, `TestRequest` pretends to be an insecure GET request for the server root (`/`)
 /// with no headers. To create a `TestRequest` with different parameters, use the builder pattern:
 ///
 /// ```
@@ -83,7 +83,7 @@ impl Default for TestRequest {
     fn default() -> Self {
         TestRequest {
             body: "",
-            remote_addr: "0.0.0.0:0".parse().unwrap(),
+            remote_addr: "127.0.0.1:23456".parse().unwrap(),
             secure: false,
             method: Method::Get,
             path: "/",

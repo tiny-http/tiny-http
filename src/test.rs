@@ -3,7 +3,7 @@ use ascii::AsciiString;
 use std::net::SocketAddr;
 use std::str::FromStr;
 
-/// A simpler version of a `Request` that is useful for testing. No data actually goes anywhere.
+/// A simpler version of [`Request`] that is useful for testing. No data actually goes anywhere.
 ///
 /// By default, `TestRequest` pretends to be an unsecure GET request for the server root (`/`)
 /// with no headers. To create a `TestRequest` with different parameters, use the builder pattern:

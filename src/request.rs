@@ -43,6 +43,10 @@ use {HTTPVersion, Header, Method, Response, StatusCode};
 /// sent back to the client.
 /// This means that if your code fails during the handling of a request, this "internal server
 /// error" response will automatically be sent during the stack unwinding.
+///
+/// # Testing
+///
+/// If you want to build fake requests to test your server, use [`TestRequest`](crate::test::TestRequest).
 pub struct Request {
     // where to read the body from
     data_reader: Option<Box<dyn Read + Send + 'static>>,

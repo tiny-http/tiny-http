@@ -125,7 +125,7 @@ use util::MessagesQueue;
 pub use common::{HTTPVersion, Header, HeaderField, Method, StatusCode};
 pub use request::{ReadWrite, Request};
 pub use response::{Response, ResponseBox};
-pub use test::MockRequest;
+pub use test::TestRequest;
 
 mod client;
 mod common;

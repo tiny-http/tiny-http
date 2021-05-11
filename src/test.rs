@@ -1,5 +1,5 @@
+use crate::{request::new_request, HTTPVersion, Header, HeaderField, Method, Request};
 use ascii::AsciiString;
-use crate::{HeaderField, Method, HTTPVersion, Header, Request, request::new_request};
 use std::net::SocketAddr;
 use std::str::FromStr;
 

@@ -131,8 +131,8 @@ mod client;
 mod common;
 mod request;
 mod response;
-mod util;
 mod test;
+mod util;
 
 /// The main class of this library.
 ///

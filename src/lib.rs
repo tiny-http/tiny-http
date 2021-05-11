@@ -123,14 +123,16 @@ use client::ClientConnection;
 use util::MessagesQueue;
 
 pub use common::{HTTPVersion, Header, HeaderField, Method, StatusCode};
-pub use request::{MockRequest, ReadWrite, Request};
+pub use request::{ReadWrite, Request};
 pub use response::{Response, ResponseBox};
+pub use test::MockRequest;
 
 mod client;
 mod common;
 mod request;
 mod response;
 mod util;
+mod test;
 
 /// The main class of this library.
 ///

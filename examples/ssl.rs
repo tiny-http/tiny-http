@@ -35,6 +35,8 @@ fn main() {
         );
 
         let response = Response::from_string("hello world");
-        request.respond(response);
+        request
+            .respond(response)
+            .unwrap_or(println!("Failed to respond to request"));
     }
 }

@@ -2,13 +2,13 @@ use std::io::Error as IoError;
 use std::io::{self, Cursor, ErrorKind, Read, Write};
 
 use std::fmt;
-use std::net::SocketAddr;
 use std::str::FromStr;
 
 use std::sync::mpsc::Sender;
 
 use chunked_transfer::Decoder;
 use util::EqualReader;
+use util::PeerAddr;
 use {HTTPVersion, Header, Method, Response, StatusCode};
 
 /// Represents an HTTP request made by a client.
@@ -54,7 +54,7 @@ pub struct Request {
     // if this writer is empty, then the request has been answered
     response_writer: Option<Box<dyn Write + Send + 'static>>,
 
-    remote_addr: SocketAddr,
+    remote_addr: PeerAddr,
 
     // true if HTTPS, false if HTTP
     secure: bool,
@@ -132,7 +132,7 @@ pub fn new_request<R, W>(
     path: String,
     version: HTTPVersion,
     headers: Vec<Header>,
-    remote_addr: SocketAddr,
+    remote_addr: PeerAddr,
     mut source_data: R,
     writer: W,
 ) -> Result<Request, RequestCreationError>
@@ -286,7 +286,7 @@ impl Request {
     /// this function will return the address of the proxy and not the address of the actual
     /// user.
     #[inline]
-    pub fn remote_addr(&self) -> &SocketAddr {
+    pub fn remote_addr(&self) -> &PeerAddr {
         &self.remote_addr
     }
 

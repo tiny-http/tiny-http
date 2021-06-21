@@ -89,19 +89,6 @@ mod prompt_pipelining {
     }
 
     #[test]
-    fn expect_continue() {
-        assert_requests_parsed_promptly(5, REQ_BODY, Duration::from_millis(200), move |wr| {
-            for _ in 0..5 {
-                write!(wr, "GET / HTTP/1.1\r\n").unwrap();
-                write!(wr, "Connection: keep-alive\r\n").unwrap();
-                write!(wr, "Expect: 100 continue\r\n").unwrap();
-                write!(wr, "Content-Length: {}\r\n\r\n", REQ_BODY.len()).unwrap();
-                wr.write_all(REQ_BODY).unwrap();
-            }
-        });
-    }
-
-    #[test]
     fn chunked() {
         assert_requests_parsed_promptly(5, REQ_BODY, Duration::from_millis(200), move |wr| {
             for _ in 0..5 {

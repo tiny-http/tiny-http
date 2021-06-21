@@ -73,30 +73,51 @@ mod prompt_pipelining {
             .expect("Server did not finish reading pipelined requests quickly enough");
     }
 
-    // short (but not trivial) request body
-    const REQ_BODY: &'static [u8] = &[65; 5000];
+    #[test]
+    fn empty() {
+        assert_requests_parsed_promptly(5, &[], Duration::from_millis(200), move |wr| {
+            for _ in 0..5 {
+                write!(wr, "GET / HTTP/1.1\r\n").unwrap();
+                write!(wr, "Connection: keep-alive\r\n\r\n").unwrap();
+            }
+        });
+    }
 
     #[test]
-    fn content_length() {
-        assert_requests_parsed_promptly(5, REQ_BODY, Duration::from_millis(200), move |wr| {
+    fn content_length_short() {
+        let body = &[65u8; 100]; // short but not trivial
+        assert_requests_parsed_promptly(5, body, Duration::from_millis(200), move |wr| {
             for _ in 0..5 {
                 write!(wr, "GET / HTTP/1.1\r\n").unwrap();
                 write!(wr, "Connection: keep-alive\r\n").unwrap();
-                write!(wr, "Content-Length: {}\r\n\r\n", REQ_BODY.len()).unwrap();
-                wr.write_all(REQ_BODY).unwrap();
+                write!(wr, "Content-Length: {}\r\n\r\n", body.len()).unwrap();
+                wr.write_all(body).unwrap();
+            }
+        });
+    }
+
+    #[test]
+    fn content_length_long() {
+        let body = &[65u8; 10000]; // long enough that it won't be buffered
+        assert_requests_parsed_promptly(5, body, Duration::from_millis(200), move |wr| {
+            for _ in 0..5 {
+                write!(wr, "GET / HTTP/1.1\r\n").unwrap();
+                write!(wr, "Connection: keep-alive\r\n").unwrap();
+                write!(wr, "Content-Length: {}\r\n\r\n", body.len()).unwrap();
+                wr.write_all(body).unwrap();
             }
         });
     }
 
     #[test]
     fn chunked() {
-        assert_requests_parsed_promptly(5, REQ_BODY, Duration::from_millis(200), move |wr| {
+        let body = &[65u8; 10000];
+        assert_requests_parsed_promptly(5, body, Duration::from_millis(200), move |wr| {
             for _ in 0..5 {
                 write!(wr, "GET / HTTP/1.1\r\n").unwrap();
                 write!(wr, "Connection: keep-alive\r\n").unwrap();
                 write!(wr, "Transfer-Encoding: chunked\r\n\r\n").unwrap();
-                let mut body = REQ_BODY;
-                encode_chunked(&mut body, wr);
+                encode_chunked(&mut &body[..], wr);
             }
         });
     }

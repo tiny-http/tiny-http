@@ -8,7 +8,7 @@ use std::str::FromStr;
 use std::sync::mpsc::Sender;
 
 use chunked_transfer::Decoder;
-use util::EqualReader;
+use util::{EqualReader, FusedReader};
 use {HTTPVersion, Header, Method, Response, StatusCode};
 
 /// Represents an HTTP request made by a client.
@@ -213,12 +213,12 @@ where
             Box::new(Cursor::new(buffer)) as Box<dyn Read + Send + 'static>
         } else {
             let (data_reader, _) = EqualReader::new(source_data, content_length); // TODO:
-            Box::new(data_reader) as Box<dyn Read + Send + 'static>
+            Box::new(FusedReader::new(data_reader)) as Box<dyn Read + Send + 'static>
         }
     } else if transfer_encoding.is_some() {
         // if a transfer-encoding was specified, then "chunked" is ALWAYS applied
         // over the message (RFC2616 #3.6)
-        Box::new(Decoder::new(source_data)) as Box<dyn Read + Send + 'static>
+        Box::new(FusedReader::new(Decoder::new(source_data))) as Box<dyn Read + Send + 'static>
     } else {
         // if we have neither a Content-Length nor a Transfer-Encoding,
         // assuming that we have no data
@@ -441,9 +441,6 @@ impl Request {
     where
         R: Read,
     {
-        // Droping the request reader now so that further requests can start processing immediately.
-        self.data_reader = None;
-
         let mut writer = self.extract_writer_impl();
 
         let do_not_send_body = self.method == Method::Head;
@@ -487,9 +484,6 @@ impl fmt::Debug for Request {
 
 impl Drop for Request {
     fn drop(&mut self) {
-        // Droping the request reader now so that further requests can start processing immediately.
-        self.data_reader = None;
-
         if self.response_writer.is_some() {
             let response = Response::empty(500);
             let _ = self.respond_impl(response); // ignoring any potential error

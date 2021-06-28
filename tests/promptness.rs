@@ -1,17 +1,20 @@
 extern crate tiny_http;
 
-use tiny_http::{Server, Response};
-use std::net::{TcpStream, Shutdown};
-use std::io::{copy, Write, Read};
-use std::thread::{spawn, sleep};
-use std::time::Duration;
+use std::io::{copy, Read, Write};
+use std::net::{Shutdown, TcpStream};
+use std::ops::Deref;
 use std::sync::mpsc::channel;
 use std::sync::Arc;
-use std::ops::Deref;
+use std::thread::{sleep, spawn};
+use std::time::Duration;
+use tiny_http::{Response, Server};
 
 /// Stream that produces bytes very slowly
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
-struct SlowByteSrc { val: u8, len: usize }
+struct SlowByteSrc {
+    val: u8,
+    len: usize,
+}
 impl<'b> Read for SlowByteSrc {
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
         sleep(Duration::from_millis(100));
@@ -30,7 +33,9 @@ fn encode_chunked(data: &mut dyn Read, output: &mut dyn Write) {
         write!(output, "{:X}\r\n", l).unwrap();
         output.write_all(&buf[..l]).unwrap();
         write!(output, "\r\n").unwrap();
-        if l == 0 { break; }
+        if l == 0 {
+            break;
+        }
     }
 }
 
@@ -42,9 +47,12 @@ mod prompt_pipelining {
         req_cnt: usize,
         req_body: &'static [u8],
         timeout: Duration,
-        req_writer: impl FnOnce(&mut dyn Write) + Send + 'static
+        req_writer: impl FnOnce(&mut dyn Write) + Send + 'static,
     ) {
-        let resp_body = SlowByteSrc { val: 42, len: 1000_000 }; // very slow response body
+        let resp_body = SlowByteSrc {
+            val: 42,
+            len: 1000_000,
+        }; // very slow response body
 
         let server = Server::http("0.0.0.0:0").unwrap();
         let mut client = TcpStream::connect(server.server_addr()).unwrap();
@@ -59,9 +67,9 @@ mod prompt_pipelining {
                 assert_eq!(req_body, body.as_slice());
                 // The next pipelined request should now be available for parsing,
                 // while we send the (possibly slow) response in another thread
-                spawn(move || req.respond(
-                    Response::empty(200).with_data(resp_body, Some(resp_body.len))
-                ));
+                spawn(move || {
+                    req.respond(Response::empty(200).with_data(resp_body, Some(resp_body.len)))
+                });
             }
             svr_send.send(()).unwrap();
         });
@@ -69,7 +77,8 @@ mod prompt_pipelining {
         spawn(move || req_writer(&mut client));
 
         // requests must be sent and received quickly (before timeout expires)
-        svr_rcv.recv_timeout(timeout)
+        svr_rcv
+            .recv_timeout(timeout)
             .expect("Server did not finish reading pipelined requests quickly enough");
     }
 
@@ -129,7 +138,7 @@ mod prompt_responses {
     /// Check that response is sent promptly without waiting for full request body.
     fn assert_responds_promptly(
         timeout: Duration,
-        req_writer: impl FnOnce(&mut dyn Write) + Send + 'static
+        req_writer: impl FnOnce(&mut dyn Write) + Send + 'static,
     ) {
         let server = Server::http("0.0.0.0:0").unwrap();
         let client = TcpStream::connect(server.server_addr()).unwrap();
@@ -152,7 +161,10 @@ mod prompt_responses {
         assert!(resp.is_ok(), "Server response was not sent promptly");
     }
 
-    static SLOW_BODY: SlowByteSrc = SlowByteSrc { val: 65, len: 1000_000 };
+    static SLOW_BODY: SlowByteSrc = SlowByteSrc {
+        val: 65,
+        len: 1000_000,
+    };
 
     #[test]
     fn content_length_http11() {

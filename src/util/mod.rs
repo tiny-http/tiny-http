@@ -1,21 +1,21 @@
 pub use self::custom_stream::CustomStream;
 pub use self::equal_reader::EqualReader;
+pub use self::fused_reader::FusedReader;
 pub use self::messages_queue::MessagesQueue;
 pub use self::refined_tcp_stream::RefinedTcpStream;
 pub use self::sequential::{SequentialReader, SequentialReaderBuilder};
 pub use self::sequential::{SequentialWriter, SequentialWriterBuilder};
 pub use self::task_pool::TaskPool;
-pub use self::fused_reader::FusedReader;
 
 use std::str::FromStr;
 
 mod custom_stream;
 mod equal_reader;
+mod fused_reader;
 mod messages_queue;
 mod refined_tcp_stream;
 mod sequential;
 mod task_pool;
-mod fused_reader;
 
 /// Parses a the value of a header.
 /// Suitable for `Accept-*`, `TE`, etc.

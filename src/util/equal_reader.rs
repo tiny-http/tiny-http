@@ -120,7 +120,7 @@ mod tests {
             let (mut equal_reader, _) = EqualReader::new(org_reader.by_ref(), 5);
 
             let mut vec = [0];
-            equal_reader.read(&mut vec).unwrap();
+            equal_reader.read_exact(&mut vec).unwrap();
             assert_eq!(vec[0], b'h');
         }
 

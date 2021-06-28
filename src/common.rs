@@ -186,27 +186,18 @@ impl FromStr for Header {
     fn from_str(input: &str) -> Result<Header, ()> {
         let mut elems = input.splitn(2, ':');
 
-        let field = elems.next();
-        let value = elems.next();
-
-        let (field, value) = match (field, value) {
-            (Some(f), Some(v)) => (f, v),
-            _ => return Err(()),
-        };
-
-        let field = match FromStr::from_str(field) {
-            Ok(f) => f,
-            _ => return Err(()),
-        };
-
-        let value = AsciiString::from_ascii(value.trim()).map_err(|_| ())?;
+        let field = elems.next().and_then(|f| f.parse().ok()).ok_or(())?;
+        let value = elems
+            .next()
+            .and_then(|v| AsciiString::from_ascii(v.trim()).ok())
+            .ok_or(())?;
 
         Ok(Header { field, value })
     }
 }
 
 impl Display for Header {
-    fn fmt(&self, formatter: &mut Formatter) -> Result<(), fmt::Error> {
+    fn fmt(&self, formatter: &mut Formatter<'_>) -> Result<(), fmt::Error> {
         write!(formatter, "{}: {}", self.field, self.value.as_str())
     }
 }
@@ -214,7 +205,7 @@ impl Display for Header {
 /// Field of a header (eg. `Content-Type`, `Content-Length`, etc.)
 ///
 /// Comparison between two `HeaderField`s ignores case.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq)]
 pub struct HeaderField(AsciiString);
 
 impl HeaderField {
@@ -226,9 +217,7 @@ impl HeaderField {
     }
 
     pub fn as_str(&self) -> &AsciiStr {
-        match self {
-            HeaderField(ref s) => s,
-        }
+        &self.0
     }
 
     pub fn equiv(&self, other: &'static str) -> bool {
@@ -249,9 +238,8 @@ impl FromStr for HeaderField {
 }
 
 impl Display for HeaderField {
-    fn fmt(&self, formatter: &mut Formatter) -> Result<(), fmt::Error> {
-        let method = self.as_str();
-        write!(formatter, "{}", method.as_str())
+    fn fmt(&self, formatter: &mut Formatter<'_>) -> Result<(), fmt::Error> {
+        write!(formatter, "{}", self.0.as_str())
     }
 }
 
@@ -262,8 +250,6 @@ impl PartialEq for HeaderField {
         self_str.eq_ignore_ascii_case(other_str)
     }
 }
-
-impl Eq for HeaderField {}
 
 /// HTTP request methods
 ///
@@ -342,7 +328,7 @@ impl FromStr for Method {
 }
 
 impl Display for Method {
-    fn fmt(&self, formatter: &mut Formatter) -> Result<(), fmt::Error> {
+    fn fmt(&self, formatter: &mut Formatter<'_>) -> Result<(), fmt::Error> {
         write!(formatter, "{}", self.as_str())
     }
 }
@@ -353,11 +339,8 @@ impl Display for Method {
 pub struct HTTPVersion(pub u8, pub u8);
 
 impl Display for HTTPVersion {
-    fn fmt(&self, formatter: &mut Formatter) -> Result<(), fmt::Error> {
-        let (major, minor) = match self {
-            HTTPVersion(m, n) => (m, n),
-        };
-        write!(formatter, "{}.{}", major, minor)
+    fn fmt(&self, formatter: &mut Formatter<'_>) -> Result<(), fmt::Error> {
+        write!(formatter, "{}.{}", self.0, self.1)
     }
 }
 

@@ -1,110 +1,95 @@
-/*!
-# Simple usage
-
-## Creating the server
-
-The easiest way to create a server is to call `Server::http()`.
-
-The `http()` function returns an `IoResult<Server>` which will return an error
-in the case where the server creation fails (for example if the listening port is already
-occupied).
-
-```no_run
-let server = tiny_http::Server::http("0.0.0.0:0").unwrap();
-```
-
-A newly-created `Server` will immediately start listening for incoming connections and HTTP
-requests.
-
-## Receiving requests
-
-Calling `server.recv()` will block until the next request is available.
-This function returns an `IoResult<Request>`, so you need to handle the possible errors.
-
-```no_run
-# let server = tiny_http::Server::http("0.0.0.0:0").unwrap();
-
-loop {
-    // blocks until the next request is received
-    let request = match server.recv() {
-        Ok(rq) => rq,
-        Err(e) => { println!("error: {}", e); break }
-    };
-
-    // do something with the request
-    // ...
-}
-```
-
-In a real-case scenario, you will probably want to spawn multiple worker tasks and call
-`server.recv()` on all of them. Like this:
-
-```no_run
-# use std::sync::Arc;
-# use std::thread;
-# let server = tiny_http::Server::http("0.0.0.0:0").unwrap();
-let server = Arc::new(server);
-let mut guards = Vec::with_capacity(4);
-
-for _ in (0 .. 4) {
-    let server = server.clone();
-
-    let guard = thread::spawn(move || {
-        loop {
-            let rq = server.recv().unwrap();
-
-            // ...
-        }
-    });
-
-    guards.push(guard);
-}
-```
-
-If you don't want to block, you can call `server.try_recv()` instead.
-
-## Handling requests
-
-The `Request` object returned by `server.recv()` contains informations about the client's request.
-The most useful methods are probably `request.method()` and `request.url()` which return
-the requested method (`GET`, `POST`, etc.) and url.
-
-To handle a request, you need to create a `Response` object. See the docs of this object for
-more infos. Here is an example of creating a `Response` from a file:
-
-```no_run
-# use std::fs::File;
-# use std::path::Path;
-let response = tiny_http::Response::from_file(File::open(&Path::new("image.png")).unwrap());
-```
-
-All that remains to do is call `request.respond()`:
-
-```no_run
-# use std::fs::File;
-# use std::path::Path;
-# let server = tiny_http::Server::http("0.0.0.0:0").unwrap();
-# let request = server.recv().unwrap();
-# let response = tiny_http::Response::from_file(File::open(&Path::new("image.png")).unwrap());
-let _ = request.respond(response);
-```
-*/
-#![crate_name = "tiny_http"]
-#![crate_type = "lib"]
+//! # Simple usage
+//!
+//! ## Creating the server
+//!
+//! The easiest way to create a server is to call `Server::http()`.
+//!
+//! The `http()` function returns an `IoResult<Server>` which will return an error
+//! in the case where the server creation fails (for example if the listening port is already
+//! occupied).
+//!
+//! ```no_run
+//! let server = tiny_http::Server::http("0.0.0.0:0").unwrap();
+//! ```
+//!
+//! A newly-created `Server` will immediately start listening for incoming connections and HTTP
+//! requests.
+//!
+//! ## Receiving requests
+//!
+//! Calling `server.recv()` will block until the next request is available.
+//! This function returns an `IoResult<Request>`, so you need to handle the possible errors.
+//!
+//! ```no_run
+//! # let server = tiny_http::Server::http("0.0.0.0:0").unwrap();
+//!
+//! loop {
+//!     // blocks until the next request is received
+//!     let request = match server.recv() {
+//!         Ok(rq) => rq,
+//!         Err(e) => { println!("error: {}", e); break }
+//!     };
+//!
+//!     // do something with the request
+//!     // ...
+//! }
+//! ```
+//!
+//! In a real-case scenario, you will probably want to spawn multiple worker tasks and call
+//! `server.recv()` on all of them. Like this:
+//!
+//! ```no_run
+//! # use std::sync::Arc;
+//! # use std::thread;
+//! # let server = tiny_http::Server::http("0.0.0.0:0").unwrap();
+//! let server = Arc::new(server);
+//! let mut guards = Vec::with_capacity(4);
+//!
+//! for _ in (0 .. 4) {
+//!     let server = server.clone();
+//!
+//!     let guard = thread::spawn(move || {
+//!         loop {
+//!             let rq = server.recv().unwrap();
+//!
+//!             // ...
+//!         }
+//!     });
+//!
+//!     guards.push(guard);
+//! }
+//! ```
+//!
+//! If you don't want to block, you can call `server.try_recv()` instead.
+//!
+//! ## Handling requests
+//!
+//! The `Request` object returned by `server.recv()` contains informations about the client's request.
+//! The most useful methods are probably `request.method()` and `request.url()` which return
+//! the requested method (`GET`, `POST`, etc.) and url.
+//!
+//! To handle a request, you need to create a `Response` object. See the docs of this object for
+//! more infos. Here is an example of creating a `Response` from a file:
+//!
+//! ```no_run
+//! # use std::fs::File;
+//! # use std::path::Path;
+//! let response = tiny_http::Response::from_file(File::open(&Path::new("image.png")).unwrap());
+//! ```
+//!
+//! All that remains to do is call `request.respond()`:
+//!
+//! ```no_run
+//! # use std::fs::File;
+//! # use std::path::Path;
+//! # let server = tiny_http::Server::http("0.0.0.0:0").unwrap();
+//! # let request = server.recv().unwrap();
+//! # let response = tiny_http::Response::from_file(File::open(&Path::new("image.png")).unwrap());
+//! let _ = request.respond(response);
+//! ```
 #![forbid(unsafe_code)]
-// matches!() only becomes stable in Rust 1.42
+#![deny(rust_2018_idioms)]
 #![allow(clippy::match_like_matches_macro)]
-
-#[macro_use]
-extern crate log;
-
-extern crate ascii;
-extern crate chrono;
-extern crate chunked_transfer;
-extern crate url;
-
-#[cfg(feature = "ssl")]
-extern crate openssl;
 
 use std::error::Error;
 use std::io::Error as IoError;
@@ -221,7 +206,7 @@ impl Server {
         A: ToSocketAddrs,
     {
         Server::new(ServerConfig {
-            addr: addr,
+            addr,
             ssl: Some(config),
         })
     }
@@ -249,7 +234,7 @@ impl Server {
         // building the TcpListener
         let (server, local_addr) = {
             let local_addr = listener.local_addr()?;
-            debug!("Server listening on {}", local_addr);
+            log::debug!("Server listening on {}", local_addr);
             (listener, local_addr)
         };
 
@@ -308,7 +293,7 @@ impl Server {
             // a tasks pool is used to dispatch the connections into threads
             let tasks_pool = util::TaskPool::new();
 
-            debug!("Running accept thread");
+            log::debug!("Running accept thread");
             while !inside_close_trigger.load(Relaxed) {
                 let new_client = match server.accept() {
                     Ok((sock, _)) => {
@@ -359,13 +344,13 @@ impl Server {
                     }
 
                     Err(e) => {
-                        error!("Error accepting new client: {}", e);
+                        log::error!("Error accepting new client: {}", e);
                         inside_messages.push(e.into());
                         break;
                     }
                 }
             }
-            debug!("Terminating accept thread");
+            log::debug!("Terminating accept thread");
         });
 
         // result
@@ -380,7 +365,7 @@ impl Server {
     ///
     /// The iterator will return `None` if the server socket is shutdown.
     #[inline]
-    pub fn incoming_requests(&self) -> IncomingRequests {
+    pub fn incoming_requests(&self) -> IncomingRequests<'_> {
         IncomingRequests { server: self }
     }
 
@@ -431,7 +416,7 @@ impl Server {
     }
 }
 
-impl<'a> Iterator for IncomingRequests<'a> {
+impl Iterator for IncomingRequests<'_> {
     type Item = Request;
     fn next(&mut self) -> Option<Request> {
         self.server.recv().ok()

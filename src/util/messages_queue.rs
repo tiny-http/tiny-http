@@ -86,7 +86,8 @@ where
             } else {
                 Duration::from_millis(0)
             };
-            if result.timed_out() || (duration.as_secs() == 0 && duration.subsec_nanos() < 1000000)
+            if result.timed_out()
+                || (duration.as_secs() == 0 && duration.subsec_nanos() < 1_000_000)
             {
                 return None;
             }

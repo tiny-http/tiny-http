@@ -7,9 +7,9 @@ use std::str::FromStr;
 
 use std::sync::mpsc::Sender;
 
+use crate::util::{EqualReader, FusedReader};
+use crate::{HTTPVersion, Header, Method, Response, StatusCode};
 use chunked_transfer::Decoder;
-use util::{EqualReader, FusedReader};
-use {HTTPVersion, Header, Method, Response, StatusCode};
 
 /// Represents an HTTP request made by a client.
 ///
@@ -304,7 +304,7 @@ impl Request {
         protocol: &str,
         response: Response<R>,
     ) -> Box<dyn ReadWrite + Send> {
-        use util::CustomStream;
+        use crate::util::CustomStream;
 
         response
             .raw_print(
@@ -473,7 +473,7 @@ impl Request {
 }
 
 impl fmt::Debug for Request {
-    fn fmt(&self, formatter: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
         write!(
             formatter,
             "Request({} {} from {})",

@@ -1,4 +1,4 @@
-use common::{HTTPDate, HTTPVersion, Header, StatusCode};
+use crate::common::{HTTPDate, HTTPVersion, Header, StatusCode};
 
 use std::cmp::Ordering;
 use std::sync::mpsc::Receiver;
@@ -36,10 +36,7 @@ use std::str::FromStr;
 ///     behavior differs from the default for most headers, which is to allow them to
 ///     be set multiple times in the same response.
 ///
-pub struct Response<R>
-where
-    R: Read,
-{
+pub struct Response<R> {
     reader: R,
     status_code: StatusCode,
     headers: Vec<Header>,
@@ -119,7 +116,7 @@ fn choose_transfer_encoding(
     has_additional_headers: bool,
     chunked_threshold: usize,
 ) -> TransferEncoding {
-    use util;
+    use crate::util;
 
     // HTTP 1.0 doesn't support other encoding
     if *http_version <= (1, 0) {
@@ -164,7 +161,6 @@ fn choose_transfer_encoding(
             None
         });
 
-    //
     if let Some(user_request) = user_request {
         return user_request;
     }
@@ -352,22 +348,12 @@ where
         ));
 
         // add `Date` if not in the headers
-        if self
-            .headers
-            .iter()
-            .find(|h| h.field.equiv(&"Date"))
-            .is_none()
-        {
+        if !self.headers.iter().any(|h| h.field.equiv(&"Date")) {
             self.headers.insert(0, build_date_header());
         }
 
         // add `Server` if not in the headers
-        if self
-            .headers
-            .iter()
-            .find(|h| h.field.equiv(&"Server"))
-            .is_none()
-        {
+        if !self.headers.iter().any(|h| h.field.equiv(&"Server")) {
             self.headers.insert(
                 0,
                 Header::from_bytes(&b"Server"[..], &b"tiny-http (Rust)"[..]).unwrap(),
@@ -390,16 +376,17 @@ where
         // if the transfer encoding is identity, the content length must be known ; therefore if
         // we don't know it, we buffer the entire response first here
         // while this is an expensive operation, it is only ever needed for clients using HTTP 1.0
-        let (mut reader, data_length) = match (self.data_length, transfer_encoding) {
-            (Some(l), _) => (Box::new(self.reader) as Box<dyn Read>, Some(l)),
-            (None, Some(TransferEncoding::Identity)) => {
-                let mut buf = Vec::new();
-                self.reader.read_to_end(&mut buf)?;
-                let l = buf.len();
-                (Box::new(Cursor::new(buf)) as Box<dyn Read>, Some(l))
-            }
-            _ => (Box::new(self.reader) as Box<dyn Read>, None),
-        };
+        let (mut reader, data_length): (Box<dyn Read>, _) =
+            match (self.data_length, transfer_encoding) {
+                (Some(l), _) => (Box::new(self.reader), Some(l)),
+                (None, Some(TransferEncoding::Identity)) => {
+                    let mut buf = Vec::new();
+                    self.reader.read_to_end(&mut buf)?;
+                    let l = buf.len();
+                    (Box::new(Cursor::new(buf)), Some(l))
+                }
+                _ => (Box::new(self.reader), None),
+            };
 
         // checking whether to ignore the body of the response
         let do_not_send_body = do_not_send_body

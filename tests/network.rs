@@ -72,7 +72,7 @@ fn poor_network_test() {
     thread::sleep(Duration::from_millis(100));
     (write!(client, "\n\r")).unwrap();
     thread::sleep(Duration::from_millis(100));
-    (write!(client, "\n")).unwrap();
+    (writeln!(client)).unwrap();
 
     // client.set_keepalive(Some(2)).unwrap(); FIXME: reenable this
     let mut data = String::new();
@@ -118,7 +118,7 @@ fn server_crash_results_in_response() {
     // client.set_keepalive(Some(2)).unwrap(); FIXME: reenable this
     let mut content = String::new();
     client.read_to_string(&mut content).unwrap();
-    assert!(&content[9..].starts_with("5")); // 5xx status code
+    assert!(&content[9..].starts_with('5')); // 5xx status code
 }
 
 #[test]
@@ -137,14 +137,16 @@ fn responses_reordered() {
         let rq2 = server.recv().unwrap();
 
         thread::spawn(move || {
-            rq2.respond(tiny_http::Response::from_string(format!("second request")))
-                .unwrap();
+            rq2.respond(tiny_http::Response::from_string(
+                "second request".to_owned(),
+            ))
+            .unwrap();
         });
 
         thread::sleep(Duration::from_millis(100));
 
         thread::spawn(move || {
-            rq1.respond(tiny_http::Response::from_string(format!("first request")))
+            rq1.respond(tiny_http::Response::from_string("first request".to_owned()))
                 .unwrap();
         });
     });

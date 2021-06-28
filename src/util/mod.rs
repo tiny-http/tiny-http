@@ -30,7 +30,7 @@ pub fn parse_header_value(input: &str) -> Vec<(&str, f32)> {
 
             let t = params.next()?;
 
-            let mut value = 1.0f32;
+            let mut value = 1.0_f32;
 
             for p in params {
                 if p.trim_start().starts_with("q=") {
@@ -49,6 +49,7 @@ pub fn parse_header_value(input: &str) -> Vec<(&str, f32)> {
 #[cfg(test)]
 mod test {
     #[test]
+    #[allow(clippy::float_cmp)]
     fn test_parse_header() {
         let result = super::parse_header_value("text/html, text/plain; q=1.5 , image/png ; q=2.0");
 

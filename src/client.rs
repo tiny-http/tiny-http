@@ -7,11 +7,10 @@ use std::io::{BufReader, BufWriter, ErrorKind, Read};
 use std::net::SocketAddr;
 use std::str::FromStr;
 
-use common::{HTTPVersion, Method};
-use util::RefinedTcpStream;
-use util::{SequentialReader, SequentialReaderBuilder, SequentialWriterBuilder};
-
-use Request;
+use crate::common::{HTTPVersion, Method};
+use crate::util::RefinedTcpStream;
+use crate::util::{SequentialReader, SequentialReaderBuilder, SequentialWriterBuilder};
+use crate::Request;
 
 /// A ClientConnection is an object that will store a socket to a client
 /// and return Request objects.
@@ -38,18 +37,17 @@ pub struct ClientConnection {
 }
 
 /// Error that can happen when reading a request.
+#[derive(Debug)]
 enum ReadError {
     WrongRequestLine,
     WrongHeader(HTTPVersion),
-
     /// the client sent an unrecognized `Expect` header
     ExpectationFailed(HTTPVersion),
-
     ReadIoError(IoError),
 }
 
 impl ClientConnection {
-    /// Creates a new ClientConnection that takes ownership of the TcpStream.
+    /// Creates a new `ClientConnection` that takes ownership of the `TcpStream`.
     pub fn new(
         write_socket: RefinedTcpStream,
         mut read_socket: RefinedTcpStream,
@@ -143,10 +141,10 @@ impl ClientConnection {
 
         // follow-up for next potential request
         let mut data_source = self.source.next().unwrap();
-        ::std::mem::swap(&mut self.next_header_source, &mut data_source);
+        std::mem::swap(&mut self.next_header_source, &mut data_source);
 
         // building the next reader
-        let request = ::request::new_request(
+        let request = crate::request::new_request(
             self.secure,
             method,
             path,
@@ -157,7 +155,7 @@ impl ClientConnection {
             writer,
         )
         .map_err(|e| {
-            use request;
+            use crate::request;
             match e {
                 request::RequestCreationError::CreationIoError(e) => ReadError::ReadIoError(e),
                 request::RequestCreationError::ExpectationFailed => {
@@ -173,10 +171,11 @@ impl ClientConnection {
 
 impl Iterator for ClientConnection {
     type Item = Request;
+
     /// Blocks until the next Request is available.
     /// Returns None when no new Requests will come from the client.
     fn next(&mut self) -> Option<Request> {
-        use {Response, StatusCode};
+        use crate::{Response, StatusCode};
 
         // the client sent a "connection: close" header in this previous request
         //  or is using HTTP 1.0, meaning that no new request will come
@@ -240,32 +239,25 @@ impl Iterator for ClientConnection {
             }
 
             // updating the status of the connection
-            {
-                let connection_header = rq
-                    .headers()
-                    .iter()
-                    .find(|h| h.field.equiv(&"Connection"))
-                    .map(|h| h.value.as_str());
+            let connection_header = rq
+                .headers()
+                .iter()
+                .find(|h| h.field.equiv(&"Connection"))
+                .map(|h| h.value.as_str());
 
-                let lowercase = connection_header.map(|h| h.to_ascii_lowercase());
+            let lowercase = connection_header.map(|h| h.to_ascii_lowercase());
 
-                match lowercase {
-                    Some(ref val) if val.contains("close") => self.no_more_requests = true,
-
-                    Some(ref val) if val.contains("upgrade") => self.no_more_requests = true,
-
-                    Some(ref val)
-                        if !val.contains("keep-alive")
-                            && *rq.http_version() == HTTPVersion(1, 0) =>
-                    {
-                        self.no_more_requests = true
-                    }
-
-                    None if *rq.http_version() == HTTPVersion(1, 0) => self.no_more_requests = true,
-
-                    _ => (),
-                };
-            }
+            match lowercase {
+                Some(ref val) if val.contains("close") => self.no_more_requests = true,
+                Some(ref val) if val.contains("upgrade") => self.no_more_requests = true,
+                Some(ref val)
+                    if !val.contains("keep-alive") && *rq.http_version() == HTTPVersion(1, 0) =>
+                {
+                    self.no_more_requests = true
+                }
+                None if *rq.http_version() == HTTPVersion(1, 0) => self.no_more_requests = true,
+                _ => (),
+            };
 
             // returning the request
             return Some(rq);
@@ -275,64 +267,43 @@ impl Iterator for ClientConnection {
 
 /// Parses a "HTTP/1.1" string.
 fn parse_http_version(version: &str) -> Result<HTTPVersion, ReadError> {
-    let elems = version
-        .splitn(2, '/')
-        .map(|e| e.to_owned())
-        .collect::<Vec<String>>();
-    if elems.len() != 2 {
-        return Err(ReadError::WrongRequestLine);
-    }
+    let (major, minor) = match version {
+        "HTTP/0.9" => (0, 9),
+        "HTTP/1.0" => (1, 0),
+        "HTTP/1.1" => (1, 1),
+        "HTTP/2.0" => (2, 0),
+        "HTTP/3.0" => (3, 0),
+        _ => return Err(ReadError::WrongRequestLine),
+    };
 
-    let elems = elems[1]
-        .splitn(2, '.')
-        .map(|e| e.to_owned())
-        .collect::<Vec<String>>();
-    if elems.len() != 2 {
-        return Err(ReadError::WrongRequestLine);
-    }
-
-    match (FromStr::from_str(&elems[0]), FromStr::from_str(&elems[1])) {
-        (Ok(major), Ok(minor)) => Ok(HTTPVersion(major, minor)),
-        _ => Err(ReadError::WrongRequestLine),
-    }
+    Ok(HTTPVersion(major, minor))
 }
 
 /// Parses the request line of the request.
 /// eg. GET / HTTP/1.1
 fn parse_request_line(line: &str) -> Result<(Method, String, HTTPVersion), ReadError> {
-    let mut words = line.split(' ');
+    let mut parts = line.split(' ');
 
-    let method = words.next();
-    let path = words.next();
-    let version = words.next();
+    let method = parts.next().and_then(|w| w.parse().ok());
+    let path = parts.next().map(ToOwned::to_owned);
+    let version = parts.next().and_then(|w| parse_http_version(w).ok());
 
-    let (method, path, version) = match (method, path, version) {
-        (Some(m), Some(p), Some(v)) => (m, p, v),
-        _ => return Err(ReadError::WrongRequestLine),
-    };
-
-    let method = match FromStr::from_str(method) {
-        Ok(method) => method,
-        Err(()) => return Err(ReadError::WrongRequestLine),
-    };
-
-    let version = parse_http_version(version)?;
-
-    Ok((method, path.to_owned(), version))
+    method
+        .zip(path)
+        .zip(version)
+        .ok_or(ReadError::WrongRequestLine)
+        .map(|((method, path), version)| (method, path, version))
 }
 
 #[cfg(test)]
 mod test {
     #[test]
     fn test_parse_request_line() {
-        let (method, path, ver) = match super::parse_request_line("GET /hello HTTP/1.1") {
-            Err(_) => panic!(),
-            Ok(v) => v,
-        };
+        let (method, path, ver) = super::parse_request_line("GET /hello HTTP/1.1").unwrap();
 
-        assert!(method == ::Method::Get);
+        assert!(method == crate::Method::Get);
         assert!(path == "/hello");
-        assert!(ver == ::common::HTTPVersion(1, 1));
+        assert!(ver == crate::common::HTTPVersion(1, 1));
 
         assert!(super::parse_request_line("GET /hello").is_err());
         assert!(super::parse_request_line("qsd qsd qsd").is_err());

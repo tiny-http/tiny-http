@@ -60,7 +60,7 @@ fn expect_100_continue() {
 
     // client.set_keepalive(Some(3)).unwrap(); FIXME: reenable this
     let mut content = vec![0; 12];
-    client.read(&mut content).unwrap();
+    client.read_exact(&mut content).unwrap();
     assert!(&content[9..].starts_with(b"100")); // 100 status code
 
     (write!(client, "hello")).unwrap();

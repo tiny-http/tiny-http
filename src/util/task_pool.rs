@@ -131,7 +131,7 @@ impl Drop for TaskPool {
     fn drop(&mut self) {
         self.sharing
             .active_tasks
-            .store(999999999, Ordering::Release);
+            .store(999_999_999, Ordering::Release);
         self.sharing.condvar.notify_all();
     }
 }

@@ -54,11 +54,10 @@ impl From<TestRequest> for Request {
     fn from(mut mock: TestRequest) -> Request {
         // if the user didn't set the Content-Length header, then set it for them
         // otherwise, leave it alone (it may be under test)
-        if mock
+        if !mock
             .headers
             .iter_mut()
-            .find(|h| h.field.equiv("Content-Length"))
-            .is_none()
+            .any(|h| h.field.equiv("Content-Length"))
         {
             mock.headers.push(Header {
                 field: HeaderField::from_str("Content-Length").unwrap(),

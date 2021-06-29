@@ -19,7 +19,9 @@ impl<'b> Read for SlowByteSrc {
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
         sleep(Duration::from_millis(100));
         let l = self.len.min(buf.len()).min(1000);
-        buf[..l].fill(self.val);
+        for v in buf[..l].iter_mut() {
+            *v = self.val;
+        }
         self.len -= l;
         Ok(l)
     }

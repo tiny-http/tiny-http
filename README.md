@@ -1,7 +1,9 @@
 # tiny-http
 
-[![Build Status](https://travis-ci.org/tiny-http/tiny-http.svg?branch=master)](https://travis-ci.org/tiny-http/tiny-http)
-[![tiny\_http on Crates.io](https://meritbadge.herokuapp.com/tiny_http)](https://crates.io/crates/tiny\_http)
+[![Crate][crate_img]][crate]
+[![Documentation][docs_img]][docs]
+![License][license_img]
+[![CI Status][ci_badge]][ci_link]
 
 [**Documentation**](https://docs.rs/tiny_http)
 
@@ -29,7 +31,7 @@ Add this to the `Cargo.toml` file of your project:
 
 ```toml
 [dependencies]
-tiny_http = "0.6"
+tiny_http = "0.8"
 ```
 
 Don't forget to add the external crate:
@@ -101,3 +103,12 @@ at your option.
 Unless you explicitly state otherwise, any contribution intentionally submitted
 for inclusion in tiny-http by you, as defined in the Apache-2.0 license, shall be
 dual licensed as above, without any additional terms or conditions.
+
+<!-- Links and Badges -->
+[crate_img]: https://img.shields.io/crates/v/tiny_http.svg?logo=rust "Crate Page"
+[crate]: https://crates.io/crates/tiny_http "Crate Link"
+[docs]: https://docs.rs/tiny_http "Documentation"
+[docs_img]: https://docs.rs/tiny_http/badge.svg "Documentation"
+[license_img]: https://img.shields.io/crates/l/tiny_http.svg "License"
+[ci_badge]: https://github.com/tiny-http/tiny-http/actions/workflows/ci.yaml/badge.svg "CI Status"
+[ci_link]: https://github.com/tiny-http/tiny-http/actions/workflows/ci.yaml "Workflow Link"

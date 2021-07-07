@@ -289,10 +289,8 @@ fn parse_request_line(line: &str) -> Result<(Method, String, HTTPVersion), ReadE
     let version = parts.next().and_then(|w| parse_http_version(w).ok());
 
     method
-        .zip(path)
-        .zip(version)
+        .and_then(|method| Some((method, path?, version?)))
         .ok_or(ReadError::WrongRequestLine)
-        .map(|((method, path), version)| (method, path, version))
 }
 
 #[cfg(test)]

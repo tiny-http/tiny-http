@@ -11,7 +11,7 @@ repository = "https://github.com/tiny-http/tiny-http"
 edition = "2018"
 
 [features]
-default = []
+default = ["log"]
 ssl = ["openssl"]
 
 [dependencies]
@@ -20,7 +20,7 @@ chunked_transfer = "1"
 openssl = { version = "0.10", optional = true }
 url = "2"
 chrono = { version = "0.4", default-features = false, features=["clock"] }
-log = "0.4"
+log = { version = "0.4", optional = true }
 
 [dev-dependencies]
 rustc-serialize = "0.3"

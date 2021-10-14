@@ -1,4 +1,4 @@
-use std::io::{Error as IoError};
+use std::io::Error as IoError;
 use std::io::{self, Cursor, ErrorKind, Read, Write};
 
 use std::fmt;

@@ -1,5 +1,19 @@
 # Changes
 
+## 0.9.0
+
+* [Rust 2018 Refactor](https://github.com/tiny-http/tiny-http/pull/208)
+* [Enable prompt responses, before the request has been fully read](https://github.com/tiny-http/tiny-http/pull/207)
+
+  This isn't an API change, but does result in different behaviour to 0.8.2 and so justifies a minor version bump.
+
+  HTTP requests now return a boxed `FusedReader` which drops the underlying
+  reader once it reaches EOF, such that the reader no longer needs to be
+  explicitly consumed and the server may now respond with e.g. a "413 Payload
+  too large" without waiting for the whole reader.
+
+* Bumped the minimum compiler version tested by CI to 1.48 (the version supported in Debian Bullseye)
+
 ## 0.8.2
 
 * [Add TestRequest for writing server tests more easily](https://github.com/tiny-http/tiny-http/pull/203)

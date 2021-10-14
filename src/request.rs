@@ -1,4 +1,4 @@
-use std::io::Error as IoError;
+use std::io::{Bytes, Error as IoError};
 use std::io::{self, Cursor, ErrorKind, Read, Write};
 
 use std::fmt;
@@ -394,6 +394,21 @@ impl Request {
             Box::new(writer) as Box<dyn Write + Send + 'static>
         } else {
             writer
+        }
+    }
+
+    /// Extract a response String from the Request.
+    ///
+    /// # Errors
+    ///
+    /// If the data in this stream is *not* valid UTF-8 then an error is
+    /// returned and `buf` is unchanged.
+    pub fn to_string(&mut self) -> Result<String, IoError> {
+        let mut buffer = String::new();
+
+        match self.as_reader().read_to_string(&mut buffer) {
+            Ok(_) => Ok(buffer),
+            Err(e) => Err(e),
         }
     }
 

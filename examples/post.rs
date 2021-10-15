@@ -1,4 +1,4 @@
-use tiny_http::{Server, Response};
+use tiny_http::{Response, Server};
 
 fn main() {
     let server = Server::http("0.0.0.0:8000").unwrap();
@@ -11,7 +11,12 @@ fn main() {
                 println!("{}", s);
                 request.respond(Response::from_string(s)).unwrap()
             }
-            Err(e) => request.respond(Response::from_string(format!("Couldn't upload data: {}", e))).unwrap()
+            Err(e) => request
+                .respond(Response::from_string(format!(
+                    "Couldn't upload data: {}",
+                    e
+                )))
+                .unwrap(),
         }
     }
 }

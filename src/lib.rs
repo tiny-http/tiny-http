@@ -336,7 +336,7 @@ impl Server {
             log::debug!("Running accept thread");
             while !inside_close_trigger.load(Relaxed) {
                 let new_client = match server.accept() {
-                    Ok((mut sock, _)) => {
+                    Ok((sock, _)) => {
                         use util::RefinedTcpStream;
                         let (read_closable, write_closable) = match ssl {
                             None => {

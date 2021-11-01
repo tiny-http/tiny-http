@@ -90,6 +90,13 @@
 #![forbid(unsafe_code)]
 #![deny(rust_2018_idioms)]
 #![allow(clippy::match_like_matches_macro)]
+#[cfg(feature = "ssl-openssl")]
+extern crate openssl;
+
+#[cfg(feature = "ssl-rustls")]
+extern crate rustls;
+#[cfg(feature = "ssl-rustls")]
+extern crate rustls_pemfile;
 
 use std::error::Error;
 use std::io::Error as IoError;
@@ -196,7 +203,7 @@ impl Server {
     }
 
     /// Shortcut for an HTTPS server on a specific address.
-    #[cfg(feature = "ssl")]
+    #[cfg(any(feature = "ssl-openssl", feature = "ssl-rustls"))]
     #[inline]
     pub fn https<A>(
         addr: A,
@@ -239,12 +246,14 @@ impl Server {
         };
 
         // building the SSL capabilities
-        #[cfg(feature = "ssl")]
+        #[cfg(feature = "ssl-openssl")]
         type SslContext = openssl::ssl::SslContext;
-        #[cfg(not(feature = "ssl"))]
+        #[cfg(feature = "ssl-rustls")]
+        type SslContext = Arc<rustls::ServerConfig>;
+        #[cfg(not(any(feature = "ssl-openssl", feature = "ssl-rustls")))]
         type SslContext = ();
         let ssl: Option<SslContext> = match ssl_config {
-            #[cfg(feature = "ssl")]
+            #[cfg(feature = "ssl-openssl")]
             Some(mut config) => {
                 use openssl::pkey::PKey;
                 use openssl::ssl;
@@ -270,16 +279,47 @@ impl Server {
                 }
 
                 Some(ctxt.build())
-            }
-            #[cfg(not(feature = "ssl"))]
-            Some(_) => {
-                return Err(
-                    "Building a server with SSL requires enabling the `ssl` feature \
-                                   in tiny-http"
-                        .to_owned()
-                        .into(),
-                )
-            }
+            },
+            #[cfg(feature = "ssl-rustls")]
+            Some(mut config) => {
+                //let mut tls_conf = rustls::ServerConfig::new(rustls::server::NoClientAuth::new());
+
+                let certificate = rustls::Certificate(
+                    match rustls_pemfile::certs(&mut config.certificate.as_slice())?.first() {
+                        Some(cert) => cert.clone(),
+                        None => return Err("Couldn't extract certificate from config.".into())
+                    }
+                );
+                let private_key = rustls::PrivateKey ({
+                    let private_key = config.private_key.clone();
+                    let pkcs8_keys = rustls_pemfile::pkcs8_private_keys(&mut private_key.as_slice())
+                        .expect("file contains invalid pkcs8 private key (encrypted keys not supported)");
+                    // prefer to load pkcs8 keys
+                    if !pkcs8_keys.is_empty() {
+                        pkcs8_keys[0].clone()
+                    } else {
+                        let private_key = config.private_key.clone();
+                        let rsa_keys = rustls_pemfile::rsa_private_keys(&mut private_key.as_slice())
+                            .expect("file contains invalid rsa private key");
+                        rsa_keys[0].clone()
+                    }
+                });
+
+                let tls_conf = rustls::ServerConfig::builder()
+                    .with_safe_defaults()
+                    .with_no_client_auth()
+                    .with_single_cert(vec![certificate], private_key)?;
+
+                // let's wipe the certificate and private key from memory, because we're
+                // better safe than sorry
+                for b in &mut config.certificate { *b = 0; }
+                for b in &mut config.private_key { *b = 0; }
+
+                Some(Arc::new(tls_conf))
+            },
+            #[cfg(not(any(feature = "ssl-openssl", feature = "ssl-rustls")))]
+            Some(_) => return Err("Building a server with SSL requires enabling the `ssl` feature \
+                                   in tiny-http".to_owned().into()),
             None => None,
         };
 
@@ -296,11 +336,13 @@ impl Server {
             log::debug!("Running accept thread");
             while !inside_close_trigger.load(Relaxed) {
                 let new_client = match server.accept() {
-                    Ok((sock, _)) => {
+                    Ok((mut sock, _)) => {
                         use util::RefinedTcpStream;
                         let (read_closable, write_closable) = match ssl {
-                            None => RefinedTcpStream::new(sock),
-                            #[cfg(feature = "ssl")]
+                            None => {
+                                RefinedTcpStream::new(sock)
+                            },
+                            #[cfg(feature = "ssl-openssl")]
                             Some(ref ssl) => {
                                 let ssl = openssl::ssl::Ssl::new(ssl).expect("Couldn't create ssl");
                                 // trying to apply SSL over the connection
@@ -311,8 +353,18 @@ impl Server {
                                 };
 
                                 RefinedTcpStream::new(sock)
-                            }
-                            #[cfg(not(feature = "ssl"))]
+                            },
+                            #[cfg(feature = "ssl-rustls")]
+                            Some(ref tls_conf) => {
+                                let tls_session = match rustls::ServerConnection::new(tls_conf.clone()) {
+                                    Ok(s) => s,
+                                    Err(_) => continue,
+                                };
+                                let stream = rustls::StreamOwned::new(tls_session, sock);
+
+                                RefinedTcpStream::new(stream)
+                            },
+                            #[cfg(not(any(feature = "ssl-openssl", feature = "ssl-rustls")))]
                             Some(_) => unreachable!(),
                         };
 

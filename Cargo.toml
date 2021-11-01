@@ -12,15 +12,23 @@ edition = "2018"
 
 [features]
 default = []
-ssl = ["openssl"]
+ssl = ["ssl-openssl"]
+ssl-openssl = ["openssl"]
+ssl-rustls = ["rustls"]
 
 [dependencies]
 ascii = "1.0"
 chunked_transfer = "1"
-openssl = { version = "0.10", optional = true }
 url = "2"
 log = "0.4"
 time = { version = "0.3", features = [ "std", "formatting", "macros", "parsing" ] }
+
+#[cfg(feature = "ssl-openssl")]
+openssl = { version = "0.10", optional = true }
+
+#[cfg(feature = "ssl-rustls")]
+rustls = { version = "0.20", optional = true }
+rustls-pemfile = "0.2.1"
 
 [dev-dependencies]
 rustc-serialize = "0.3"

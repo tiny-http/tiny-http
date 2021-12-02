@@ -10,6 +10,73 @@ use std::sync::mpsc::Sender;
 use crate::util::{EqualReader, FusedReader};
 use crate::{HTTPVersion, Header, Method, Response, StatusCode};
 use chunked_transfer::Decoder;
+#[cfg(feature = "serde")]
+use serde::{Serialize, Deserialize};
+
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct Parameters {
+    remote_addr: SocketAddr,
+
+    // true if HTTPS, false if HTTP
+    secure: bool,
+
+    method: Method,
+
+    path: String,
+
+    http_version: HTTPVersion,
+
+    headers: Vec<Header>,
+
+    body_length: Option<usize>,
+
+    // true if a `100 Continue` response must be sent when `as_reader()` is called
+    must_send_continue: bool,
+}
+
+impl Parameters {
+    /// Returns the address of the client that sent this request.
+    ///
+    /// Note that this is gathered from the socket. If you receive the request from a proxy,
+    /// this function will return the address of the proxy and not the address of the actual
+    /// user.
+    pub fn remote_addr(&self) -> &SocketAddr {
+        &self.remote_addr
+    }
+
+    /// Returns true if the request was made through HTTPS.
+    pub fn secure(&self) -> bool {
+        self.secure
+    }
+
+    /// Returns the method requested by the client (eg. `GET`, `POST`, etc.).
+    pub fn method(&self) -> &Method {
+        &self.method
+    }
+
+    /// Returns the resource requested by the client.
+    pub fn path(&self) -> &str {
+        &self.path
+    }
+
+    /// Returns the HTTP version of the request.
+    pub fn http_version(&self) -> &HTTPVersion {
+        &self.http_version
+    }
+
+    /// Returns a list of all headers sent by the client.
+    pub fn headers(&self) -> &[Header] {
+        &self.headers
+    }
+
+    /// Returns the length of the body in bytes.
+    ///
+    /// Returns `None` if the length is unknown.
+    pub fn body_length(&self) -> Option<usize> {
+        self.body_length
+    }
+}
 
 /// Represents an HTTP request made by a client.
 ///
@@ -54,23 +121,7 @@ pub struct Request {
     // if this writer is empty, then the request has been answered
     response_writer: Option<Box<dyn Write + Send + 'static>>,
 
-    remote_addr: SocketAddr,
-
-    // true if HTTPS, false if HTTP
-    secure: bool,
-
-    method: Method,
-
-    path: String,
-
-    http_version: HTTPVersion,
-
-    headers: Vec<Header>,
-
-    body_length: Option<usize>,
-
-    // true if a `100 Continue` response must be sent when `as_reader()` is called
-    must_send_continue: bool,
+    parameters: Parameters,
 
     // If Some, a message must be sent after responding
     notify_when_responded: Option<Sender<()>>,
@@ -229,14 +280,16 @@ where
     Ok(Request {
         data_reader: Some(reader),
         response_writer: Some(Box::new(writer) as Box<dyn Write + Send + 'static>),
-        remote_addr,
-        secure,
-        method,
-        path,
-        http_version: version,
-        headers,
-        body_length: content_length,
-        must_send_continue: expects_continue,
+        parameters: Parameters {
+            remote_addr,
+            secure,
+            method,
+            path,
+            http_version: version,
+            headers,
+            body_length: content_length,
+            must_send_continue: expects_continue,
+        },
         notify_when_responded: None,
     })
 }
@@ -245,31 +298,31 @@ impl Request {
     /// Returns true if the request was made through HTTPS.
     #[inline]
     pub fn secure(&self) -> bool {
-        self.secure
+        self.parameters.secure
     }
 
     /// Returns the method requested by the client (eg. `GET`, `POST`, etc.).
     #[inline]
     pub fn method(&self) -> &Method {
-        &self.method
+        &self.parameters.method
     }
 
     /// Returns the resource requested by the client.
     #[inline]
     pub fn url(&self) -> &str {
-        &self.path
+        &self.parameters.path
     }
 
     /// Returns a list of all headers sent by the client.
     #[inline]
     pub fn headers(&self) -> &[Header] {
-        &self.headers
+        &self.parameters.headers
     }
 
     /// Returns the HTTP version of the request.
     #[inline]
     pub fn http_version(&self) -> &HTTPVersion {
-        &self.http_version
+        &self.parameters.http_version
     }
 
     /// Returns the length of the body in bytes.
@@ -277,7 +330,7 @@ impl Request {
     /// Returns `None` if the length is unknown.
     #[inline]
     pub fn body_length(&self) -> Option<usize> {
-        self.body_length
+        self.parameters.body_length
     }
 
     /// Returns the address of the client that sent this request.
@@ -287,7 +340,7 @@ impl Request {
     /// user.
     #[inline]
     pub fn remote_addr(&self) -> &SocketAddr {
-        &self.remote_addr
+        &self.parameters.remote_addr
     }
 
     /// Sends a response with a `Connection: upgrade` header, then turns the `Request` into a `Stream`.
@@ -309,8 +362,8 @@ impl Request {
         response
             .raw_print(
                 self.response_writer.as_mut().unwrap().by_ref(),
-                self.http_version.clone(),
-                &self.headers,
+                self.parameters.http_version.clone(),
+                &self.parameters.headers,
                 false,
                 Some(protocol),
             )
@@ -356,18 +409,18 @@ impl Request {
     ///  function will send back a `100 Continue` response.
     #[inline]
     pub fn as_reader(&mut self) -> &mut dyn Read {
-        if self.must_send_continue {
+        if self.parameters.must_send_continue {
             let msg = Response::new_empty(StatusCode(100));
             msg.raw_print(
                 self.response_writer.as_mut().unwrap().by_ref(),
-                self.http_version.clone(),
-                &self.headers,
+                self.parameters.http_version.clone(),
+                &self.parameters.headers,
                 true,
                 None,
             )
             .ok();
             self.response_writer.as_mut().unwrap().flush().ok();
-            self.must_send_continue = false;
+            self.parameters.must_send_continue = false;
         }
 
         self.data_reader.as_mut().unwrap()
@@ -443,12 +496,12 @@ impl Request {
     {
         let mut writer = self.extract_writer_impl();
 
-        let do_not_send_body = self.method == Method::Head;
+        let do_not_send_body = self.parameters.method == Method::Head;
 
         Self::ignore_client_closing_errors(response.raw_print(
             writer.by_ref(),
-            self.http_version.clone(),
-            &self.headers,
+            self.parameters.http_version.clone(),
+            &self.parameters.headers,
             do_not_send_body,
             None,
         ))?;
@@ -477,7 +530,7 @@ impl fmt::Debug for Request {
         write!(
             formatter,
             "Request({} {} from {})",
-            self.method, self.path, self.remote_addr
+            self.parameters.method, self.parameters.path, self.parameters.remote_addr
         )
     }
 }

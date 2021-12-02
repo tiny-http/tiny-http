@@ -5,8 +5,36 @@ use std::str::FromStr;
 
 use chrono::*;
 
+#[cfg(feature = "serde")]
+use serde::{Serialize, Deserialize};
+
+#[cfg(feature = "serde")]
+mod ascii_string {
+    use serde::{de::Error as _, Deserialize, Deserializer, Serialize, Serializer};
+
+    pub fn deserialize<'de, D, T>(deserializer: D) -> Result<T, D::Error>
+    where
+        D: Deserializer<'de>,
+        T: std::str::FromStr,
+    <T as std::str::FromStr>::Err: std::fmt::Display,
+    {
+        String::deserialize(deserializer)?
+            .parse::<T>()
+            .map_err(|e| D::Error::custom(format!("{}", e)))
+    }
+
+    pub fn serialize<S, T>(value: &T, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+        T: std::fmt::Display,
+    {
+        format!("{}", value).serialize(serializer)
+    }
+}
+
 /// Status code of a request or response.
 #[derive(Eq, PartialEq, Copy, Clone, Debug, Ord, PartialOrd)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct StatusCode(pub u16);
 
 impl StatusCode {
@@ -151,8 +179,10 @@ impl PartialOrd<StatusCode> for u16 {
 
 /// Represents a HTTP header.
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Header {
     pub field: HeaderField,
+    #[cfg_attr(feature = "serde", serde(with = "ascii_string"))]
     pub value: AsciiString,
 }
 
@@ -206,7 +236,8 @@ impl Display for Header {
 ///
 /// Comparison between two `HeaderField`s ignores case.
 #[derive(Debug, Clone, Eq)]
-pub struct HeaderField(AsciiString);
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct HeaderField(#[cfg_attr(feature = "serde", serde(with = "ascii_string"))] AsciiString);
 
 impl HeaderField {
     pub fn from_bytes<B>(bytes: B) -> Result<HeaderField, FromAsciiError<B>>
@@ -256,6 +287,7 @@ impl PartialEq for HeaderField {
 /// As per [RFC 7231](https://tools.ietf.org/html/rfc7231#section-4.1) and
 /// [RFC 5789](https://tools.ietf.org/html/rfc5789)
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum Method {
     /// `GET`
     Get,
@@ -285,7 +317,7 @@ pub enum Method {
     Patch,
 
     /// Request methods not standardized by the IETF
-    NonStandard(AsciiString),
+    NonStandard(#[cfg_attr(feature = "serde", serde(with = "ascii_string"))] AsciiString),
 }
 
 impl Method {
@@ -336,6 +368,7 @@ impl Display for Method {
 /// HTTP version (usually 1.0 or 1.1).
 #[allow(clippy::upper_case_acronyms)]
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct HTTPVersion(pub u8, pub u8);
 
 impl Display for HTTPVersion {

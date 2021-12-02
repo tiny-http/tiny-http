@@ -3,7 +3,7 @@ use std::cmp::Ordering;
 use std::fmt::{self, Display, Formatter};
 use std::str::FromStr;
 
-use chrono::*;
+use chrono::{DateTime, Utc};
 
 #[cfg(feature = "serde")]
 use serde::{Serialize, Deserialize};

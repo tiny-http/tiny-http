@@ -21,7 +21,7 @@ openssl = { version = "0.10", optional = true }
 url = "2"
 chrono = { version = "0.4", default-features = false, features=["clock"] }
 log = "0.4"
-serde = { version = "1.0.118", features = ["derive"], optional = true }
+serde = { version = "1", features = ["derive"], optional = true }
 
 [dev-dependencies]
 rustc-serialize = "0.3"

@@ -2,8 +2,7 @@ use ascii::{AsciiStr, AsciiString, FromAsciiError};
 use std::cmp::Ordering;
 use std::fmt::{self, Display, Formatter};
 use std::str::FromStr;
-
-use chrono::*;
+use time::{format_description, OffsetDateTime};
 
 /// Status code of a request or response.
 #[derive(Eq, PartialEq, Copy, Clone, Debug, Ord, PartialOrd)]
@@ -398,18 +397,25 @@ impl From<(u8, u8)> for HTTPVersion {
 /// Represents the current date, expressed in RFC 1123 format, e.g. Sun, 06 Nov 1994 08:49:37 GMT
 #[allow(clippy::upper_case_acronyms)]
 pub struct HTTPDate {
-    d: DateTime<Utc>,
+    d: OffsetDateTime,
 }
 
 impl HTTPDate {
     pub fn new() -> HTTPDate {
-        HTTPDate { d: Utc::now() }
+        HTTPDate {
+            d: OffsetDateTime::now_utc(),
+        }
     }
 }
 
 impl ToString for HTTPDate {
     fn to_string(&self) -> String {
-        self.d.format("%a, %e %b %Y %H:%M:%S GMT").to_string()
+        // Note: This can probably be made Self::format however parse is not a const function, making this difficult.
+        let format = format_description::parse("%a, %e %b %Y %H:%M:%S GMT")
+            .expect("Cannot fail.  The format string is correct.");
+        self.d
+            .format(&format)
+            .expect("Cannot fail with this format under any reasonable conditions.")
     }
 }
 

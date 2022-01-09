@@ -19,8 +19,8 @@ ascii = "1.0"
 chunked_transfer = "1"
 openssl = { version = "0.10", optional = true }
 url = "2"
-chrono = { version = "0.4", default-features = false, features=["clock"] }
 log = "0.4"
+time = { version = "0.3", features = [ "std", "formatting" ] }
 
 [dev-dependencies]
 rustc-serialize = "0.3"

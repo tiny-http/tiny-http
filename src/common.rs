@@ -2,7 +2,7 @@ use ascii::{AsciiStr, AsciiString, FromAsciiError};
 use std::cmp::Ordering;
 use std::fmt::{self, Display, Formatter};
 use std::str::FromStr;
-use time::{format_description, OffsetDateTime};
+use time::OffsetDateTime;
 
 /// Status code of a request or response.
 #[derive(Eq, PartialEq, Copy, Clone, Debug, Ord, PartialOrd)]
@@ -394,7 +394,7 @@ impl From<(u8, u8)> for HTTPVersion {
     }
 }
 
-/// Represents the current date, expressed in RFC 1123 format, e.g. Sun, 06 Nov 1994 08:49:37 GMT
+/// Represents the current date, expressed in RFC 7231 (IMF-fixdate) format, e.g. Sun, 06 Nov 1994 08:49:37 GMT
 #[allow(clippy::upper_case_acronyms)]
 pub struct HTTPDate {
     d: OffsetDateTime,
@@ -408,13 +408,18 @@ impl HTTPDate {
     }
 }
 
+/// Format description for emitting a [`time::PrimitiveDateTime`] or [`time::OffsetDateTime`] in the format required by RFC7231
+///
+/// `format_description!` is a procedural macro, but since `time-rs` doesn't provide any other way
+/// to construct the format description slice in a `const` context we haven't much choice.
+const IMF_FIXDATE_FORMAT: &[time::format_description::FormatItem<'static>] = time::macros::format_description!(
+    "[weekday repr:short], [day padding:zero] [month repr:short] [year repr:full] [hour repr:24 padding:zero]:[minute padding:zero]:[second padding:zero] GMT"
+);
+
 impl ToString for HTTPDate {
     fn to_string(&self) -> String {
-        // Note: This can probably be made Self::format however parse is not a const function, making this difficult.
-        let format = format_description::parse("%a, %e %b %Y %H:%M:%S GMT")
-            .expect("Cannot fail.  The format string is correct.");
         self.d
-            .format(&format)
+            .format(&IMF_FIXDATE_FORMAT)
             .expect("Cannot fail with this format under any reasonable conditions.")
     }
 }
@@ -422,6 +427,8 @@ impl ToString for HTTPDate {
 #[cfg(test)]
 mod test {
     use super::Header;
+    use crate::common::HTTPDate;
+    use time::OffsetDateTime;
 
     #[test]
     fn test_parse_header() {
@@ -431,6 +438,15 @@ mod test {
         assert!(header.value.as_str() == "text/html");
 
         assert!("hello world".parse::<Header>().is_err());
+    }
+
+    #[test]
+    fn formats_date_correctly() {
+        let http_date = HTTPDate {
+            d: OffsetDateTime::from_unix_timestamp(420895020).unwrap(),
+        };
+
+        assert_eq!(http_date.to_string(), "Wed, 04 May 1983 11:17:00 GMT")
     }
 
     #[test]

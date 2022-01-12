@@ -31,13 +31,7 @@ Add this to the `Cargo.toml` file of your project:
 
 ```toml
 [dependencies]
-tiny_http = "0.8"
-```
-
-Don't forget to add the external crate:
-
-```rust
-extern crate tiny_http;
+tiny_http = "0.10"
 ```
 
 ### Usage

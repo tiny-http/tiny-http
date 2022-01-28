@@ -6,8 +6,6 @@ use std::net::{Shutdown, SocketAddr, TcpStream};
 use std::sync::{Arc, Mutex};
 #[cfg(feature = "ssl-openssl")]
 use openssl::ssl::SslStream;
-#[cfg(feature = "ssl")]
-use std::sync::{Arc, Mutex};
 
 pub struct RefinedTcpStream {
     stream: Stream,

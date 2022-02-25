@@ -74,8 +74,15 @@ impl OpenSslContext {
 
         let mut ctx = openssl::ssl::SslContext::builder(ssl::SslMethod::tls())?;
         ctx.set_cipher_list("DEFAULT")?;
-        let cert = X509::from_pem(&certificates)?;
-        ctx.set_certificate(&cert)?;
+        let certificate_chain = X509::stack_from_pem(&certificates)?;
+        if certificate_chain.is_empty() {
+            return Err("Couldn't extract certificate chain from config.".into());
+        }
+        // The leaf certificate must always be first in the PEM file
+        ctx.set_certificate(&certificate_chain[0])?;
+        for chain_cert in certificate_chain.into_iter().skip(1) {
+            ctx.add_extra_chain_cert(chain_cert)?;
+        }
         let key = PKey::private_key_from_pem(&private_key)?;
         ctx.set_private_key(&key)?;
         ctx.set_verify(SslVerifyMode::NONE);

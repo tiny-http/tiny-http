@@ -14,10 +14,10 @@ What does **tiny-http** handle?
  - Accepting and managing connections to the clients
  - Parsing requests
  - Requests pipelining
- - Transfer-Encoding and Content-Encoding (**not fully implemented yet**)
+ - HTTPS (using either OpenSSL or Rustls)
+ - Transfer-Encoding and Content-Encoding
  - Turning user input (eg. POST input) into a contiguous UTF-8 string (**not implemented yet**)
  - Ranges (**not implemented yet**)
- - HTTPS
  - `Connection: upgrade` (used by websockets)
 
 Tiny-http handles everything that is related to client connections and data transfers and encoding.
@@ -31,7 +31,7 @@ Add this to the `Cargo.toml` file of your project:
 
 ```toml
 [dependencies]
-tiny_http = "0.10"
+tiny_http = "0.11"
 ```
 
 ### Usage

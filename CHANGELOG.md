@@ -1,5 +1,20 @@
 # Changes
 
+## 0.11.0
+
+* [Add support for Rustls](https://github.com/tiny-http/tiny-http/pull/218)
+
+  Thanks to @3xmblzj5 and @travispaul for their help in implementing [`Rustls`](https://github.com/rustls/rustls) as a
+  drop-in replacement for OpenSSL, you can now build `tiny-http` with TLS support without any external dependencies!
+  OpenSSL will remain the default implementation if you just enable the `ssl` feature, but you are strongly encouraged
+  to use `ssl-rustls` where possible!
+
+* [Fix incorrect certificate chain loading](https://github.com/tiny-http/tiny-http/commit/876efd6b752e991c699d27d3d0ad9a47e9d35c29)
+
+  Fix a longstanding bug where we were only loading the first (i.e. the leaf) certificate from any PEM file supplied by
+  the user.
+
+
 ## 0.10.0
 
 * [Replace chrono with time-rs](https://github.com/tiny-http/tiny-http/commit/75ac7758fd0ca660c35f58c2a36edb23a42cda32)

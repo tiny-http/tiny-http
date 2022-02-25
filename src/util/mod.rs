@@ -13,7 +13,7 @@ mod custom_stream;
 mod equal_reader;
 mod fused_reader;
 mod messages_queue;
-mod refined_tcp_stream;
+pub(crate) mod refined_tcp_stream;
 mod sequential;
 mod task_pool;
 

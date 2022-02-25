@@ -3,9 +3,83 @@ use std::io::{Read, Write};
 use std::net::{Shutdown, SocketAddr, TcpStream};
 
 #[cfg(any(feature = "ssl-openssl", feature = "ssl-rustls"))]
-use std::sync::{Arc, Mutex};
-#[cfg(feature = "ssl-openssl")]
-use openssl::ssl::SslStream;
+use crate::ssl::SslStream;
+
+pub(crate) enum Stream {
+    Http(TcpStream),
+    #[cfg(any(feature = "ssl-openssl", feature = "ssl-rustls"))]
+    Https(SslStream),
+}
+
+impl Clone for Stream {
+    fn clone(&self) -> Self {
+        match self {
+            Stream::Http(tcp_stream) => Stream::Http(tcp_stream.try_clone().unwrap()),
+            #[cfg(any(feature = "ssl-openssl", feature = "ssl-rustls"))]
+            Stream::Https(ssl_stream) => Stream::Https(ssl_stream.clone()),
+        }
+    }
+}
+
+impl From<TcpStream> for Stream {
+    fn from(tcp_stream: TcpStream) -> Self {
+        Stream::Http(tcp_stream)
+    }
+}
+
+impl Stream {
+    fn secure(&self) -> bool {
+        match self {
+            Stream::Http(_) => false,
+            #[cfg(any(feature = "ssl-openssl", feature = "ssl-rustls"))]
+            Stream::Https(_) => true,
+        }
+    }
+
+    fn peer_addr(&mut self) -> IoResult<SocketAddr> {
+        match self {
+            Stream::Http(tcp_stream) => tcp_stream.peer_addr(),
+            #[cfg(any(feature = "ssl-openssl", feature = "ssl-rustls"))]
+            Stream::Https(ssl_stream) => ssl_stream.peer_addr(),
+        }
+    }
+
+    fn shutdown(&mut self, how: Shutdown) -> IoResult<()> {
+        match self {
+            Stream::Http(tcp_stream) => tcp_stream.shutdown(how),
+            #[cfg(any(feature = "ssl-openssl", feature = "ssl-rustls"))]
+            Stream::Https(ssl_stream) => ssl_stream.shutdown(how),
+        }
+    }
+}
+
+impl Read for Stream {
+    fn read(&mut self, buf: &mut [u8]) -> IoResult<usize> {
+        match self {
+            Stream::Http(tcp_stream) => tcp_stream.read(buf),
+            #[cfg(any(feature = "ssl-openssl", feature = "ssl-rustls"))]
+            Stream::Https(ssl_stream) => ssl_stream.read(buf),
+        }
+    }
+}
+
+impl Write for Stream {
+    fn write(&mut self, buf: &[u8]) -> IoResult<usize> {
+        match self {
+            Stream::Http(tcp_stream) => tcp_stream.write(buf),
+            #[cfg(any(feature = "ssl-openssl", feature = "ssl-rustls"))]
+            Stream::Https(ssl_stream) => ssl_stream.write(buf),
+        }
+    }
+
+    fn flush(&mut self) -> IoResult<()> {
+        match self {
+            Stream::Http(tcp_stream) => tcp_stream.flush(),
+            #[cfg(any(feature = "ssl-openssl", feature = "ssl-rustls"))]
+            Stream::Https(ssl_stream) => ssl_stream.flush(),
+        }
+    }
+}
 
 pub struct RefinedTcpStream {
     stream: Stream,
@@ -13,51 +87,14 @@ pub struct RefinedTcpStream {
     close_write: bool,
 }
 
-pub enum Stream {
-    Http(TcpStream),
-    #[cfg(feature = "ssl-openssl")]
-    Https(Arc<Mutex<SslStream<TcpStream>>>),
-    #[cfg(feature = "ssl-rustls")]
-    Https(Arc<Mutex<rustls::StreamOwned<rustls::ServerConnection, TcpStream>>>),
-}
-
-impl From<TcpStream> for Stream {
-    #[inline]
-    fn from(stream: TcpStream) -> Stream {
-        Stream::Http(stream)
-    }
-}
-
-#[cfg(feature = "ssl-openssl")]
-impl From<SslStream<TcpStream>> for Stream {
-    #[inline]
-    fn from(stream: SslStream<TcpStream>) -> Stream {
-        Stream::Https(Arc::new(Mutex::new(stream)))
-    }
-}
-
-#[cfg(feature = "ssl-rustls")]
-impl From<rustls::StreamOwned<rustls::ServerConnection, TcpStream>> for Stream {
-    #[inline]
-    fn from(stream: rustls::StreamOwned<rustls::ServerConnection, TcpStream>) -> Stream {
-        Stream::Https(Arc::new(Mutex::new(stream)))
-    }
-}
-
 impl RefinedTcpStream {
-    pub fn new<S>(stream: S) -> (RefinedTcpStream, RefinedTcpStream)
+    pub(crate) fn new<S>(stream: S) -> (RefinedTcpStream, RefinedTcpStream)
     where
         S: Into<Stream>,
     {
-        let stream = stream.into();
+        let stream: Stream = stream.into();
 
-        let read = match stream {
-            Stream::Http(ref stream) => Stream::Http(stream.try_clone().unwrap()),
-            #[cfg(feature = "ssl-openssl")]
-            Stream::Https(ref stream) => Stream::Https(Arc::clone(stream)),
-            #[cfg(feature = "ssl-rustls")]
-            Stream::Https(ref stream) => Stream::Https(Arc::clone(stream)),
-        };
+        let (read, write) = (stream.clone(), stream);
 
         let read = RefinedTcpStream {
             stream: read,
@@ -66,7 +103,7 @@ impl RefinedTcpStream {
         };
 
         let write = RefinedTcpStream {
-            stream,
+            stream: write,
             close_read: false,
             close_write: true,
         };
@@ -76,81 +113,39 @@ impl RefinedTcpStream {
 
     /// Returns true if this struct wraps around a secure connection.
     #[inline]
-    pub fn secure(&self) -> bool {
-        match self.stream {
-            Stream::Http(_) => false,
-            #[cfg(any(feature = "ssl-openssl", feature = "ssl-rustls"))]
-            Stream::Https(_) => true,
-        }
+    pub(crate) fn secure(&self) -> bool {
+        self.stream.secure()
     }
 
-    pub fn peer_addr(&mut self) -> IoResult<SocketAddr> {
-        match self.stream {
-            Stream::Http(ref mut stream) => stream.peer_addr(),
-            #[cfg(feature = "ssl-openssl")]
-            Stream::Https(ref mut stream) => stream.lock().unwrap().get_ref().peer_addr(),
-            #[cfg(feature = "ssl-rustls")]
-            Stream::Https(ref mut stream) => stream.lock().unwrap().sock.peer_addr(),
-        }
+    pub(crate) fn peer_addr(&mut self) -> IoResult<SocketAddr> {
+        self.stream.peer_addr()
     }
 }
 
 impl Drop for RefinedTcpStream {
     fn drop(&mut self) {
         if self.close_read {
-            match self.stream {
-                // ignoring outcome
-                Stream::Http(ref mut stream) => stream.shutdown(Shutdown::Read).ok(),
-                #[cfg(feature = "ssl-openssl")]
-                Stream::Https(ref mut stream) => stream.lock().unwrap().get_mut().shutdown(Shutdown::Read).ok(),
-                #[cfg(feature = "ssl-rustls")]
-                Stream::Https(ref mut stream) => stream.lock().unwrap().sock.shutdown(Shutdown::Read).ok(),
-            };
+            self.stream.shutdown(Shutdown::Read).ok();
         }
 
         if self.close_write {
-            match self.stream {
-                // ignoring outcome
-                Stream::Http(ref mut stream) => stream.shutdown(Shutdown::Write).ok(),
-                #[cfg(feature = "ssl-openssl")]
-                Stream::Https(ref mut stream) => stream.lock().unwrap().get_mut().shutdown(Shutdown::Write).ok(),
-                #[cfg(feature = "ssl-rustls")]
-                Stream::Https(ref mut stream) => stream.lock().unwrap().sock.shutdown(Shutdown::Write).ok(),
-            };
+            self.stream.shutdown(Shutdown::Write).ok();
         }
     }
 }
 
 impl Read for RefinedTcpStream {
     fn read(&mut self, buf: &mut [u8]) -> IoResult<usize> {
-        match self.stream {
-            Stream::Http(ref mut stream) => stream.read(buf),
-            #[cfg(feature = "ssl-openssl")]
-            Stream::Https(ref mut stream) => stream.lock().unwrap().read(buf),
-            #[cfg(feature = "ssl-rustls")]
-            Stream::Https(ref mut stream) => stream.lock().unwrap().read(buf),
-        }
+        self.stream.read(buf)
     }
 }
 
 impl Write for RefinedTcpStream {
     fn write(&mut self, buf: &[u8]) -> IoResult<usize> {
-        match self.stream {
-            Stream::Http(ref mut stream) => stream.write(buf),
-            #[cfg(feature = "ssl-openssl")]
-            Stream::Https(ref mut stream) => stream.lock().unwrap().write(buf),
-            #[cfg(feature = "ssl-rustls")]
-            Stream::Https(ref mut stream) => stream.lock().unwrap().write(buf),
-        }
+        self.stream.write(buf)
     }
 
     fn flush(&mut self) -> IoResult<()> {
-        match self.stream {
-            Stream::Http(ref mut stream) => stream.flush(),
-            #[cfg(feature = "ssl-openssl")]
-            Stream::Https(ref mut stream) => stream.lock().unwrap().flush(),
-            #[cfg(feature = "ssl-rustls")]
-            Stream::Https(ref mut stream) => stream.lock().unwrap().flush(),
-        }
+        self.stream.flush()
     }
 }

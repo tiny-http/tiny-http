@@ -1,7 +1,8 @@
+use crate::connection::Connection;
 use crate::util::refined_tcp_stream::Stream as RefinedStream;
 use std::error::Error;
 use std::io::{Read, Write};
-use std::net::{Shutdown, SocketAddr, TcpStream};
+use std::net::{Shutdown, SocketAddr};
 use std::sync::{Arc, Mutex};
 use zeroize::Zeroizing;
 
@@ -9,11 +10,11 @@ use zeroize::Zeroizing;
 ///
 /// Uses an internal Mutex to permit disparate reader & writer threads to access the stream independently.
 pub(crate) struct RustlsStream(
-    Arc<Mutex<rustls::StreamOwned<rustls::ServerConnection, TcpStream>>>,
+    Arc<Mutex<rustls::StreamOwned<rustls::ServerConnection, Connection>>>,
 );
 
 impl RustlsStream {
-    pub(crate) fn peer_addr(&mut self) -> std::io::Result<SocketAddr> {
+    pub(crate) fn peer_addr(&mut self) -> std::io::Result<Option<SocketAddr>> {
         self.0
             .lock()
             .expect("Failed to lock SSL stream mutex")
@@ -103,7 +104,7 @@ impl RustlsContext {
 
     pub(crate) fn accept(
         &self,
-        stream: TcpStream,
+        stream: Connection,
     ) -> Result<RustlsStream, Box<dyn Error + Send + Sync + 'static>> {
         let connection = rustls::ServerConnection::new(self.0.clone())?;
         Ok(RustlsStream(Arc::new(Mutex::new(

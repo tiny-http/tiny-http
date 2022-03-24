@@ -101,7 +101,7 @@ fn pipelining_test() {
 #[test]
 fn server_crash_results_in_response() {
     let server = tiny_http::Server::http("0.0.0.0:0").unwrap();
-    let port = server.server_addr().port();
+    let port = server.server_addr().to_ip().unwrap().port();
     let mut client = TcpStream::connect(("127.0.0.1", port)).unwrap();
 
     thread::spawn(move || {

@@ -16,7 +16,7 @@ use crate::Request;
 /// and return Request objects.
 pub struct ClientConnection {
     // address of the client
-    remote_addr: IoResult<SocketAddr>,
+    remote_addr: IoResult<Option<SocketAddr>>,
 
     // sequence of Readers to the stream, so that the data is not read in
     //  the wrong order

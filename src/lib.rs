@@ -98,7 +98,6 @@ use std::error::Error;
 use std::io::Error as IoError;
 use std::io::ErrorKind as IoErrorKind;
 use std::io::Result as IoResult;
-use std::net;
 use std::net::{Shutdown, TcpStream, ToSocketAddrs};
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering::Relaxed;
@@ -108,15 +107,18 @@ use std::thread;
 use std::time::Duration;
 
 use client::ClientConnection;
+use connection::Connection;
 use util::MessagesQueue;
 
 pub use common::{HTTPVersion, Header, HeaderField, Method, StatusCode};
+pub use connection::{ConfigListenAddr, ListenAddr, Listener};
 pub use request::{ReadWrite, Request};
 pub use response::{Response, ResponseBox};
 pub use test::TestRequest;
 
 mod client;
 mod common;
+mod connection;
 mod request;
 mod response;
 mod ssl;
@@ -137,7 +139,7 @@ pub struct Server {
     messages: Arc<MessagesQueue<Message>>,
 
     // result of TcpListener::local_addr()
-    listening_addr: net::SocketAddr,
+    listening_addr: ListenAddr,
 }
 
 enum Message {
@@ -169,12 +171,9 @@ pub struct IncomingRequests<'a> {
 
 /// Represents the parameters required to create a server.
 #[derive(Debug, Clone)]
-pub struct ServerConfig<A>
-where
-    A: ToSocketAddrs,
-{
-    /// The addresses to listen to.
-    pub addr: A,
+pub struct ServerConfig {
+    /// The addresses to try to listen to.
+    pub addr: ConfigListenAddr,
 
     /// If `Some`, then the server will use SSL to encode the communications.
     pub ssl: Option<SslConfig>,
@@ -196,7 +195,10 @@ impl Server {
     where
         A: ToSocketAddrs,
     {
-        Server::new(ServerConfig { addr, ssl: None })
+        Server::new(ServerConfig {
+            addr: ConfigListenAddr::from_socket_addrs(addr)?,
+            ssl: None,
+        })
     }
 
     /// Shortcut for an HTTPS server on a specific address.
@@ -210,17 +212,26 @@ impl Server {
         A: ToSocketAddrs,
     {
         Server::new(ServerConfig {
-            addr,
+            addr: ConfigListenAddr::from_socket_addrs(addr)?,
             ssl: Some(config),
         })
     }
 
+    #[cfg(unix)]
+    #[inline]
+    /// Shortcut for a UNIX socket server at a specific path
+    pub fn http_unix(
+        path: &std::path::Path,
+    ) -> Result<Server, Box<dyn Error + Send + Sync + 'static>> {
+        Server::new(ServerConfig {
+            addr: ConfigListenAddr::unix_from_path(path),
+            ssl: None,
+        })
+    }
+
     /// Builds a new server that listens on the specified address.
-    pub fn new<A>(config: ServerConfig<A>) -> Result<Server, Box<dyn Error + Send + Sync + 'static>>
-    where
-        A: ToSocketAddrs,
-    {
-        let listener = net::TcpListener::bind(config.addr)?;
+    pub fn new(config: ServerConfig) -> Result<Server, Box<dyn Error + Send + Sync + 'static>> {
+        let listener = config.addr.bind()?;
         Self::from_listener(listener, config.ssl)
     }
 
@@ -228,10 +239,11 @@ impl Server {
     ///
     /// This is useful if you've constructed TcpListener using some less usual method
     /// such as from systemd. For other cases, you probably want the `new()` function.
-    pub fn from_listener(
-        listener: net::TcpListener,
+    pub fn from_listener<L: Into<Listener>>(
+        listener: L,
         ssl_config: Option<SslConfig>,
     ) -> Result<Server, Box<dyn Error + Send + Sync + 'static>> {
+        let listener = listener.into();
         // building the "close" variable
         let close_trigger = Arc::new(AtomicBool::new(false));
 
@@ -354,8 +366,8 @@ impl Server {
 
     /// Returns the address the server is listening to.
     #[inline]
-    pub fn server_addr(&self) -> net::SocketAddr {
-        self.listening_addr
+    pub fn server_addr(&self) -> ListenAddr {
+        self.listening_addr.clone()
     }
 
     /// Returns the number of clients currently connected to the server.
@@ -410,9 +422,24 @@ impl Drop for Server {
     fn drop(&mut self) {
         self.close.store(true, Relaxed);
         // Connect briefly to ourselves to unblock the accept thread
-        let maybe_stream = TcpStream::connect(self.listening_addr);
+        let maybe_stream = match &self.listening_addr {
+            ListenAddr::IP(addr) => TcpStream::connect(addr).map(Connection::from),
+            #[cfg(unix)]
+            ListenAddr::Unix(addr) => {
+                // TODO: use connect_addr when its stabilized.
+                let path = addr.as_pathname().unwrap();
+                std::os::unix::net::UnixStream::connect(path).map(Connection::from)
+            }
+        };
         if let Ok(stream) = maybe_stream {
             let _ = stream.shutdown(Shutdown::Both);
+        }
+
+        #[cfg(unix)]
+        if let ListenAddr::Unix(addr) = &self.listening_addr {
+            if let Some(path) = addr.as_pathname() {
+                let _ = std::fs::remove_file(path);
+            }
         }
     }
 }

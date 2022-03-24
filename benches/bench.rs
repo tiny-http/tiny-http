@@ -13,7 +13,7 @@ use tiny_http::Method;
 // TODO: obtain time
 fn curl_bench() {
     let server = tiny_http::Server::http("0.0.0.0:0").unwrap();
-    let port = server.server_addr().port();
+    let port = server.server_addr().to_ip().unwrap().port();
     let num_requests = 10usize;
 
     match Command::new("curl")
@@ -31,7 +31,7 @@ fn curl_bench() {
 #[bench]
 fn sequential_requests(bencher: &mut test::Bencher) {
     let server = tiny_http::Server::http("0.0.0.0:0").unwrap();
-    let port = server.server_addr().port();
+    let port = server.server_addr().to_ip().unwrap().port();
 
     let mut stream = std::net::TcpStream::connect(("127.0.0.1", port)).unwrap();
 
@@ -51,7 +51,7 @@ fn parallel_requests(bencher: &mut test::Bencher) {
     fdlimit::raise_fd_limit();
 
     let server = tiny_http::Server::http("0.0.0.0:0").unwrap();
-    let port = server.server_addr().port();
+    let port = server.server_addr().to_ip().unwrap().port();
 
     bencher.iter(|| {
         let mut streams = Vec::new();

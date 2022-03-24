@@ -54,7 +54,7 @@ pub struct Request {
     // if this writer is empty, then the request has been answered
     response_writer: Option<Box<dyn Write + Send + 'static>>,
 
-    remote_addr: SocketAddr,
+    remote_addr: Option<SocketAddr>,
 
     // true if HTTPS, false if HTTP
     secure: bool,
@@ -132,7 +132,7 @@ pub fn new_request<R, W>(
     path: String,
     version: HTTPVersion,
     headers: Vec<Header>,
-    remote_addr: SocketAddr,
+    remote_addr: Option<SocketAddr>,
     mut source_data: R,
     writer: W,
 ) -> Result<Request, RequestCreationError>
@@ -282,12 +282,15 @@ impl Request {
 
     /// Returns the address of the client that sent this request.
     ///
+    /// The address is always `Some` for TCP listeners, but always `None` for UNIX listeners
+    /// (as the remote address of a UNIX client is almost always unnamed).
+    ///
     /// Note that this is gathered from the socket. If you receive the request from a proxy,
     /// this function will return the address of the proxy and not the address of the actual
     /// user.
     #[inline]
-    pub fn remote_addr(&self) -> &SocketAddr {
-        &self.remote_addr
+    pub fn remote_addr(&self) -> Option<&SocketAddr> {
+        self.remote_addr.as_ref()
     }
 
     /// Sends a response with a `Connection: upgrade` header, then turns the `Request` into a `Stream`.
@@ -476,7 +479,7 @@ impl fmt::Debug for Request {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
         write!(
             formatter,
-            "Request({} {} from {})",
+            "Request({} {} from {:?})",
             self.method, self.path, self.remote_addr
         )
     }

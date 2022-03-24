@@ -1,12 +1,13 @@
 use std::io::Result as IoResult;
 use std::io::{Read, Write};
-use std::net::{Shutdown, SocketAddr, TcpStream};
+use std::net::{Shutdown, SocketAddr};
 
+use crate::connection::Connection;
 #[cfg(any(feature = "ssl-openssl", feature = "ssl-rustls"))]
 use crate::ssl::SslStream;
 
 pub(crate) enum Stream {
-    Http(TcpStream),
+    Http(Connection),
     #[cfg(any(feature = "ssl-openssl", feature = "ssl-rustls"))]
     Https(SslStream),
 }
@@ -21,8 +22,8 @@ impl Clone for Stream {
     }
 }
 
-impl From<TcpStream> for Stream {
-    fn from(tcp_stream: TcpStream) -> Self {
+impl From<Connection> for Stream {
+    fn from(tcp_stream: Connection) -> Self {
         Stream::Http(tcp_stream)
     }
 }
@@ -36,7 +37,7 @@ impl Stream {
         }
     }
 
-    fn peer_addr(&mut self) -> IoResult<SocketAddr> {
+    fn peer_addr(&mut self) -> IoResult<Option<SocketAddr>> {
         match self {
             Stream::Http(tcp_stream) => tcp_stream.peer_addr(),
             #[cfg(any(feature = "ssl-openssl", feature = "ssl-rustls"))]
@@ -117,7 +118,7 @@ impl RefinedTcpStream {
         self.stream.secure()
     }
 
-    pub(crate) fn peer_addr(&mut self) -> IoResult<SocketAddr> {
+    pub(crate) fn peer_addr(&mut self) -> IoResult<Option<SocketAddr>> {
         self.stream.peer_addr()
     }
 }

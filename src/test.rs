@@ -70,7 +70,7 @@ impl From<TestRequest> for Request {
             mock.path.to_string(),
             mock.http_version,
             mock.headers,
-            mock.remote_addr,
+            Some(mock.remote_addr),
             mock.body.as_bytes(),
             std::io::sink(),
         )

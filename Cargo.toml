@@ -20,7 +20,7 @@ ssl-rustls = ["rustls", "rustls-pemfile", "zeroize"]
 ascii = "1.0"
 chunked_transfer = "1"
 url = "2"
-log = "0.4"
+log = "0.4.4"
 time = { version = "0.3", features = [ "std", "formatting", "macros", "parsing" ] }
 
 openssl = { version = "0.10", optional = true }

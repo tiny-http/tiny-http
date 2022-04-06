@@ -45,7 +45,7 @@ pub struct TestRequest {
     // true if HTTPS, false if HTTP
     secure: bool,
     method: Method,
-    path: &'static str,
+    path: String,
     http_version: HTTPVersion,
     headers: Vec<Header>,
 }
@@ -67,7 +67,7 @@ impl From<TestRequest> for Request {
         new_request(
             mock.secure,
             mock.method,
-            mock.path.to_string(),
+            mock.path,
             mock.http_version,
             mock.headers,
             Some(mock.remote_addr),
@@ -85,7 +85,7 @@ impl Default for TestRequest {
             remote_addr: "127.0.0.1:23456".parse().unwrap(),
             secure: false,
             method: Method::Get,
-            path: "/",
+            path: "/".to_string(),
             http_version: HTTPVersion::from((1, 1)),
             headers: Vec::new(),
         }
@@ -112,8 +112,8 @@ impl TestRequest {
         self.method = method;
         self
     }
-    pub fn with_path(mut self, path: &'static str) -> Self {
-        self.path = path;
+    pub fn with_path(mut self, path: &str) -> Self {
+        self.path = path.to_string();
         self
     }
     pub fn with_http_version(mut self, version: HTTPVersion) -> Self {

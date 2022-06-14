@@ -26,7 +26,7 @@ time = { version = "0.3", features = [ "std", "formatting", "macros", "parsing" 
 openssl = { version = "0.10", optional = true }
 rustls = { version = "0.20", optional = true }
 rustls-pemfile = { version = "0.2.1", optional = true }
-zeroize = { version = "1.5.2", optional = true }
+zeroize = { version = "1", optional = true }
 
 [dev-dependencies]
 rustc-serialize = "0.3"

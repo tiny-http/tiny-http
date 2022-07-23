@@ -2,7 +2,6 @@ use ascii::{AsciiStr, AsciiString, FromAsciiError};
 use std::cmp::Ordering;
 use std::fmt::{self, Display, Formatter};
 use std::str::FromStr;
-use time::OffsetDateTime;
 
 /// Status code of a request or response.
 #[derive(Eq, PartialEq, Copy, Clone, Debug, Ord, PartialOrd)]
@@ -394,41 +393,11 @@ impl From<(u8, u8)> for HTTPVersion {
     }
 }
 
-/// Represents the current date, expressed in RFC 7231 (IMF-fixdate) format, e.g. Sun, 06 Nov 1994 08:49:37 GMT
-#[allow(clippy::upper_case_acronyms)]
-pub struct HTTPDate {
-    d: OffsetDateTime,
-}
-
-impl HTTPDate {
-    pub fn new() -> HTTPDate {
-        HTTPDate {
-            d: OffsetDateTime::now_utc(),
-        }
-    }
-}
-
-/// Format description for emitting a [`time::PrimitiveDateTime`] or [`time::OffsetDateTime`] in the format required by RFC7231
-///
-/// `format_description!` is a procedural macro, but since `time-rs` doesn't provide any other way
-/// to construct the format description slice in a `const` context we haven't much choice.
-const IMF_FIXDATE_FORMAT: &[time::format_description::FormatItem<'static>] = time::macros::format_description!(
-    "[weekday repr:short], [day padding:zero] [month repr:short] [year repr:full] [hour repr:24 padding:zero]:[minute padding:zero]:[second padding:zero] GMT"
-);
-
-impl ToString for HTTPDate {
-    fn to_string(&self) -> String {
-        self.d
-            .format(&IMF_FIXDATE_FORMAT)
-            .expect("Cannot fail with this format under any reasonable conditions.")
-    }
-}
-
 #[cfg(test)]
 mod test {
     use super::Header;
-    use crate::common::HTTPDate;
-    use time::OffsetDateTime;
+    use httpdate::HttpDate;
+    use std::time::{Duration, SystemTime};
 
     #[test]
     fn test_parse_header() {
@@ -442,9 +411,7 @@ mod test {
 
     #[test]
     fn formats_date_correctly() {
-        let http_date = HTTPDate {
-            d: OffsetDateTime::from_unix_timestamp(420895020).unwrap(),
-        };
+        let http_date = HttpDate::from(SystemTime::UNIX_EPOCH + Duration::from_secs(420895020));
 
         assert_eq!(http_date.to_string(), "Wed, 04 May 1983 11:17:00 GMT")
     }

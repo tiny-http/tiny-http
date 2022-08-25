@@ -1,4 +1,5 @@
 use crate::common::{HTTPVersion, Header, StatusCode};
+use crate::BufferingMode;
 use httpdate::HttpDate;
 use std::cmp::Ordering;
 use std::sync::mpsc::Receiver;
@@ -43,6 +44,7 @@ pub struct Response<R> {
     headers: Vec<Header>,
     data_length: Option<usize>,
     chunked_threshold: Option<usize>,
+    buffering: BufferingMode,
 }
 
 /// A `Response` without a template parameter.
@@ -116,6 +118,7 @@ fn choose_transfer_encoding(
     entity_length: &Option<usize>,
     has_additional_headers: bool,
     chunked_threshold: usize,
+    buffering: BufferingMode,
 ) -> TransferEncoding {
     use crate::util;
 
@@ -166,6 +169,12 @@ fn choose_transfer_encoding(
         return user_request;
     }
 
+    // unbuffered messages must use chunked transfer encoding, to send messages as they
+    // are produced
+    if let BufferingMode::Unbuffered = buffering {
+        return TransferEncoding::Chunked;
+    }
+
     // if we have additional headers, using chunked
     if has_additional_headers {
         return TransferEncoding::Chunked;
@@ -206,6 +215,7 @@ where
             headers: Vec::with_capacity(16),
             data_length,
             chunked_threshold: None,
+            buffering: BufferingMode::Buffered,
         };
 
         for h in headers {
@@ -228,6 +238,14 @@ where
     /// it is wanted or when there is no `Content-Length`.
     pub fn with_chunked_threshold(mut self, length: usize) -> Response<R> {
         self.chunked_threshold = Some(length);
+        self
+    }
+
+    /// Define if the output should be buffered. If the output in unbuffered,
+    /// every write to the socket will be followed by a flush, and the output
+    /// will be chunked.
+    pub fn with_buffering(mut self, buffering: BufferingMode) -> Self {
+        self.buffering = buffering;
         self
     }
 
@@ -319,6 +337,7 @@ where
             status_code: self.status_code,
             data_length,
             chunked_threshold: self.chunked_threshold,
+            buffering: BufferingMode::Buffered,
         }
     }
 
@@ -346,6 +365,7 @@ where
             &self.data_length,
             false, /* TODO */
             self.chunked_threshold(),
+            self.buffering,
         ));
 
         // add `Date` if not in the headers
@@ -433,7 +453,11 @@ where
                 Some(TransferEncoding::Chunked) => {
                     use chunked_transfer::Encoder;
 
-                    let mut writer = Encoder::new(writer);
+                    let mut writer = if let BufferingMode::Unbuffered = self.buffering {
+                        Encoder::with_flush_after_write(writer)
+                    } else {
+                        Encoder::new(writer)
+                    };
                     io::copy(&mut reader, &mut writer)?;
                 }
 
@@ -481,6 +505,7 @@ where
             headers: self.headers,
             data_length: self.data_length,
             chunked_threshold: self.chunked_threshold,
+            buffering: self.buffering,
         }
     }
 }
@@ -569,6 +594,7 @@ impl Clone for Response<io::Empty> {
             headers: self.headers.clone(),
             data_length: self.data_length,
             chunked_threshold: self.chunked_threshold,
+            buffering: self.buffering,
         }
     }
 }

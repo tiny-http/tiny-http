@@ -19,9 +19,8 @@ ssl-rustls = ["rustls", "rustls-pemfile", "zeroize"]
 [dependencies]
 ascii = "1.0"
 chunked_transfer = "1"
-url = "2"
 log = "0.4.4"
-time = { version = "0.3", features = [ "std", "formatting", "macros", "parsing" ] }
+httpdate = "1.0.2"
 
 openssl = { version = "0.10", optional = true }
 rustls = { version = "0.20", optional = true }

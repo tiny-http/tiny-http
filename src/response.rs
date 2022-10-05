@@ -1,5 +1,5 @@
-use crate::common::{HTTPDate, HTTPVersion, Header, StatusCode};
-
+use crate::common::{HTTPVersion, Header, StatusCode};
+use httpdate::HttpDate;
 use std::cmp::Ordering;
 use std::sync::mpsc::Receiver;
 
@@ -9,6 +9,7 @@ use std::io::{self, Cursor, Read, Write};
 use std::fs::File;
 
 use std::str::FromStr;
+use std::time::SystemTime;
 
 /// Object representing an HTTP response whose purpose is to be given to a `Request`.
 ///
@@ -71,7 +72,7 @@ impl FromStr for TransferEncoding {
 
 /// Builds a Date: header with the current date.
 fn build_date_header() -> Header {
-    let d = HTTPDate::new();
+    let d = HttpDate::from(SystemTime::now());
     Header::from_bytes(&b"Date"[..], &d.to_string().into_bytes()[..]).unwrap()
 }
 

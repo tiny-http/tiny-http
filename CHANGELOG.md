@@ -1,5 +1,27 @@
 # Changes
 
+## 0.12.0
+* Bumped the minimum compiler version tested by CI to 1.56 - this is necessary due to an increasing number of dependencies
+  introducing Cargo manifest features only supported on newer versions of Rust.
+
+* [Add support for UNIX sockets](https://github.com/tiny-http/tiny-http/pull/224)
+
+  Thanks to @ColonelThirtyTwo for adding support for binding to UNIX sockets when creating a tiny-http server. This change
+  makes a few small breaking API modifications, if you are constructing `ServerConfig` manually you will need to use the new `ListenAddr`
+  type rather than directly supplying a `net::SocketAddr`. Likewise `Server::server_addr()` will now return an enum that can
+  represent either a TCP socket or a UNIX socket.
+
+  Finally `Request::remote_addr()` now returns an `Option<&SocketAddr>` as UNIX sockets don't ever have a remote host.
+
+* [Reduce required dependencies by switching to `httpdate`](https://github.com/tiny-http/tiny-http/pull/228)
+
+  @esheppa replaced our internal HTTPDate type with the `httpdate` library (used extensively in the community by Hyper, Tokio and others)
+  which reduces our baseline dependency tree from 18 crates to 5!
+
+* `TestRequest::path` no longer has a `'static` bound, allowing for fuzzers to generate test request paths at runtime.
+
+* Unpinned `zeroize` so it can float around any stable `^1` version.
+
 ## 0.11.0
 
 * [Add support for Rustls](https://github.com/tiny-http/tiny-http/pull/218)

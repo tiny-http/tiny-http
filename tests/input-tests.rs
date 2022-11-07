@@ -129,7 +129,7 @@ fn too_long_header_field() {
     let mut client = support::new_client_to_hello_world_server();
 
     // in limit
-    write!(client, 
+    write!(client,
         "GET / HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\nContent-Type: text/plain; charset=utf8\r\nContent-Length: 5\r\nX-A-Too-Long-Field: {}\r\n\r\nhello", &just_ok_buf
     ).unwrap();
 
@@ -141,7 +141,7 @@ fn too_long_header_field() {
     let mut client = support::new_client_to_hello_world_server();
 
     // one more byte (1)
-    write!(client, 
+    write!(client,
         "GET / HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\nContent-Type: text/plain; charset=utf8\r\nContent-Length: 5\r\nX-A-Too-Long-Field: {}1\r\n\r\nhello", &just_ok_buf
     ).unwrap();
 
@@ -149,7 +149,6 @@ fn too_long_header_field() {
     client.read_to_string(&mut content).unwrap();
     assert!(&content[9..].starts_with("431 Request Header Fields Too Large")); // 431 status code
 }
-
 
 #[test]
 fn too_long_header() {
@@ -159,13 +158,18 @@ fn too_long_header() {
     let mut client = support::new_client_to_hello_world_server();
 
     // in limit
-    write!(client, 
+    write!(client,
         "GET / HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\nContent-Type: text/plain; charset=utf8\r\nContent-Length: 5\r\n"
     ).unwrap();
     for n in 0..7 {
         write!(client, "X-A-Too-Long-Field-{}: {}\r\n", n, &data).unwrap();
     }
-    write!(client, "X-A-Too-Long-Field-7: {}\r\n\r\nhello", data.split_at(747).0).unwrap();
+    write!(
+        client,
+        "X-A-Too-Long-Field-7: {}\r\n\r\nhello",
+        data.split_at(747).0
+    )
+    .unwrap();
 
     let mut content = String::new();
     client.read_to_string(&mut content).unwrap();
@@ -175,13 +179,18 @@ fn too_long_header() {
     let mut client = support::new_client_to_hello_world_server();
 
     // one more byte (748)
-    write!(client, 
+    write!(client,
         "GET / HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\nContent-Type: text/plain; charset=utf8\r\nContent-Length: 5\r\n"
     ).unwrap();
     for n in 0..7 {
         write!(client, "X-A-Too-Long-Field-{}: {}\r\n", n, &data).unwrap();
     }
-    write!(client, "X-A-Too-Long-Field-7: {}\r\n\r\nhello", data.split_at(748).0).unwrap();
+    write!(
+        client,
+        "X-A-Too-Long-Field-7: {}\r\n\r\nhello",
+        data.split_at(748).0
+    )
+    .unwrap();
 
     let mut content = String::new();
     client.read_to_string(&mut content).unwrap();

@@ -1,15 +1,15 @@
-use ascii::AsciiString;
-
+use std::convert::TryFrom;
 use std::io::Error as IoError;
 use std::io::Result as IoResult;
 use std::io::{BufReader, BufWriter, ErrorKind, Read};
-
 use std::net::SocketAddr;
-use std::str::FromStr;
+
+use ascii::{AsciiChar, AsciiStr, AsciiString};
 
 use crate::common::{HTTPVersion, Method};
 use crate::util::RefinedTcpStream;
 use crate::util::{SequentialReader, SequentialReaderBuilder, SequentialWriterBuilder};
+use crate::Header;
 use crate::Request;
 
 /// A ClientConnection is an object that will store a socket to a client
@@ -77,6 +77,9 @@ impl ClientConnection {
     ///
     /// Reads until `CRLF` is reached. The next read will start
     ///  at the first byte of the new line.
+    ///
+    /// The overall header limit is 8K.
+    /// The limit per header line is 2K.
     fn read_next_line(&mut self) -> IoResult<AsciiString> {
         let mut buf = Vec::new();
         let mut prev_byte_was_cr = false;
@@ -97,21 +100,37 @@ impl ClientConnection {
 
             prev_byte_was_cr = byte == b'\r';
 
+            if buf.len() >= 2_048 {
+                return Err(IoError::new(
+                    ErrorKind::InvalidInput,
+                    "Header field too large",
+                ));
+            }
             buf.push(byte);
         }
     }
 
     /// Reads a request from the stream.
     /// Blocks until the header has been read.
+    ///
+    /// The overall header limit is 8K.
+    /// The limit per header line is 2K.
     fn read(&mut self) -> Result<Request, ReadError> {
         let (method, path, version, headers) = {
+            let mut header_limit_rest = 8_192_usize;
+
             // reading the request line
             let (method, path, version) = {
                 let line = self.read_next_line().map_err(ReadError::ReadIoError)?;
 
-                parse_request_line(
-                    line.as_str().trim(), // TODO: remove this conversion
-                )?
+                header_limit_rest = header_limit_rest.checked_sub(line.len()).ok_or_else(|| {
+                    ReadError::ReadIoError(IoError::new(
+                        ErrorKind::InvalidInput,
+                        "Headers too large",
+                    ))
+                })?;
+
+                parse_request_line(line.trim())?
             };
 
             // getting all headers
@@ -120,11 +139,21 @@ impl ClientConnection {
                 loop {
                     let line = self.read_next_line().map_err(ReadError::ReadIoError)?;
 
+                    header_limit_rest =
+                        header_limit_rest.checked_sub(line.len()).ok_or_else(|| {
+                            ReadError::ReadIoError(IoError::new(
+                                ErrorKind::InvalidInput,
+                                "Headers too large",
+                            ))
+                        })?;
+
+                    let line = line.trim();
+
                     if line.is_empty() {
                         break;
-                    };
-                    headers.push(match FromStr::from_str(line.as_str().trim()) {
-                        // TODO: remove this conversion
+                    }
+
+                    headers.push(match Header::try_from(line) {
                         Ok(h) => h,
                         _ => return Err(ReadError::WrongHeader(version)),
                     });
@@ -147,7 +176,7 @@ impl ClientConnection {
         let request = crate::request::new_request(
             self.secure,
             method,
-            path,
+            path.to_string(),
             version.clone(),
             headers,
             *self.remote_addr.as_ref().unwrap(),
@@ -220,6 +249,20 @@ impl Iterator for ClientConnection {
                     return None; // TODO: should be recoverable, but needs handling in case of body
                 }
 
+                Err(ReadError::ReadIoError(ref err)) if err.kind() == ErrorKind::InvalidInput => {
+                    if err.to_string().contains("too large") {
+                        // headers too large
+                        let writer = self.sink.next().unwrap();
+                        let response = Response::new_empty(StatusCode(431));
+                        response
+                            .raw_print(writer, HTTPVersion(1, 1), &[], false, None)
+                            .ok();
+                        return None; // closing the connection
+                    } else {
+                        return None;
+                    }
+                }
+
                 Err(ReadError::ReadIoError(_)) => return None,
 
                 Ok(rq) => rq,
@@ -266,8 +309,8 @@ impl Iterator for ClientConnection {
 }
 
 /// Parses a "HTTP/1.1" string.
-fn parse_http_version(version: &str) -> Result<HTTPVersion, ReadError> {
-    let (major, minor) = match version {
+fn parse_http_version(version: &AsciiStr) -> Result<HTTPVersion, ReadError> {
+    let (major, minor) = match version.as_str() {
         "HTTP/0.9" => (0, 9),
         "HTTP/1.0" => (1, 0),
         "HTTP/1.1" => (1, 1),
@@ -281,10 +324,10 @@ fn parse_http_version(version: &str) -> Result<HTTPVersion, ReadError> {
 
 /// Parses the request line of the request.
 /// eg. GET / HTTP/1.1
-fn parse_request_line(line: &str) -> Result<(Method, String, HTTPVersion), ReadError> {
-    let mut parts = line.split(' ');
+fn parse_request_line(line: &AsciiStr) -> Result<(Method, AsciiString, HTTPVersion), ReadError> {
+    let mut parts = line.split(AsciiChar::Space);
 
-    let method = parts.next().and_then(|w| w.parse().ok());
+    let method = parts.next().map(Method::from);
     let path = parts.next().map(ToOwned::to_owned);
     let version = parts.next().and_then(|w| parse_http_version(w).ok());
 
@@ -295,15 +338,18 @@ fn parse_request_line(line: &str) -> Result<(Method, String, HTTPVersion), ReadE
 
 #[cfg(test)]
 mod test {
+    use ascii::AsAsciiStr;
+
     #[test]
     fn test_parse_request_line() {
-        let (method, path, ver) = super::parse_request_line("GET /hello HTTP/1.1").unwrap();
+        let (method, path, ver) =
+            super::parse_request_line("GET /hello HTTP/1.1".as_ascii_str().unwrap()).unwrap();
 
         assert!(method == crate::Method::Get);
         assert!(path == "/hello");
         assert!(ver == crate::common::HTTPVersion(1, 1));
 
-        assert!(super::parse_request_line("GET /hello").is_err());
-        assert!(super::parse_request_line("qsd qsd qsd").is_err());
+        assert!(super::parse_request_line("GET /hello".as_ascii_str().unwrap()).is_err());
+        assert!(super::parse_request_line("qsd qsd qsd".as_ascii_str().unwrap()).is_err());
     }
 }

@@ -121,7 +121,19 @@ impl ClientConnection {
 
             // reading the request line
             let (method, path, version) = {
-                let line = self.read_next_line().map_err(ReadError::ReadIoError)?;
+                let line = self.read_next_line().map_err(|err| {
+                    ReadError::ReadIoError(match err.kind() {
+                        ErrorKind::InvalidInput => {
+                            if err.to_string().contains("too large") {
+                                // use 414 URI Too Long for request line ("large" is needed here)
+                                IoError::new(ErrorKind::InvalidInput, "URI too large")
+                            } else {
+                                err
+                            }
+                        }
+                        _ => err,
+                    })
+                })?;
 
                 header_limit_rest = header_limit_rest.checked_sub(line.len()).ok_or_else(|| {
                     ReadError::ReadIoError(IoError::new(
@@ -250,10 +262,16 @@ impl Iterator for ClientConnection {
                 }
 
                 Err(ReadError::ReadIoError(ref err)) if err.kind() == ErrorKind::InvalidInput => {
-                    if err.to_string().contains("too large") {
-                        // headers too large
+                    let err_s = err.to_string();
+                    if err_s.contains("too large") {
+                        let status = StatusCode(if err_s.contains("URI") {
+                            414u16 // URI too long
+                        } else {
+                            431u16 // headers too large
+                        });
+
                         let writer = self.sink.next().unwrap();
-                        let response = Response::new_empty(StatusCode(431));
+                        let response = Response::new_empty(status);
                         response
                             .raw_print(writer, HTTPVersion(1, 1), &[], false, None)
                             .ok();

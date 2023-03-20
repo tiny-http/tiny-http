@@ -11,6 +11,13 @@ use std::fs::File;
 use std::str::FromStr;
 use std::time::SystemTime;
 
+use lazy_static::lazy_static;
+
+lazy_static! {
+    // Declare static variable to hold header value 
+    static ref DATE_HEADER: Header = build_date_header();
+}
+
 /// Object representing an HTTP response whose purpose is to be given to a `Request`.
 ///
 /// Some headers cannot be changed. Trying to define the value
@@ -72,8 +79,16 @@ impl FromStr for TransferEncoding {
 
 /// Builds a Date: header with the current date.
 fn build_date_header() -> Header {
+    // compute the date value
     let d = HttpDate::from(SystemTime::now());
+    
+    // Build the header using the computed date
     Header::from_bytes(&b"Date"[..], &d.to_string().into_bytes()[..]).unwrap()
+}
+
+// Expose a function to get the cached header
+fn get_date_header() -> &'static Header { 
+    &DATE_HEADER
 }
 
 fn write_message_header<W>(

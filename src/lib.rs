@@ -170,6 +170,44 @@ pub struct IncomingRequests<'a> {
     server: &'a Server,
 }
 
+/// Control buffering in a data stream.
+#[derive(Debug, Copy, Clone)]
+pub enum BufferingMode {
+    /// Buffer the messages. This is the default.
+    Buffered,
+    /// Do not buffer the messages, this prevent caching but will probably incur a performance cost.
+    Unbuffered,
+}
+
+impl Default for BufferingMode {
+    fn default() -> Self {
+        BufferingMode::Buffered
+    }
+}
+
+/// Advanced server settings.
+/// In order to retain the ability to add options later while preserving the
+/// API, this is an "opaque" struct, to be manipulated through the `new` and
+/// `with_*` configuration methods.
+#[derive(Default, Debug, Clone)]
+pub struct ServerConfigAdvanced {
+    /// Control buffering on the server->client path. The default value is
+    /// `BufferingMode::Buffered`.
+    writer_buffering: BufferingMode,
+}
+
+impl ServerConfigAdvanced {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Change the buffering mode of the writer returned with each message.
+    pub fn with_writer_buffering_mode(mut self, mode: BufferingMode) -> Self {
+        self.writer_buffering = mode;
+        self
+    }
+}
+
 /// Represents the parameters required to create a server.
 #[derive(Debug, Clone)]
 pub struct ServerConfig {
@@ -178,6 +216,9 @@ pub struct ServerConfig {
 
     /// If `Some`, then the server will use SSL to encode the communications.
     pub ssl: Option<SslConfig>,
+
+    /// Advanced server settings.
+    pub advanced: ServerConfigAdvanced,
 }
 
 /// Configuration of the server for SSL.
@@ -199,6 +240,7 @@ impl Server {
         Server::new(ServerConfig {
             addr: ConfigListenAddr::from_socket_addrs(addr)?,
             ssl: None,
+            advanced: ServerConfigAdvanced::new(),
         })
     }
 
@@ -215,6 +257,7 @@ impl Server {
         Server::new(ServerConfig {
             addr: ConfigListenAddr::from_socket_addrs(addr)?,
             ssl: Some(config),
+            advanced: ServerConfigAdvanced::new(),
         })
     }
 
@@ -227,13 +270,14 @@ impl Server {
         Server::new(ServerConfig {
             addr: ConfigListenAddr::unix_from_path(path),
             ssl: None,
+            advanced: ServerConfigAdvanced::new(),
         })
     }
 
     /// Builds a new server that listens on the specified address.
     pub fn new(config: ServerConfig) -> Result<Server, Box<dyn Error + Send + Sync + 'static>> {
         let listener = config.addr.bind()?;
-        Self::from_listener(listener, config.ssl)
+        Self::from_listener(listener, config)
     }
 
     /// Builds a new server using the specified TCP listener.
@@ -242,7 +286,7 @@ impl Server {
     /// such as from systemd. For other cases, you probably want the `new()` function.
     pub fn from_listener<L: Into<Listener>>(
         listener: L,
-        ssl_config: Option<SslConfig>,
+        config: ServerConfig,
     ) -> Result<Server, Box<dyn Error + Send + Sync + 'static>> {
         let listener = listener.into();
         // building the "close" variable
@@ -265,7 +309,7 @@ impl Server {
         #[cfg(any(feature = "ssl-openssl", feature = "ssl-rustls"))]
         type SslContext = crate::ssl::SslContextImpl;
         let ssl: Option<SslContext> = {
-            match ssl_config {
+            match config.ssl {
                 #[cfg(any(feature = "ssl-openssl", feature = "ssl-rustls"))]
                 Some(config) => Some(SslContext::from_pem(
                     config.certificate,
@@ -286,6 +330,7 @@ impl Server {
 
         let inside_close_trigger = close_trigger.clone();
         let inside_messages = messages.clone();
+        let writer_buffering = config.advanced.writer_buffering;
         thread::spawn(move || {
             // a tasks pool is used to dispatch the connections into threads
             let tasks_pool = util::TaskPool::new();
@@ -312,7 +357,11 @@ impl Server {
                             Some(ref _ssl) => unreachable!(),
                         };
 
-                        Ok(ClientConnection::new(write_closable, read_closable))
+                        Ok(ClientConnection::new(
+                            write_closable,
+                            read_closable,
+                            writer_buffering,
+                        ))
                     }
                     Err(e) => Err(e),
                 };

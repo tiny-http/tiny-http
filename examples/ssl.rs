@@ -1,11 +1,19 @@
 extern crate tiny_http;
 
-#[cfg(not(any(feature = "ssl-openssl", feature = "ssl-rustls")))]
+#[cfg(not(any(
+    feature = "ssl-openssl",
+    feature = "ssl-rustls",
+    feature = "ssl-native-tls"
+)))]
 fn main() {
     println!("This example requires one of the supported `ssl-*` features to be enabled");
 }
 
-#[cfg(any(feature = "ssl-openssl", feature = "ssl-rustls"))]
+#[cfg(any(
+    feature = "ssl-openssl",
+    feature = "ssl-rustls",
+    feature = "ssl-native-tls"
+))]
 fn main() {
     use tiny_http::{Response, Server};
 

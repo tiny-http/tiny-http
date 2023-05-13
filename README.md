@@ -14,7 +14,7 @@ What does **tiny-http** handle?
  - Accepting and managing connections to the clients
  - Parsing requests
  - Requests pipelining
- - HTTPS (using either OpenSSL or Rustls)
+ - HTTPS (using either OpenSSL, Rustls or native-tls)
  - Transfer-Encoding and Content-Encoding
  - Turning user input (eg. POST input) into a contiguous UTF-8 string (**not implemented yet**)
  - Ranges (**not implemented yet**)

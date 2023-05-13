@@ -10,6 +10,7 @@ jobs:
           - default
           - ssl-openssl
           - ssl-rustls
+          - ssl-native-tls
     steps:
       - uses: actions/checkout@v2
       - name: Install stable toolchain
@@ -43,6 +44,7 @@ jobs:
           - default
           - ssl-openssl
           - ssl-rustls
+          - ssl-native-tls
     steps:
       - uses: actions/checkout@v2
       - name: Install toolchain

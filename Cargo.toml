@@ -9,12 +9,14 @@ keywords = ["http", "server", "web"]
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/tiny-http/tiny-http"
 edition = "2018"
+rust-version = "1.57"
 
 [features]
 default = ["log"]
 ssl = ["ssl-openssl"]
 ssl-openssl = ["openssl", "zeroize"]
 ssl-rustls = ["rustls", "rustls-pemfile", "zeroize"]
+ssl-native-tls = ["native-tls", "zeroize"]
 
 [dependencies]
 ascii = "1.0"
@@ -26,6 +28,7 @@ openssl = { version = "0.10", optional = true }
 rustls = { version = "0.20", optional = true }
 rustls-pemfile = { version = "0.2.1", optional = true }
 zeroize = { version = "1", optional = true }
+native-tls = { version = "0.2", optional = true }
 
 [dev-dependencies]
 rustc-serialize = "0.3"

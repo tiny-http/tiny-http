@@ -91,7 +91,11 @@
 #![deny(rust_2018_idioms)]
 #![allow(clippy::match_like_matches_macro)]
 
-#[cfg(any(feature = "ssl-openssl", feature = "ssl-rustls"))]
+#[cfg(any(
+    feature = "ssl-openssl",
+    feature = "ssl-rustls",
+    feature = "ssl-native-tls"
+))]
 use zeroize::Zeroizing;
 
 use std::error::Error;
@@ -203,7 +207,11 @@ impl Server {
     }
 
     /// Shortcut for an HTTPS server on a specific address.
-    #[cfg(any(feature = "ssl-openssl", feature = "ssl-rustls"))]
+    #[cfg(any(
+        feature = "ssl-openssl",
+        feature = "ssl-rustls",
+        feature = "ssl-native-tls"
+    ))]
     #[inline]
     pub fn https<A>(
         addr: A,
@@ -256,22 +264,42 @@ impl Server {
         };
 
         // building the SSL capabilities
-        #[cfg(all(feature = "ssl-openssl", feature = "ssl-rustls"))]
+        #[cfg(any(
+            all(feature = "ssl-openssl", feature = "ssl-rustls"),
+            all(feature = "ssl-openssl", feature = "ssl-native-tls"),
+            all(feature = "ssl-native-tls", feature = "ssl-rustls"),
+        ))]
         compile_error!(
-            "Features 'ssl-openssl' and 'ssl-rustls' must not be enabled at the same time"
+            "Only one feature from 'ssl-openssl', 'ssl-rustls', 'ssl-native-tls' can be enabled at the same time"
         );
-        #[cfg(not(any(feature = "ssl-openssl", feature = "ssl-rustls")))]
+        #[cfg(not(any(
+            feature = "ssl-openssl",
+            feature = "ssl-rustls",
+            feature = "ssl-native-tls"
+        )))]
         type SslContext = ();
-        #[cfg(any(feature = "ssl-openssl", feature = "ssl-rustls"))]
+        #[cfg(any(
+            feature = "ssl-openssl",
+            feature = "ssl-rustls",
+            feature = "ssl-native-tls"
+        ))]
         type SslContext = crate::ssl::SslContextImpl;
         let ssl: Option<SslContext> = {
             match ssl_config {
-                #[cfg(any(feature = "ssl-openssl", feature = "ssl-rustls"))]
+                #[cfg(any(
+                    feature = "ssl-openssl",
+                    feature = "ssl-rustls",
+                    feature = "ssl-native-tls"
+                ))]
                 Some(config) => Some(SslContext::from_pem(
                     config.certificate,
                     Zeroizing::new(config.private_key),
                 )?),
-                #[cfg(not(any(feature = "ssl-openssl", feature = "ssl-rustls")))]
+                #[cfg(not(any(
+                    feature = "ssl-openssl",
+                    feature = "ssl-rustls",
+                    feature = "ssl-native-tls"
+                )))]
                 Some(_) => return Err(
                     "Building a server with SSL requires enabling the `ssl` feature in tiny-http"
                         .into(),
@@ -297,7 +325,11 @@ impl Server {
                         use util::RefinedTcpStream;
                         let (read_closable, write_closable) = match ssl {
                             None => RefinedTcpStream::new(sock),
-                            #[cfg(any(feature = "ssl-openssl", feature = "ssl-rustls"))]
+                            #[cfg(any(
+                                feature = "ssl-openssl",
+                                feature = "ssl-rustls",
+                                feature = "ssl-native-tls"
+                            ))]
                             Some(ref ssl) => {
                                 // trying to apply SSL over the connection
                                 // if an error occurs, we just close the socket and resume listening
@@ -308,7 +340,11 @@ impl Server {
 
                                 RefinedTcpStream::new(sock)
                             }
-                            #[cfg(not(any(feature = "ssl-openssl", feature = "ssl-rustls")))]
+                            #[cfg(not(any(
+                                feature = "ssl-openssl",
+                                feature = "ssl-rustls",
+                                feature = "ssl-native-tls"
+                            )))]
                             Some(ref _ssl) => unreachable!(),
                         };
 

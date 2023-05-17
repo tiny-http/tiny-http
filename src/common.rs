@@ -1,5 +1,6 @@
-use ascii::{AsciiStr, AsciiString, FromAsciiError};
+use ascii::{AsAsciiStr, AsciiChar, AsciiStr, AsciiString, FromAsciiError};
 use std::cmp::Ordering;
+use std::convert::TryFrom;
 use std::fmt::{self, Display, Formatter};
 use std::str::FromStr;
 
@@ -200,6 +201,21 @@ impl Display for Header {
     }
 }
 
+impl TryFrom<&AsciiStr> for Header {
+    type Error = ();
+
+    fn try_from(input: &AsciiStr) -> Result<Self, Self::Error> {
+        let field_s = input.split(AsciiChar::Colon).next();
+        let field = field_s
+            .and_then(|f| HeaderField::try_from(f).ok())
+            .ok_or(())?;
+
+        let value = input[(field_s.unwrap().len() + 1)..].trim().to_owned();
+
+        Ok(Header { field, value })
+    }
+}
+
 /// Field of a header (eg. `Content-Type`, `Content-Length`, etc.)
 ///
 /// Comparison between two `HeaderField`s ignores case.
@@ -232,6 +248,19 @@ impl FromStr for HeaderField {
         } else {
             AsciiString::from_ascii(s).map(HeaderField).map_err(|_| ())
         }
+    }
+}
+
+impl TryFrom<&AsciiStr> for HeaderField {
+    type Error = ();
+
+    fn try_from(asciistr: &AsciiStr) -> Result<Self, Self::Error> {
+        for asciichar in asciistr {
+            if *asciichar == AsciiChar::Space {
+                return Err(());
+            }
+        }
+        Ok(Self(asciistr.to_owned()))
     }
 }
 
@@ -318,8 +347,8 @@ impl FromStr for Method {
             "TRACE" => Method::Trace,
             "PATCH" => Method::Patch,
             s => {
-                let ascii_string = AsciiString::from_ascii(s).map_err(|_| ())?;
-                Method::NonStandard(ascii_string)
+                let ascii_string = s.as_ascii_str().map_err(|_| ())?;
+                Method::NonStandard(ascii_string.to_owned())
             }
         })
     }
@@ -328,6 +357,24 @@ impl FromStr for Method {
 impl Display for Method {
     fn fmt(&self, formatter: &mut Formatter<'_>) -> Result<(), fmt::Error> {
         write!(formatter, "{}", self.as_str())
+    }
+}
+
+impl From<&AsciiStr> for Method {
+    fn from(s: &AsciiStr) -> Self {
+        // `AsciiStr::as_str()` is a deref cast
+        match s.as_str() {
+            "GET" => Method::Get,
+            "HEAD" => Method::Head,
+            "POST" => Method::Post,
+            "PUT" => Method::Put,
+            "DELETE" => Method::Delete,
+            "CONNECT" => Method::Connect,
+            "OPTIONS" => Method::Options,
+            "TRACE" => Method::Trace,
+            "PATCH" => Method::Patch,
+            _ => Method::NonStandard(AsciiString::from(s)),
+        }
     }
 }
 
@@ -395,9 +442,15 @@ impl From<(u8, u8)> for HTTPVersion {
 
 #[cfg(test)]
 mod test {
-    use super::Header;
+    use std::{
+        convert::TryFrom,
+        time::{Duration, SystemTime},
+    };
+
+    use ascii::AsAsciiStr;
     use httpdate::HttpDate;
-    use std::time::{Duration, SystemTime};
+
+    use super::Header;
 
     #[test]
     fn test_parse_header() {
@@ -407,6 +460,15 @@ mod test {
         assert!(header.value.as_str() == "text/html");
 
         assert!("hello world".parse::<Header>().is_err());
+    }
+
+    #[test]
+    fn test_header_try_from_ascii() {
+        let header: Header =
+            Header::try_from("Content-Type: text/html".as_ascii_str().unwrap()).unwrap();
+
+        assert!(header.field.equiv(&"content-type"));
+        assert!(header.value.as_str() == "text/html");
     }
 
     #[test]
@@ -424,7 +486,15 @@ mod test {
         assert!(header.value.as_str() == "20: 34");
     }
 
-    // This tests reslstance to RUSTSEC-2020-0031: "HTTP Request smuggling
+    #[test]
+    fn test_header_with_doublecolon_try_from_ascii() {
+        let header: Header = Header::try_from("Time: 20: 34".as_ascii_str().unwrap()).unwrap();
+
+        assert!(header.field.equiv(&"time"));
+        assert!(header.value.as_str() == "20: 34");
+    }
+
+    // This tests resistance to RUSTSEC-2020-0031: "HTTP Request smuggling
     // through malformed Transfer Encoding headers"
     // (https://rustsec.org/advisories/RUSTSEC-2020-0031.html).
     #[test]
@@ -436,5 +506,37 @@ mod test {
         assert!("Transfer-Encoding: chunked".parse::<Header>().is_ok());
         assert!("Transfer-Encoding: chunked ".parse::<Header>().is_ok());
         assert!("Transfer-Encoding:   chunked ".parse::<Header>().is_ok());
+    }
+
+    #[test]
+    fn test_strict_headers_try_from_ascii() {
+        for s in [
+            "Transfer-Encoding : chunked",
+            " Transfer-Encoding: chunked",
+            "Transfer Encoding: chunked",
+            " Transfer\tEncoding : chunked",
+        ] {
+            let header = Header::try_from(s.as_ascii_str().unwrap());
+            assert!(
+                header.is_err(),
+                "{} should not convert to {:#?}",
+                s,
+                header.unwrap()
+            );
+        }
+
+        for s in [
+            "Transfer-Encoding: chunked",
+            "Transfer-Encoding: chunked ",
+            "Transfer-Encoding:   chunked ",
+        ] {
+            let header = Header::try_from(s.as_ascii_str().unwrap());
+            assert!(
+                header.is_ok(),
+                "{} should convert: {:#?}",
+                s,
+                header.unwrap_err()
+            );
+        }
     }
 }

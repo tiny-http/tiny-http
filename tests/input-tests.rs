@@ -120,3 +120,79 @@ fn custom_content_type_response_header() {
     assert!(content.ends_with("{\"custom\": \"Content-Type\"}"));
     assert_ne!(content.find("Content-Type: application/json"), None);
 }
+
+#[test]
+fn too_long_header_field() {
+    let just_ok_buf = String::from_utf8([b'X'; 2048 - 21].to_vec()).unwrap();
+    assert_eq!(just_ok_buf.len(), 2048 - 21);
+
+    let mut client = support::new_client_to_hello_world_server();
+
+    // in limit
+    write!(client,
+        "GET / HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\nContent-Type: text/plain; charset=utf8\r\nContent-Length: 5\r\nX-A-Too-Long-Field: {}\r\n\r\nhello", &just_ok_buf
+    ).unwrap();
+
+    let mut content = String::new();
+    client.read_to_string(&mut content).unwrap();
+    assert!(&content[9..].starts_with("200 OK"), "{}", &content); // 200 status with body
+
+    // out of limit
+    let mut client = support::new_client_to_hello_world_server();
+
+    // one more byte (1)
+    write!(client,
+        "GET / HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\nContent-Type: text/plain; charset=utf8\r\nContent-Length: 5\r\nX-A-Too-Long-Field: {}1\r\n\r\nhello", &just_ok_buf
+    ).unwrap();
+
+    let mut content = String::new();
+    client.read_to_string(&mut content).unwrap();
+    assert!(&content[9..].starts_with("431 Request Header Fields Too Large")); // 431 status code
+}
+
+#[test]
+fn too_long_header() {
+    let data = String::from_utf8([b'X'; 1024].to_vec()).unwrap();
+    assert_eq!(data.len(), 1024);
+
+    let mut client = support::new_client_to_hello_world_server();
+
+    // in limit
+    write!(client,
+        "GET / HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\nContent-Type: text/plain; charset=utf8\r\nContent-Length: 5\r\n"
+    ).unwrap();
+    for n in 0..7 {
+        write!(client, "X-A-Too-Long-Field-{}: {}\r\n", n, &data).unwrap();
+    }
+    write!(
+        client,
+        "X-A-Too-Long-Field-7: {}\r\n\r\nhello",
+        data.split_at(747).0
+    )
+    .unwrap();
+
+    let mut content = String::new();
+    client.read_to_string(&mut content).unwrap();
+    assert!(&content[9..].starts_with("200 OK"), "{}", &content); // 200 status with body
+
+    // out of limit
+    let mut client = support::new_client_to_hello_world_server();
+
+    // one more byte (748)
+    write!(client,
+        "GET / HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\nContent-Type: text/plain; charset=utf8\r\nContent-Length: 5\r\n"
+    ).unwrap();
+    for n in 0..7 {
+        write!(client, "X-A-Too-Long-Field-{}: {}\r\n", n, &data).unwrap();
+    }
+    write!(
+        client,
+        "X-A-Too-Long-Field-7: {}\r\n\r\nhello",
+        data.split_at(748).0
+    )
+    .unwrap();
+
+    let mut content = String::new();
+    client.read_to_string(&mut content).unwrap();
+    assert!(&content[9..].starts_with("431 Request Header Fields Too Large")); // 431 status code
+}

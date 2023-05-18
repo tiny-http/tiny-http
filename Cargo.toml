@@ -34,6 +34,7 @@ native-tls = { version = "0.2", optional = true }
 rustc-serialize = "0.3"
 sha1 = "0.6.0"
 fdlimit = "0.1"
+libc = "0.2"
 
 [package.metadata.docs.rs]
 # Enable just one SSL implementation

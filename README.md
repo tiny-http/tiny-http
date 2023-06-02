@@ -31,7 +31,7 @@ Add this to the `Cargo.toml` file of your project:
 
 ```toml
 [dependencies]
-tiny_http = "0.11"
+tiny_http = "0.12.0"
 ```
 
 ### Usage

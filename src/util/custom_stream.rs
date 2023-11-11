@@ -1,6 +1,8 @@
-use std::io::Result as IoResult;
-use std::io::{Read, Write};
+use std::io::{Read, Write, Result as IoResult};
 
+use crate::ReadWrite;
+
+// Example usage with CustomStream
 pub struct CustomStream<R, W> {
     reader: R,
     writer: W,
@@ -16,6 +18,21 @@ where
     }
 }
 
+impl<R, W> ReadWrite for CustomStream<R, W>
+where
+    R: Read,
+    W: Write,
+{
+    fn reader(&self) -> &dyn Read {
+        &self.reader
+    }
+
+    fn writer(&self) -> &dyn Write {
+        &self.writer
+    }
+}
+
+// Implement Read for CustomStream
 impl<R, W> Read for CustomStream<R, W>
 where
     R: Read,
@@ -25,6 +42,7 @@ where
     }
 }
 
+// Implement Write for CustomStream
 impl<R, W> Write for CustomStream<R, W>
 where
     W: Write,

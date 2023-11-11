@@ -94,6 +94,15 @@ impl<R: Write> Write for NotifyOnDrop<R> {
         self.inner.flush()
     }
 }
+impl<R: ReadWrite> ReadWrite for NotifyOnDrop<R> {
+    fn reader(&self) -> &dyn Read {
+        self.inner.reader()
+    }
+
+    fn writer(&self) -> &dyn Write {
+        self.inner.writer()
+    }
+}
 impl<R> Drop for NotifyOnDrop<R> {
     fn drop(&mut self) {
         self.sender.send(()).unwrap();
@@ -497,11 +506,11 @@ impl Drop for Request {
     }
 }
 
-/// Dummy trait that regroups the `Read` and `Write` traits.
-///
-/// Automatically implemented on all types that implement both `Read` and `Write`.
-pub trait ReadWrite: Read + Write {}
-impl<T> ReadWrite for T where T: Read + Write {}
+// Define the ReadWrite trait that encompasses both Read and Write
+pub trait ReadWrite: Read + Write {
+    fn reader(&self) -> &dyn Read;
+    fn writer(&self) -> &dyn Write;
+}
 
 #[cfg(test)]
 mod tests {

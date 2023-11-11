@@ -506,7 +506,9 @@ impl Drop for Request {
     }
 }
 
-// Define the ReadWrite trait that encompasses both Read and Write
+/// Dummy trait that regroups the `Read` and `Write` traits.
+///
+/// Automatically implemented on all types that implement both `Read` and `Write`.
 pub trait ReadWrite: Read + Write {
     fn reader(&self) -> &dyn Read;
     fn writer(&self) -> &dyn Write;

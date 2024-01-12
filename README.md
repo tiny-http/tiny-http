@@ -53,6 +53,20 @@ for request in server.incoming_requests() {
 }
 ```
 
+#### Running Included Examples
+
+1. Clone this repository locally
+2. to run an example in the examples folder run:
+```bash
+cargo run --example [example_name]
+```
+
+example:
+```bash
+cargo run --example hello-world
+```
+
+
 ### Speed
 
 Tiny-http was designed with speed in mind:
@@ -73,7 +87,7 @@ Tiny-http was designed with speed in mind:
  - Decoding the client's request is done lazily. If you don't read the request's body, it will not
  be decoded.
 
-### Examples
+### Example Implementations
 
 Examples of tiny-http in use:
 

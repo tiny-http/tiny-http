@@ -1,18 +1,13 @@
 [package]
 name = "tiny_http"
 version = "0.12.0"
-authors = ["pierre.krieger1708@gmail.com",
-           "Corey Farwell <coreyf@rwell.org>"]
 description = "Low level HTTP server library"
-documentation = "https://tiny-http.github.io/tiny-http/tiny_http/index.html"
 keywords = ["http", "server", "web"]
 license = "MIT OR Apache-2.0"
-repository = "https://github.com/tiny-http/tiny-http"
 edition = "2018"
-rust-version = "1.57"
 
 [features]
-default = ["log"]
+default = ["log", "ssl-rustls"]
 ssl = ["ssl-openssl"]
 ssl-openssl = ["openssl", "zeroize"]
 ssl-rustls = ["rustls", "rustls-pemfile", "zeroize"]

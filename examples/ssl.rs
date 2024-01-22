@@ -1,31 +1,18 @@
 extern crate tiny_http;
 
-#[cfg(not(any(
-    feature = "ssl-openssl",
-    feature = "ssl-rustls",
-    feature = "ssl-native-tls"
-)))]
+#[cfg(not(feature = "ssl-rustls"))]
 fn main() {
     println!("This example requires one of the supported `ssl-*` features to be enabled");
 }
 
-#[cfg(any(
-    feature = "ssl-openssl",
-    feature = "ssl-rustls",
-    feature = "ssl-native-tls"
-))]
+#[cfg(feature = "ssl-rustls")]
 fn main() {
-    use tiny_http::{Response, Server};
-
-    let server = Server::https(
-        "0.0.0.0:8000",
-        tiny_http::SslConfig {
-            certificate: include_bytes!("ssl-cert.pem").to_vec(),
-            private_key: include_bytes!("ssl-key.pem").to_vec(),
-        },
-    )
-    .unwrap();
-
+    use tiny_http::{ssl, Response, Server};
+    let server_config = ssl::SslContextImpl::get_server_config_from_pem(
+        include_bytes!("ssl-cert.pem").to_vec(),
+        include_bytes!("ssl-key.pem").to_vec().into(),
+    );
+    let server = Server::https("0.0.0.0:8000", server_config.unwrap()).unwrap();
     println!(
         "Note: connecting to this server will likely give you a warning from your browser \
               because the connection is unsecure. This is because the certificate used by this \
@@ -34,7 +21,6 @@ fn main() {
 
     for request in server.incoming_requests() {
         assert!(request.secure());
-
         println!(
             "received request! method: {:?}, url: {:?}, headers: {:?}",
             request.method(),

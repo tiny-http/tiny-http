@@ -159,7 +159,7 @@ mod prompt_responses {
         // response should arrive quickly (before timeout expires)
         client.set_read_timeout(Some(timeout)).unwrap();
         let resp = client.deref().read(&mut [0u8; 4096]);
-        client.shutdown(Shutdown::Both).unwrap();
+        let _ = client.shutdown(Shutdown::Both);
         assert!(resp.is_ok(), "Server response was not sent promptly");
     }
 

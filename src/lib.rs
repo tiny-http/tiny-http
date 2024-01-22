@@ -91,13 +91,6 @@
 #![deny(rust_2018_idioms)]
 #![allow(clippy::match_like_matches_macro)]
 
-#[cfg(any(
-    feature = "ssl-openssl",
-    feature = "ssl-rustls",
-    feature = "ssl-native-tls"
-))]
-use zeroize::Zeroizing;
-
 use std::error::Error;
 use std::io::Error as IoError;
 use std::io::ErrorKind as IoErrorKind;
@@ -126,7 +119,7 @@ mod connection;
 mod log;
 mod request;
 mod response;
-mod ssl;
+pub mod ssl;
 mod test;
 mod util;
 
@@ -174,23 +167,20 @@ pub struct IncomingRequests<'a> {
     server: &'a Server,
 }
 
+#[cfg(not(feature = "ssl-rustls"))]
+pub type SslConfig = ();
+#[cfg(feature = "ssl-rustls")]
+pub type SslConfig = crate::ssl::SslServerConfig;
+
 /// Represents the parameters required to create a server.
 #[derive(Debug, Clone)]
 pub struct ServerConfig {
     /// The addresses to try to listen to.
     pub addr: ConfigListenAddr,
 
+    #[cfg(feature = "ssl-rustls")]
     /// If `Some`, then the server will use SSL to encode the communications.
     pub ssl: Option<SslConfig>,
-}
-
-/// Configuration of the server for SSL.
-#[derive(Debug, Clone)]
-pub struct SslConfig {
-    /// Contains the public certificate to send to clients.
-    pub certificate: Vec<u8>,
-    /// Contains the ultra-secret private key used to decode communications.
-    pub private_key: Vec<u8>,
 }
 
 impl Server {
@@ -207,11 +197,7 @@ impl Server {
     }
 
     /// Shortcut for an HTTPS server on a specific address.
-    #[cfg(any(
-        feature = "ssl-openssl",
-        feature = "ssl-rustls",
-        feature = "ssl-native-tls"
-    ))]
+    #[cfg(feature = "ssl-rustls")]
     #[inline]
     pub fn https<A>(
         addr: A,
@@ -264,42 +250,15 @@ impl Server {
         };
 
         // building the SSL capabilities
-        #[cfg(any(
-            all(feature = "ssl-openssl", feature = "ssl-rustls"),
-            all(feature = "ssl-openssl", feature = "ssl-native-tls"),
-            all(feature = "ssl-native-tls", feature = "ssl-rustls"),
-        ))]
-        compile_error!(
-            "Only one feature from 'ssl-openssl', 'ssl-rustls', 'ssl-native-tls' can be enabled at the same time"
-        );
-        #[cfg(not(any(
-            feature = "ssl-openssl",
-            feature = "ssl-rustls",
-            feature = "ssl-native-tls"
-        )))]
+        #[cfg(not(feature = "ssl-rustls"))]
         type SslContext = ();
-        #[cfg(any(
-            feature = "ssl-openssl",
-            feature = "ssl-rustls",
-            feature = "ssl-native-tls"
-        ))]
+        #[cfg(feature = "ssl-rustls")]
         type SslContext = crate::ssl::SslContextImpl;
         let ssl: Option<SslContext> = {
             match ssl_config {
-                #[cfg(any(
-                    feature = "ssl-openssl",
-                    feature = "ssl-rustls",
-                    feature = "ssl-native-tls"
-                ))]
-                Some(config) => Some(SslContext::from_pem(
-                    config.certificate,
-                    Zeroizing::new(config.private_key),
-                )?),
-                #[cfg(not(any(
-                    feature = "ssl-openssl",
-                    feature = "ssl-rustls",
-                    feature = "ssl-native-tls"
-                )))]
+                #[cfg(feature = "ssl-rustls")]
+                Some(config) => Some(SslContext::from_config(Arc::new(config))?),
+                #[cfg(not(feature = "ssl-rustls"))]
                 Some(_) => return Err(
                     "Building a server with SSL requires enabling the `ssl` feature in tiny-http"
                         .into(),
@@ -325,11 +284,7 @@ impl Server {
                         use util::RefinedTcpStream;
                         let (read_closable, write_closable) = match ssl {
                             None => RefinedTcpStream::new(sock),
-                            #[cfg(any(
-                                feature = "ssl-openssl",
-                                feature = "ssl-rustls",
-                                feature = "ssl-native-tls"
-                            ))]
+                            #[cfg(feature = "ssl-rustls")]
                             Some(ref ssl) => {
                                 // trying to apply SSL over the connection
                                 // if an error occurs, we just close the socket and resume listening
@@ -340,11 +295,7 @@ impl Server {
 
                                 RefinedTcpStream::new(sock)
                             }
-                            #[cfg(not(any(
-                                feature = "ssl-openssl",
-                                feature = "ssl-rustls",
-                                feature = "ssl-native-tls"
-                            )))]
+                            #[cfg(not(feature = "ssl-rustls"))]
                             Some(ref _ssl) => unreachable!(),
                         };
 

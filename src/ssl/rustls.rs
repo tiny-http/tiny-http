@@ -62,13 +62,14 @@ impl Write for RustlsStream {
     }
 }
 
-pub(crate) struct RustlsContext(Arc<rustls::ServerConfig>);
+pub(crate) type RustlsServerConfig = rustls::ServerConfig;
+pub struct RustlsContext(pub Arc<rustls::ServerConfig>);
 
 impl RustlsContext {
-    pub(crate) fn from_pem(
+    pub fn get_server_config_from_pem(
         certificates: Vec<u8>,
         private_key: Zeroizing<Vec<u8>>,
-    ) -> Result<Self, Box<dyn Error + Send + Sync>> {
+    ) -> Result<RustlsServerConfig, Box<dyn Error + Send + Sync>> {
         let certificate_chain: Vec<rustls::Certificate> =
             rustls_pemfile::certs(&mut certificates.as_slice())?
                 .into_iter()
@@ -94,12 +95,16 @@ impl RustlsContext {
             }
         });
 
-        let tls_conf = rustls::ServerConfig::builder()
+        Ok(rustls::ServerConfig::builder()
             .with_safe_defaults()
             .with_no_client_auth()
-            .with_single_cert(certificate_chain, private_key)?;
+            .with_single_cert(certificate_chain, private_key)?)
+    }
 
-        Ok(Self(Arc::new(tls_conf)))
+    pub(crate) fn from_config(
+        config: Arc<RustlsServerConfig>,
+    ) -> Result<Self, Box<dyn Error + Send + Sync>> {
+        Ok(Self(config.clone()))
     }
 
     pub(crate) fn accept(

@@ -47,7 +47,7 @@ fn sequential_requests(bencher: &mut test::Bencher) {
 
 #[bench]
 fn parallel_requests(bencher: &mut test::Bencher) {
-    fdlimit::raise_fd_limit();
+    let _ = fdlimit::raise_fd_limit();
 
     let server = tiny_http::Server::http("0.0.0.0:0").unwrap();
     let port = server.server_addr().to_ip().unwrap().port();

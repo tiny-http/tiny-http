@@ -8,9 +8,7 @@ jobs:
       matrix:
         features:
           - default
-          - ssl-openssl
           - ssl-rustls
-          - ssl-native-tls
     steps:
       - uses: actions/checkout@v2
       - name: Install stable toolchain
@@ -39,12 +37,10 @@ jobs:
         rust:
           - stable
           - nightly
-          - 1.57
+          - 1.73
         features:
           - default
-          - ssl-openssl
           - ssl-rustls
-          - ssl-native-tls
     steps:
       - uses: actions/checkout@v2
       - name: Install toolchain

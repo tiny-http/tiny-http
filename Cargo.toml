@@ -8,28 +8,22 @@ edition = "2018"
 
 [features]
 default = ["log", "ssl-rustls"]
-ssl = ["ssl-openssl"]
-ssl-openssl = ["openssl", "zeroize"]
 ssl-rustls = ["rustls", "rustls-pemfile", "zeroize"]
-ssl-native-tls = ["native-tls", "zeroize"]
 
 [dependencies]
-ascii = "1.0"
-chunked_transfer = "1"
-httpdate = "1.0.2"
+ascii = "1.1.0"
+chunked_transfer = "1.5.0"
+httpdate = "1.0.3"
 
-log = { version = "0.4.4", optional = true }
-openssl = { version = "0.10", optional = true }
-rustls = { version = "0.20", optional = true }
-rustls-pemfile = { version = "0.2.1", optional = true }
-zeroize = { version = "1", optional = true }
-native-tls = { version = "0.2", optional = true }
+log = { version = "0.4.20", optional = true }
+rustls = { version = "0.21.10", features = ["dangerous_configuration"], optional = true }
+rustls-pemfile = { version = "1.0.4", optional = true }
+zeroize = { version = "1.7.0", optional = true }
 
 [dev-dependencies]
-rustc-serialize = "0.3"
+rustc-serialize = "0.3.25"
 sha1 = "0.6.0"
-fdlimit = "0.1"
+fdlimit = "0.3.0"
 
 [package.metadata.docs.rs]
-# Enable just one SSL implementation
-features = ["ssl-openssl"]
+features = ["ssl-rustls"]

@@ -11,10 +11,10 @@ jobs:
           - ssl-rustls
     steps:
       - uses: actions/checkout@v2
-      - name: Install stable toolchain
+      - name: Install nightly toolchain
         uses: actions-rs/toolchain@v1
         with:
-          toolchain: stable
+          toolchain: nightly
           components: rustfmt, clippy
 
       - name: Clippy
@@ -35,7 +35,6 @@ jobs:
     strategy:
       matrix:
         rust:
-          - stable
           - nightly
           - 1.73
         features:

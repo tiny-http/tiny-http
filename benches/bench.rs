@@ -14,7 +14,12 @@ fn sequential_requests(bencher: &mut test::Bencher) {
         (write!(stream, "GET / HTTP/1.1\r\nHost: localhost\r\n\r\n")).unwrap();
         let request = server.recv().unwrap();
         assert_eq!(request.method(), &Method::Get);
-        assert_eq!(true, request.respond(tiny_http::Response::new_empty(tiny_http::StatusCode(204))).is_ok());
+        assert_eq!(
+            true,
+            request
+                .respond(tiny_http::Response::new_empty(tiny_http::StatusCode(204)))
+                .is_ok()
+        );
     });
 }
 
@@ -39,7 +44,12 @@ fn parallel_requests(bencher: &mut test::Bencher) {
                 Some(rq) => rq,
             };
             assert_eq!(request.method(), &Method::Get);
-            assert_eq!(true, request.respond(tiny_http::Response::new_empty(tiny_http::StatusCode(204))).is_ok());
+            assert_eq!(
+                true,
+                request
+                    .respond(tiny_http::Response::new_empty(tiny_http::StatusCode(204)))
+                    .is_ok()
+            );
         }
     });
 }

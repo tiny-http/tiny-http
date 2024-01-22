@@ -7,6 +7,8 @@
 #[cfg(feature = "ssl-rustls")]
 pub(crate) mod rustls;
 #[cfg(feature = "ssl-rustls")]
-pub(crate) use self::rustls::RustlsContext as SslContextImpl;
+pub use self::rustls::RustlsContext as SslContextImpl;
+#[cfg(feature = "ssl-rustls")]
+pub(crate) use self::rustls::RustlsServerConfig as SslServerConfig;
 #[cfg(feature = "ssl-rustls")]
 pub(crate) use self::rustls::RustlsStream as SslStream;

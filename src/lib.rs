@@ -91,9 +91,6 @@
 #![deny(rust_2018_idioms)]
 #![allow(clippy::match_like_matches_macro)]
 
-#[cfg(feature = "ssl-rustls")]
-use zeroize::Zeroizing;
-
 use std::error::Error;
 use std::io::Error as IoError;
 use std::io::ErrorKind as IoErrorKind;
@@ -122,7 +119,7 @@ mod connection;
 mod log;
 mod request;
 mod response;
-mod ssl;
+pub mod ssl;
 mod test;
 mod util;
 
@@ -170,23 +167,20 @@ pub struct IncomingRequests<'a> {
     server: &'a Server,
 }
 
+#[cfg(not(feature = "ssl-rustls"))]
+pub type SslConfig = ();
+#[cfg(feature = "ssl-rustls")]
+pub type SslConfig = crate::ssl::SslServerConfig;
+
 /// Represents the parameters required to create a server.
 #[derive(Debug, Clone)]
 pub struct ServerConfig {
     /// The addresses to try to listen to.
     pub addr: ConfigListenAddr,
 
+    #[cfg(feature = "ssl-rustls")]
     /// If `Some`, then the server will use SSL to encode the communications.
     pub ssl: Option<SslConfig>,
-}
-
-/// Configuration of the server for SSL.
-#[derive(Debug, Clone)]
-pub struct SslConfig {
-    /// Contains the public certificate to send to clients.
-    pub certificate: Vec<u8>,
-    /// Contains the ultra-secret private key used to decode communications.
-    pub private_key: Vec<u8>,
 }
 
 impl Server {
@@ -263,10 +257,7 @@ impl Server {
         let ssl: Option<SslContext> = {
             match ssl_config {
                 #[cfg(feature = "ssl-rustls")]
-                Some(config) => Some(SslContext::from_pem(
-                    config.certificate,
-                    Zeroizing::new(config.private_key),
-                )?),
+                Some(config) => Some(SslContext::from_config(Arc::new(config))?),
                 #[cfg(not(feature = "ssl-rustls"))]
                 Some(_) => return Err(
                     "Building a server with SSL requires enabling the `ssl` feature in tiny-http"

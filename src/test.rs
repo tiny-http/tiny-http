@@ -29,7 +29,7 @@ use std::str::FromStr;
 /// #     listener: Server,
 /// # }
 /// # let server = TestServer {
-/// #     listener: Server::http("0.0.0.0:0").unwrap(),
+/// #     listener: Server::http("0.0.0.0:0",None).unwrap(),
 /// # };
 /// # impl TestServer {
 /// #     fn handle_request(&self, request: Request) -> Response<Cursor<Vec<u8>>> {
@@ -37,6 +37,7 @@ use std::str::FromStr;
 /// #     }
 /// # }
 /// let response = server.handle_request(request.into());
+/// println!("Response status code: {:?}", response.status_code());
 /// assert_eq!(response.status_code(), StatusCode(200));
 /// ```
 pub struct TestRequest {

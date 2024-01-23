@@ -12,7 +12,7 @@ fn main() {
         include_bytes!("ssl-cert.pem").to_vec(),
         include_bytes!("ssl-key.pem").to_vec().into(),
     );
-    let server = Server::https("0.0.0.0:8000", server_config.unwrap()).unwrap();
+    let server = Server::https("0.0.0.0:8000", None, server_config.unwrap()).unwrap();
     println!(
         "Note: connecting to this server will likely give you a warning from your browser \
               because the connection is unsecure. This is because the certificate used by this \

@@ -3,7 +3,7 @@ extern crate tiny_http;
 fn main() {
     use tiny_http::{Response, Server};
 
-    let server = Server::http("0.0.0.0:8000").unwrap();
+    let server = Server::http("0.0.0.0:8000", None).unwrap();
 
     for request in server.incoming_requests() {
         println!(

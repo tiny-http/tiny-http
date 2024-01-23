@@ -9,7 +9,8 @@
 //! occupied).
 //!
 //! ```no_run
-//! let server = tiny_http::Server::http("0.0.0.0:0").unwrap();
+//! let pool_size = Some(10);
+//! let server = tiny_http::Server::http("0.0.0.0:0",pool_size).unwrap();
 //! ```
 //!
 //! A newly-created `Server` will immediately start listening for incoming connections and HTTP
@@ -21,7 +22,8 @@
 //! This function returns an `IoResult<Request>`, so you need to handle the possible errors.
 //!
 //! ```no_run
-//! # let server = tiny_http::Server::http("0.0.0.0:0").unwrap();
+//! # let pool_size = Some(10);
+//! # let server = tiny_http::Server::http("0.0.0.0:0",pool_size).unwrap();
 //!
 //! loop {
 //!     // blocks until the next request is received
@@ -41,7 +43,8 @@
 //! ```no_run
 //! # use std::sync::Arc;
 //! # use std::thread;
-//! # let server = tiny_http::Server::http("0.0.0.0:0").unwrap();
+//! # let pool_size = Some(10);
+//! # let server = tiny_http::Server::http("0.0.0.0:0",pool_size).unwrap();
 //! let server = Arc::new(server);
 //! let mut guards = Vec::with_capacity(4);
 //!
@@ -82,7 +85,8 @@
 //! ```no_run
 //! # use std::fs::File;
 //! # use std::path::Path;
-//! # let server = tiny_http::Server::http("0.0.0.0:0").unwrap();
+//! # let pool_size = Some(10);
+//! # let server = tiny_http::Server::http("0.0.0.0:0",pool_size).unwrap();
 //! # let request = server.recv().unwrap();
 //! # let response = tiny_http::Response::from_file(File::open(&Path::new("image.png")).unwrap());
 //! let _ = request.respond(response);
@@ -178,6 +182,9 @@ pub struct ServerConfig {
     /// The addresses to try to listen to.
     pub addr: ConfigListenAddr,
 
+    /// The number of threads to use for the pool.
+    pub pool_size: Option<usize>,
+
     #[cfg(feature = "ssl-rustls")]
     /// If `Some`, then the server will use SSL to encode the communications.
     pub ssl: Option<SslConfig>,
@@ -186,12 +193,16 @@ pub struct ServerConfig {
 impl Server {
     /// Shortcut for a simple server on a specific address.
     #[inline]
-    pub fn http<A>(addr: A) -> Result<Server, Box<dyn Error + Send + Sync + 'static>>
+    pub fn http<A>(
+        addr: A,
+        pool_size: Option<usize>,
+    ) -> Result<Server, Box<dyn Error + Send + Sync + 'static>>
     where
         A: ToSocketAddrs,
     {
         Server::new(ServerConfig {
             addr: ConfigListenAddr::from_socket_addrs(addr)?,
+            pool_size,
             ssl: None,
         })
     }
@@ -201,6 +212,7 @@ impl Server {
     #[inline]
     pub fn https<A>(
         addr: A,
+        pool_size: Option<usize>,
         config: SslConfig,
     ) -> Result<Server, Box<dyn Error + Send + Sync + 'static>>
     where
@@ -208,6 +220,7 @@ impl Server {
     {
         Server::new(ServerConfig {
             addr: ConfigListenAddr::from_socket_addrs(addr)?,
+            pool_size,
             ssl: Some(config),
         })
     }
@@ -217,9 +230,11 @@ impl Server {
     /// Shortcut for a UNIX socket server at a specific path
     pub fn http_unix(
         path: &std::path::Path,
+        pool_size: Option<usize>,
     ) -> Result<Server, Box<dyn Error + Send + Sync + 'static>> {
         Server::new(ServerConfig {
             addr: ConfigListenAddr::unix_from_path(path),
+            pool_size,
             ssl: None,
         })
     }
@@ -227,7 +242,8 @@ impl Server {
     /// Builds a new server that listens on the specified address.
     pub fn new(config: ServerConfig) -> Result<Server, Box<dyn Error + Send + Sync + 'static>> {
         let listener = config.addr.bind()?;
-        Self::from_listener(listener, config.ssl)
+
+        Self::from_listener(listener, config.ssl, config.pool_size)
     }
 
     /// Builds a new server using the specified TCP listener.
@@ -237,6 +253,7 @@ impl Server {
     pub fn from_listener<L: Into<Listener>>(
         listener: L,
         ssl_config: Option<SslConfig>,
+        pool_size: Option<usize>,
     ) -> Result<Server, Box<dyn Error + Send + Sync + 'static>> {
         let listener = listener.into();
         // building the "close" variable
@@ -275,7 +292,7 @@ impl Server {
         let inside_messages = messages.clone();
         thread::spawn(move || {
             // a tasks pool is used to dispatch the connections into threads
-            let tasks_pool = util::TaskPool::new();
+            let tasks_pool = util::TaskPool::new(pool_size.unwrap_or(4));
 
             log::debug!("Running accept thread");
             while !inside_close_trigger.load(Relaxed) {
@@ -309,6 +326,7 @@ impl Server {
                         let messages = inside_messages.clone();
                         let mut client = Some(client);
                         tasks_pool.spawn(Box::new(move || {
+                            println!("threadid: {:?}", thread::current().id());
                             if let Some(client) = client.take() {
                                 // Synchronization is needed for HTTPS requests to avoid a deadlock
                                 if client.secure() {
@@ -352,6 +370,12 @@ impl Server {
         IncomingRequests { server: self }
     }
 
+    // #[inline]
+    // pub fn run(self) {
+    //     for request in self.incoming_requests() {
+    //         self.process(request);
+    //     }
+    // }
     /// Returns the address the server is listening to.
     #[inline]
     pub fn server_addr(&self) -> ListenAddr {

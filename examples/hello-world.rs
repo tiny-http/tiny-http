@@ -4,7 +4,7 @@ use std::sync::Arc;
 use std::thread;
 
 fn main() {
-    let server = Arc::new(tiny_http::Server::http("0.0.0.0:9975").unwrap());
+    let server = Arc::new(tiny_http::Server::http("0.0.0.0:9976", Some(4)).unwrap());
     println!("Now listening on port 9975");
 
     let mut handles = Vec::new();

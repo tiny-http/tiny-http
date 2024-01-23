@@ -10,6 +10,7 @@ use std::time::Duration;
 /// Any idle thread will automatically die after a few seconds.
 pub struct TaskPool {
     sharing: Arc<Sharing>,
+    thread_count: usize, // add a field to store the fixed thread count
 }
 
 struct Sharing {
@@ -47,7 +48,7 @@ impl<'a> Drop for Registration<'a> {
 }
 
 impl TaskPool {
-    pub fn new() -> TaskPool {
+    pub fn new(thread_count: usize) -> TaskPool {
         let pool = TaskPool {
             sharing: Arc::new(Sharing {
                 todo: Mutex::new(VecDeque::new()),
@@ -55,10 +56,11 @@ impl TaskPool {
                 active_tasks: AtomicUsize::new(0),
                 waiting_tasks: AtomicUsize::new(0),
             }),
+            thread_count, // store the fixed thread count
         };
 
-        for _ in 0..MIN_THREADS {
-            pool.add_thread(None)
+        for _ in 0..thread_count {
+            pool.add_thread(None);
         }
 
         pool
@@ -69,59 +71,68 @@ impl TaskPool {
     pub fn spawn(&self, code: Box<dyn FnMut() + Send>) {
         let mut queue = self.sharing.todo.lock().unwrap();
 
-        if self.sharing.waiting_tasks.load(Ordering::Acquire) == 0 {
-            self.add_thread(Some(code));
+        if self.sharing.active_tasks.load(Ordering::Acquire) < self.thread_count {
+            if self.sharing.waiting_tasks.load(Ordering::Acquire) == 0 {
+                self.add_thread(Some(code));
+            } else {
+                queue.push_back(code);
+                self.sharing.condvar.notify_one();
+            }
         } else {
+            // if the number of active threads is equal to the fixed thread count,
             queue.push_back(code);
             self.sharing.condvar.notify_one();
         }
     }
 
     fn add_thread(&self, initial_fn: Option<Box<dyn FnMut() + Send>>) {
+        //  if the number of active threads is greater than the fixed thread count, return
+        if self.sharing.active_tasks.load(Ordering::Acquire) >= self.thread_count {
+            return;
+        }
+
         let sharing = self.sharing.clone();
 
         thread::spawn(move || {
-            let sharing = sharing;
             let _active_guard = Registration::new(&sharing.active_tasks);
 
+            // execute the initial function if there is one
             if let Some(mut f) = initial_fn {
                 f();
             }
 
             loop {
-                let mut task: Box<dyn FnMut() + Send> = {
+                let maybe_task = {
                     let mut todo = sharing.todo.lock().unwrap();
 
-                    let task;
                     loop {
-                        if let Some(poped_task) = todo.pop_front() {
-                            task = poped_task;
-                            break;
-                        }
-                        let _waiting_guard = Registration::new(&sharing.waiting_tasks);
-
-                        let received =
-                            if sharing.active_tasks.load(Ordering::Acquire) <= MIN_THREADS {
-                                todo = sharing.condvar.wait(todo).unwrap();
-                                true
-                            } else {
-                                let (new_lock, waitres) = sharing
-                                    .condvar
-                                    .wait_timeout(todo, Duration::from_millis(5000))
-                                    .unwrap();
-                                todo = new_lock;
-                                !waitres.timed_out()
-                            };
-
-                        if !received && todo.is_empty() {
-                            return;
+                        match todo.pop_front() {
+                            Some(task) => break Some(task),
+                            None => {
+                                let _waiting_guard = Registration::new(&sharing.waiting_tasks);
+                                // if the number of active threads is greater than the fixed thread count, return
+                                if sharing.active_tasks.load(Ordering::Acquire) <= 1 {
+                                    todo = sharing.condvar.wait(todo).unwrap();
+                                } else {
+                                    // wait for some seconds
+                                    let (new_todo, timeout) = sharing
+                                        .condvar
+                                        .wait_timeout(todo, Duration::from_secs(5))
+                                        .unwrap();
+                                    todo = new_todo;
+                                    if timeout.timed_out() {
+                                        return;
+                                    }
+                                }
+                            }
                         }
                     }
-
-                    task
                 };
 
-                task();
+                // execute the task
+                if let Some(mut task) = maybe_task {
+                    task();
+                }
             }
         });
     }

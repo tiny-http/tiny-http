@@ -92,6 +92,7 @@ impl TaskPool {
         }
 
         let sharing = self.sharing.clone();
+        let thread_count = self.thread_count;
 
         thread::spawn(move || {
             let _active_guard = Registration::new(&sharing.active_tasks);
@@ -115,6 +116,7 @@ impl TaskPool {
                                     todo = sharing.condvar.wait(todo).unwrap();
                                 } else {
                                     // wait for some seconds
+                                    let wait_duration = calculate_dynamic_wait_time(&sharing,thread_count);
                                     let (new_todo, timeout) = sharing
                                         .condvar
                                         .wait_timeout(todo, Duration::from_secs(5))
@@ -145,4 +147,24 @@ impl Drop for TaskPool {
             .store(999_999_999, Ordering::Release);
         self.sharing.condvar.notify_all();
     }
+}
+
+
+
+// calculate_dynamic_wait_time calculates the dynamic wait time
+fn calculate_dynamic_wait_time(sharing: &Sharing, thread_count: usize) -> Duration {
+
+    let active_threads = sharing.active_tasks.load(Ordering::Acquire);
+    let waiting_tasks = sharing.waiting_tasks.load(Ordering::Acquire);
+
+    let base_wait = Duration::from_secs(5);
+    if active_threads < thread_count / 2 && waiting_tasks > 0 {
+        return base_wait.mul_f32(0.5);
+    }
+
+    if active_threads >= thread_count {
+        return base_wait.mul_f32(2.0);
+    }
+
+    base_wait
 }

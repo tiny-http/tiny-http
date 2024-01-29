@@ -111,7 +111,6 @@ use client::ClientConnection;
 use connection::Connection;
 use util::MessagesQueue;
 
-
 pub use common::{HTTPVersion, Header, HeaderField, Method, StatusCode};
 pub use connection::{ConfigListenAddr, ListenAddr, Listener};
 pub use request::{ReadWrite, Request};
@@ -189,6 +188,8 @@ pub struct ServerConfig {
     #[cfg(feature = "ssl-rustls")]
     /// If `Some`, then the server will use SSL to encode the communications.
     pub ssl: Option<SslConfig>,
+
+    pub memory_threshold: Option<usize>,
 }
 
 impl Server {
@@ -205,6 +206,24 @@ impl Server {
             addr: ConfigListenAddr::from_socket_addrs(addr)?,
             pool_size,
             ssl: None,
+            memory_threshold: None,
+        })
+    }
+    #[cfg(feature = "memory_monitoring")]
+    #[inline]
+    pub fn http_memory<A>(
+        addr: A,
+        pool_size: Option<usize>,
+        memory_threshold: Option<usize>,
+    ) -> Result<Server, Box<dyn Error + Send + Sync + 'static>>
+    where
+        A: ToSocketAddrs,
+    {
+        Server::new(ServerConfig {
+            addr: ConfigListenAddr::from_socket_addrs(addr)?,
+            pool_size,
+            ssl: None,
+            memory_threshold,
         })
     }
 
@@ -223,9 +242,28 @@ impl Server {
             addr: ConfigListenAddr::from_socket_addrs(addr)?,
             pool_size,
             ssl: Some(config),
+            memory_threshold: None,
         })
     }
-
+    #[cfg(feature = "memory_monitoring")]
+    #[cfg(feature = "ssl-rustls")]
+    #[inline]
+    pub fn https_memory<A>(
+        addr: A,
+        pool_size: Option<usize>,
+        config: SslConfig,
+        memory_threshold: Option<usize>,
+    ) -> Result<Server, Box<dyn Error + Send + Sync + 'static>>
+    where
+        A: ToSocketAddrs,
+    {
+        Server::new(ServerConfig {
+            addr: ConfigListenAddr::from_socket_addrs(addr)?,
+            pool_size,
+            ssl: Some(config),
+            memory_threshold,
+        })
+    }
     #[cfg(unix)]
     #[inline]
     /// Shortcut for a UNIX socket server at a specific path
@@ -237,14 +275,19 @@ impl Server {
             addr: ConfigListenAddr::unix_from_path(path),
             pool_size,
             ssl: None,
+            memory_threshold: None,
         })
     }
 
     /// Builds a new server that listens on the specified address.
     pub fn new(config: ServerConfig) -> Result<Server, Box<dyn Error + Send + Sync + 'static>> {
         let listener = config.addr.bind()?;
-
-        Self::from_listener(listener, config.ssl, config.pool_size)
+        Self::from_listener(
+            listener,
+            config.ssl,
+            config.pool_size,
+            config.memory_threshold,
+        )
     }
 
     /// Builds a new server using the specified TCP listener.
@@ -255,6 +298,7 @@ impl Server {
         listener: L,
         ssl_config: Option<SslConfig>,
         pool_size: Option<usize>,
+        memory_threshold: Option<usize>,
     ) -> Result<Server, Box<dyn Error + Send + Sync + 'static>> {
         let listener = listener.into();
         // building the "close" variable
@@ -293,7 +337,14 @@ impl Server {
         let inside_messages = messages.clone();
         thread::spawn(move || {
             // a tasks pool is used to dispatch the connections into threads
+            #[cfg(not(feature = "memory_monitoring"))]
             let tasks_pool = util::TaskPool::new(pool_size.unwrap_or(4));
+
+            #[cfg(feature = "memory_monitoring")]
+            let tasks_pool = util::TaskPool::new_limit_memory(
+                pool_size.unwrap_or(4),
+                memory_threshold.unwrap_or(0),
+            );
 
             log::debug!("Running accept thread");
             while !inside_close_trigger.load(Relaxed) {

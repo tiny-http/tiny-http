@@ -3,6 +3,8 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Condvar, Mutex};
 use std::thread;
 use std::time::Duration;
+#[cfg(feature = "memory_monitoring")]
+use sys_info;
 
 /// Manages a collection of threads.
 ///
@@ -11,6 +13,8 @@ use std::time::Duration;
 pub struct TaskPool {
     sharing: Arc<Sharing>,
     thread_count: usize, // add a field to store the fixed thread count
+    #[cfg(feature = "memory_monitoring")]
+    memory_threshold: usize, //memory threshold
 }
 
 struct Sharing {
@@ -48,6 +52,7 @@ impl<'a> Drop for Registration<'a> {
 }
 
 impl TaskPool {
+    #[cfg(not(feature = "memory_monitoring"))]
     pub fn new(thread_count: usize) -> TaskPool {
         let pool = TaskPool {
             sharing: Arc::new(Sharing {
@@ -66,6 +71,25 @@ impl TaskPool {
         pool
     }
 
+    #[cfg(feature = "memory_monitoring")]
+    pub fn new_limit_memory(thread_count: usize, memory_threshold: usize) -> TaskPool {
+        let pool = TaskPool {
+            sharing: Arc::new(Sharing {
+                todo: Mutex::new(VecDeque::new()),
+                condvar: Condvar::new(),
+                active_tasks: AtomicUsize::new(0),
+                waiting_tasks: AtomicUsize::new(0),
+            }),
+            thread_count,     // store the fixed thread count
+            memory_threshold, // store the memory threshold
+        };
+
+        for _ in 0..thread_count {
+            pool.add_thread(None);
+        }
+
+        pool
+    }
     /// Executes a function in a thread.
     /// If no thread is available, spawns a new one.
     pub fn spawn(&self, code: Box<dyn FnMut() + Send>) {
@@ -86,6 +110,13 @@ impl TaskPool {
     }
 
     fn add_thread(&self, initial_fn: Option<Box<dyn FnMut() + Send>>) {
+        #[cfg(feature = "memory_monitoring")]
+        {
+            if !self.memory_usage_below_threshold() {
+                return;
+            }
+        }
+
         //  if the number of active threads is greater than the fixed thread count, return
         if self.sharing.active_tasks.load(Ordering::Acquire) >= self.thread_count {
             return;
@@ -116,10 +147,10 @@ impl TaskPool {
                                     todo = sharing.condvar.wait(todo).unwrap();
                                 } else {
                                     // wait for some seconds
-                                    let wait_duration = calculate_dynamic_wait_time(&sharing,thread_count);
+                                    let wait_duration = calculate_dynamic_wait_time(&sharing, thread_count);
                                     let (new_todo, timeout) = sharing
                                         .condvar
-                                        .wait_timeout(todo, Duration::from_secs(5))
+                                        .wait_timeout(todo, wait_duration)
                                         .unwrap();
                                     todo = new_todo;
                                     if timeout.timed_out() {
@@ -140,6 +171,22 @@ impl TaskPool {
     }
 }
 
+#[cfg(feature = "memory_monitoring")]
+impl TaskPool {
+    fn memory_usage_below_threshold(&self) -> bool {
+        match sys_info::mem_info() {
+            Ok(mem_info) => {
+                // from free memory to free gigabytes
+                let free_gb = mem_info.free as f64 / (1024.0 * 1024.0 * 1024.0);
+                let ten_percent_threshold =
+                    self.memory_threshold as f64 / (1024.0 * 1024.0 * 1024.0) / 10.0;
+                    free_gb > ten_percent_threshold
+            }
+            Err(_e) => true,
+        }
+    }
+}
+
 impl Drop for TaskPool {
     fn drop(&mut self) {
         self.sharing
@@ -149,11 +196,8 @@ impl Drop for TaskPool {
     }
 }
 
-
-
 // calculate_dynamic_wait_time calculates the dynamic wait time
 fn calculate_dynamic_wait_time(sharing: &Sharing, thread_count: usize) -> Duration {
-
     let active_threads = sharing.active_tasks.load(Ordering::Acquire);
     let waiting_tasks = sharing.waiting_tasks.load(Ordering::Acquire);
 

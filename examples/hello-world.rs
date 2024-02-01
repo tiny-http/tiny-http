@@ -5,7 +5,6 @@ use std::time::Duration;
 use sysinfo::{Components, Disks, Networks, System};
 
 
-
 #[cfg(feature = "memory_monitoring")]
 fn main() {
     use rustls::server;

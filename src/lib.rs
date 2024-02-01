@@ -378,7 +378,6 @@ impl Server {
                         let messages = inside_messages.clone();
                         let mut client = Some(client);
                         tasks_pool.spawn(Box::new(move || {
-                            println!("threadid: {:?}", thread::current().id());
                             if let Some(client) = client.take() {
                                 // Synchronization is needed for HTTPS requests to avoid a deadlock
                                 if client.secure() {

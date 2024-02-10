@@ -37,6 +37,7 @@ use std::time::SystemTime;
 ///     behavior differs from the default for most headers, which is to allow them to
 ///     be set multiple times in the same response.
 ///
+#[must_use]
 pub struct Response<R> {
     reader: R,
     status_code: StatusCode,

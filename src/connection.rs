@@ -5,6 +5,7 @@ use std::os::unix::net as unix_net;
 use std::{
     net::{Shutdown, SocketAddr, TcpListener, TcpStream, ToSocketAddrs},
     path::PathBuf,
+    str::FromStr,
 };
 
 /// Unified listener. Either a [`TcpListener`] or [`std::os::unix::net::UnixListener`]
@@ -120,7 +121,7 @@ pub enum ConfigListenAddr {
     IP(Vec<SocketAddr>),
     #[cfg(unix)]
     // TODO: use SocketAddr when bind_addr is stabilized
-    Unix(std::path::PathBuf),
+    Unix(PathBuf),
 }
 impl ConfigListenAddr {
     pub fn from_socket_addrs<A: ToSocketAddrs>(addrs: A) -> std::io::Result<Self> {
@@ -138,6 +139,60 @@ impl ConfigListenAddr {
             #[cfg(unix)]
             Self::Unix(a) => unix_net::UnixListener::bind(a).map(Listener::from),
         }
+    }
+}
+
+impl FromStr for ConfigListenAddr {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        if s.starts_with("unix:") {
+            let path = s.splitn(2, ":").last().expect("CAN'T HAPPEN");
+            #[cfg(unix)]
+            {
+                Ok(ConfigListenAddr::Unix(path.into()))
+            }
+            #[cfg(not(unix))]
+            {
+                Err("Unix sockets not supported on this platform".to_string())
+            }
+        } else {
+            Ok(ConfigListenAddr::IP(
+                s.to_socket_addrs().map_err(|e| format!("{e}"))?.collect(),
+            ))
+        }
+    }
+}
+
+pub trait ToConfigListenAddr {
+    type Err;
+
+    fn to_config_listen_addr(self) -> Result<ConfigListenAddr, Self::Err>
+    where
+        Self: Sized;
+}
+
+impl ToConfigListenAddr for ConfigListenAddr {
+    type Err = ();
+
+    fn to_config_listen_addr(self) -> Result<ConfigListenAddr, Self::Err> {
+        Ok(self)
+    }
+}
+
+impl ToConfigListenAddr for &str {
+    type Err = String;
+
+    fn to_config_listen_addr(self) -> Result<ConfigListenAddr, Self::Err> {
+        self.parse()
+    }
+}
+
+impl ToConfigListenAddr for &String {
+    type Err = String;
+
+    fn to_config_listen_addr(self) -> Result<ConfigListenAddr, Self::Err> {
+        self.parse()
     }
 }
 

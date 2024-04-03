@@ -42,3 +42,13 @@ fn unix_basic_handling() {
     client.read_to_string(&mut content).unwrap();
     assert!(content.ends_with("hello world"));
 }
+
+#[test]
+fn unix_listen_addr_parsing() {
+    let addr: tiny_http::ConfigListenAddr = "unix:/tmp/something.sock".parse().unwrap();
+
+    match addr {
+        tiny_http::ConfigListenAddr::Unix(p) => assert_eq!(p, Path::new("/tmp/something.sock")),
+        _ => panic!("Not a Unix ListenAddr"),
+    };
+}

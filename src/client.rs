@@ -12,6 +12,10 @@ use crate::util::RefinedTcpStream;
 use crate::util::{SequentialReader, SequentialReaderBuilder, SequentialWriterBuilder};
 use crate::Request;
 
+// Tradeoff between memory use, and CPU-overhead of big transfers. Larger values require
+// more memory, but can yield faster transfers and less CPU overhead
+const BUFFER_SIZE: usize = 32 * 1024;
+
 /// A ClientConnection is an object that will store a socket to a client
 /// and return Request objects.
 pub struct ClientConnection {
@@ -55,12 +59,13 @@ impl ClientConnection {
         let remote_addr = read_socket.peer_addr();
         let secure = read_socket.secure();
 
-        let mut source = SequentialReaderBuilder::new(BufReader::with_capacity(1024, read_socket));
+        let mut source =
+            SequentialReaderBuilder::new(BufReader::with_capacity(BUFFER_SIZE, read_socket));
         let first_header = source.next().unwrap();
 
         ClientConnection {
             source,
-            sink: SequentialWriterBuilder::new(BufWriter::with_capacity(1024, write_socket)),
+            sink: SequentialWriterBuilder::new(BufWriter::with_capacity(BUFFER_SIZE, write_socket)),
             remote_addr,
             next_header_source: first_header,
             no_more_requests: false,

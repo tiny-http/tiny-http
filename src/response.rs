@@ -43,6 +43,7 @@ pub struct Response<R> {
     headers: Vec<Header>,
     data_length: Option<usize>,
     chunked_threshold: Option<usize>,
+    stream_copier: StreamCopier,
 }
 
 /// A `Response` without a template parameter.
@@ -206,6 +207,7 @@ where
             headers: Vec::with_capacity(16),
             data_length,
             chunked_threshold: None,
+            stream_copier: StreamCopier::default(),
         };
 
         for h in headers {
@@ -228,6 +230,15 @@ where
     /// it is wanted or when there is no `Content-Length`.
     pub fn with_chunked_threshold(mut self, length: usize) -> Response<R> {
         self.chunked_threshold = Some(length);
+        self
+    }
+
+    /// Change response-streaming to explicitly use a larger buffer. For
+    /// large responses and fast transfer-rates, a buffer-size of 64K or 128K
+    /// can make a significant different to response-throughput and
+    /// resource-use
+    pub fn with_copy_buffer(mut self, bufsize: usize) -> Response<R> {
+        self.stream_copier = StreamCopier::ExplicitBuffer(bufsize);
         self
     }
 
@@ -319,6 +330,7 @@ where
             status_code: self.status_code,
             data_length,
             chunked_threshold: self.chunked_threshold,
+            stream_copier: self.stream_copier,
         }
     }
 
@@ -434,7 +446,7 @@ where
                     use chunked_transfer::Encoder;
 
                     let mut writer = Encoder::new(writer);
-                    io::copy(&mut reader, &mut writer)?;
+                    self.stream_copier.copy(&mut reader, &mut writer)?;
                 }
 
                 Some(TransferEncoding::Identity) => {
@@ -442,7 +454,7 @@ where
                     let data_length = data_length.unwrap();
 
                     if data_length >= 1 {
-                        io::copy(&mut reader, &mut writer)?;
+                        self.stream_copier.copy(&mut reader, &mut writer)?;
                     }
                 }
 
@@ -481,6 +493,7 @@ where
             headers: self.headers,
             data_length: self.data_length,
             chunked_threshold: self.chunked_threshold,
+            stream_copier: StreamCopier::default(),
         }
     }
 }
@@ -569,6 +582,44 @@ impl Clone for Response<io::Empty> {
             headers: self.headers.clone(),
             data_length: self.data_length,
             chunked_threshold: self.chunked_threshold,
+            stream_copier: self.stream_copier.clone(),
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+enum StreamCopier {
+    StdIo,
+    ExplicitBuffer(usize),
+}
+
+impl Default for StreamCopier {
+    fn default() -> Self {
+        Self::StdIo
+    }
+}
+
+impl StreamCopier {
+    fn copy(&self, reader: &mut impl Read, writer: &mut impl Write) -> io::Result<u64> {
+        match self {
+            StreamCopier::StdIo => std::io::copy(reader, writer),
+            StreamCopier::ExplicitBuffer(buf_size) => {
+                let mut buf = vec![0u8; *buf_size];
+                let mut len = 0;
+
+                loop {
+                    let read = match reader.read(&mut buf) {
+                        Ok(0) => break,
+                        Ok(read) => read,
+                        Err(e) => return Err(e),
+                    };
+
+                    len += read as u64;
+                    writer.write_all(&buf[..read])?;
+                }
+
+                Ok(len)
+            }
         }
     }
 }

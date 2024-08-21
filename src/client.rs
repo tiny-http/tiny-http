@@ -8,9 +8,10 @@ use std::net::SocketAddr;
 use std::str::FromStr;
 
 use crate::common::{HTTPVersion, Method};
+use crate::util::MaybeBufferedWriter;
 use crate::util::RefinedTcpStream;
 use crate::util::{SequentialReader, SequentialReaderBuilder, SequentialWriterBuilder};
-use crate::Request;
+use crate::{BufferingMode, Request};
 
 /// A ClientConnection is an object that will store a socket to a client
 /// and return Request objects.
@@ -24,7 +25,7 @@ pub struct ClientConnection {
 
     // sequence of Writers to the stream, to avoid writing response #2 before
     //  response #1
-    sink: SequentialWriterBuilder<BufWriter<RefinedTcpStream>>,
+    sink: SequentialWriterBuilder<MaybeBufferedWriter<RefinedTcpStream>>,
 
     // Reader to read the next header from
     next_header_source: SequentialReader<BufReader<RefinedTcpStream>>,
@@ -48,9 +49,12 @@ enum ReadError {
 
 impl ClientConnection {
     /// Creates a new `ClientConnection` that takes ownership of the `TcpStream`.
+    /// The `buffering_control` parameter allows for selecting the desired
+    /// buffering mode.
     pub fn new(
         write_socket: RefinedTcpStream,
         mut read_socket: RefinedTcpStream,
+        buffering_mode: BufferingMode,
     ) -> ClientConnection {
         let remote_addr = read_socket.peer_addr();
         let secure = read_socket.secure();
@@ -60,7 +64,11 @@ impl ClientConnection {
 
         ClientConnection {
             source,
-            sink: SequentialWriterBuilder::new(BufWriter::with_capacity(1024, write_socket)),
+            sink: SequentialWriterBuilder::new(if let BufferingMode::Buffered = buffering_mode {
+                MaybeBufferedWriter::Buffered(BufWriter::with_capacity(1024, write_socket))
+            } else {
+                MaybeBufferedWriter::Unbuffered(write_socket)
+            }),
             remote_addr,
             next_header_source: first_header,
             no_more_requests: false,

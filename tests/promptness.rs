@@ -1,31 +1,17 @@
 extern crate tiny_http;
 
 use std::io::{copy, Read, Write};
-use std::net::{Shutdown, TcpStream};
+use std::net::Shutdown;
 use std::ops::Deref;
 use std::sync::mpsc::channel;
 use std::sync::Arc;
-use std::thread::{sleep, spawn};
+use std::thread::spawn;
 use std::time::Duration;
-use tiny_http::{Response, Server};
+use tiny_http::Response;
 
-/// Stream that produces bytes very slowly
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
-struct SlowByteSrc {
-    val: u8,
-    len: usize,
-}
-impl<'b> Read for SlowByteSrc {
-    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
-        sleep(Duration::from_millis(100));
-        let l = self.len.min(buf.len()).min(1000);
-        for v in buf[..l].iter_mut() {
-            *v = self.val;
-        }
-        self.len -= l;
-        Ok(l)
-    }
-}
+#[allow(dead_code)]
+mod support;
+use support::{new_one_server_one_client, SlowByteSrc};
 
 /// crude impl of http `Transfer-Encoding: chunked`
 fn encode_chunked(data: &mut dyn Read, output: &mut dyn Write) {
@@ -42,6 +28,8 @@ fn encode_chunked(data: &mut dyn Read, output: &mut dyn Write) {
 }
 
 mod prompt_pipelining {
+    use std::time::Duration;
+
     use super::*;
 
     /// Check that pipelined requests on the same connection are received promptly.
@@ -52,12 +40,12 @@ mod prompt_pipelining {
         req_writer: impl FnOnce(&mut dyn Write) + Send + 'static,
     ) {
         let resp_body = SlowByteSrc {
+            sleep_time: Duration::from_millis(100),
             val: 42,
             len: 1000_000,
         }; // very slow response body
 
-        let server = Server::http("0.0.0.0:0").unwrap();
-        let mut client = TcpStream::connect(server.server_addr().to_ip().unwrap()).unwrap();
+        let (server, mut client) = new_one_server_one_client();
         let (svr_send, svr_rcv) = channel();
 
         spawn(move || {
@@ -142,8 +130,7 @@ mod prompt_responses {
         timeout: Duration,
         req_writer: impl FnOnce(&mut dyn Write) + Send + 'static,
     ) {
-        let server = Server::http("0.0.0.0:0").unwrap();
-        let client = TcpStream::connect(server.server_addr().to_ip().unwrap()).unwrap();
+        let (server, client) = new_one_server_one_client();
 
         spawn(move || loop {
             // server attempts to respond immediately
@@ -164,6 +151,7 @@ mod prompt_responses {
     }
 
     static SLOW_BODY: SlowByteSrc = SlowByteSrc {
+        sleep_time: Duration::from_millis(100),
         val: 65,
         len: 1000_000,
     };

@@ -463,9 +463,7 @@ impl Drop for Server {
             ListenAddr::IP(addr) => TcpStream::connect(addr).map(Connection::from),
             #[cfg(unix)]
             ListenAddr::Unix(addr) => {
-                // TODO: use connect_addr when its stabilized.
-                let path = addr.as_pathname().unwrap();
-                std::os::unix::net::UnixStream::connect(path).map(Connection::from)
+                std::os::unix::net::UnixStream::connect_addr(addr).map(Connection::from)
             }
         };
         if let Ok(stream) = maybe_stream {

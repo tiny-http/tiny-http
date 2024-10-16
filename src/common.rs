@@ -148,7 +148,7 @@ impl PartialOrd<StatusCode> for u16 {
 }
 
 /// Represents a HTTP header.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Header {
     pub field: HeaderField,
     pub value: AsciiString,
@@ -203,7 +203,7 @@ impl Display for Header {
 /// Field of a header (eg. `Content-Type`, `Content-Length`, etc.)
 ///
 /// Comparison between two `HeaderField`s ignores case.
-#[derive(Debug, Clone, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct HeaderField(AsciiString);
 
 impl HeaderField {

@@ -1,7 +1,7 @@
 use crate::connection::Connection;
 use crate::util::refined_tcp_stream::Stream as RefinedStream;
 use std::error::Error;
-use std::io::{Read, Write};
+use std::io::{Cursor, Read, Write};
 use std::net::{Shutdown, SocketAddr};
 use std::sync::{Arc, Mutex};
 use zeroize::Zeroizing;
@@ -69,33 +69,33 @@ impl RustlsContext {
         certificates: Vec<u8>,
         private_key: Zeroizing<Vec<u8>>,
     ) -> Result<Self, Box<dyn Error + Send + Sync>> {
-        let certificate_chain: Vec<rustls::Certificate> =
-            rustls_pemfile::certs(&mut certificates.as_slice())?
-                .into_iter()
-                .map(|bytes| rustls::Certificate(bytes))
-                .collect();
+        let mut cursor = Cursor::new(certificates);
+        let certificate_chain = rustls_pemfile::certs(&mut cursor)
+            .into_iter()
+            .collect::<Result<Vec<rustls_pki_types::CertificateDer<'_>>, std::io::Error>>()?;
 
         if certificate_chain.is_empty() {
             return Err("Couldn't extract certificate chain from config.".into());
         }
 
-        let private_key = rustls::PrivateKey({
+        let private_key: rustls_pki_types::PrivateKeyDer<'_> = {
             let pkcs8_keys = rustls_pemfile::pkcs8_private_keys(
                 &mut private_key.clone().as_slice(),
             )
-            .expect("file contains invalid pkcs8 private key (encrypted keys are not supported)");
+            .into_iter()
+            .collect::<Result<Vec<rustls_pki_types::PrivatePkcs8KeyDer<'_>>, std::io::Error>>()?;
 
             if let Some(pkcs8_key) = pkcs8_keys.first() {
-                pkcs8_key.clone()
+                pkcs8_key.clone_key().into()
             } else {
-                let rsa_keys = rustls_pemfile::rsa_private_keys(&mut private_key.as_slice())
-                    .expect("file contains invalid rsa private key");
-                rsa_keys[0].clone()
+                let rsa_keys = rustls_pemfile::rsa_private_keys(&mut private_key.as_slice()).into_iter()
+                    .collect::<Result<Vec<rustls_pki_types::PrivatePkcs1KeyDer<'_>>, std::io::Error>>()?;
+
+                rsa_keys[0].clone_key().into()
             }
-        });
+        };
 
         let tls_conf = rustls::ServerConfig::builder()
-            .with_safe_defaults()
             .with_no_client_auth()
             .with_single_cert(certificate_chain, private_key)?;
 

@@ -15,7 +15,7 @@ rust-version = "1.57"
 default = ["log"]
 ssl = ["ssl-openssl"]
 ssl-openssl = ["openssl", "zeroize"]
-ssl-rustls = ["rustls", "rustls-pemfile", "zeroize"]
+ssl-rustls = ["rustls", "rustls-pemfile", "rustls-pki-types", "zeroize"]
 ssl-native-tls = ["native-tls", "zeroize"]
 
 [dependencies]
@@ -25,8 +25,9 @@ httpdate = "1.0.2"
 
 log = { version = "0.4.4", optional = true }
 openssl = { version = "0.10", optional = true }
-rustls = { version = "0.20", optional = true }
-rustls-pemfile = { version = "0.2.1", optional = true }
+rustls = { version = "0.23", optional = true }
+rustls-pemfile = { version = "2.2", optional = true }
+rustls-pki-types = { version = "1.9", optional = true }
 zeroize = { version = "1", optional = true }
 native-tls = { version = "0.2", optional = true }
 

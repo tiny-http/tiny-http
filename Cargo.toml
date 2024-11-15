@@ -9,7 +9,7 @@ keywords = ["http", "server", "web"]
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/tiny-http/tiny-http"
 edition = "2018"
-rust-version = "1.57"
+rust-version = "1.60"
 
 [features]
 default = ["log"]

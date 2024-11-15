@@ -156,8 +156,9 @@ where
                 self.next.send(reader).ok();
             }
             SequentialReaderInner::Waiting(recv) => {
-                let reader = recv.recv().unwrap();
-                self.next.send(reader).ok();
+                if let Ok(reader) = recv.recv() {
+                    self.next.send(reader).ok();
+                }
             }
             SequentialReaderInner::Empty => (),
         }

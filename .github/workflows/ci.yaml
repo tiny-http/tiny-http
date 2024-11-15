@@ -1,29 +1,17 @@
 on: [push, pull_request]
 name: CI
 jobs:
-  clippy_rustfmt:
-    name: Lint & Format
+  rustfmt:
+    name: Formatting
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        features:
-          - default
-          - ssl-openssl
-          - ssl-rustls
-          - ssl-native-tls
     steps:
       - uses: actions/checkout@v2
       - name: Install stable toolchain
         uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
-          components: rustfmt, clippy
-
-      - name: Clippy
-        uses: actions-rs/cargo@v1
-        with:
-          command: clippy
-          args: --features ${{ matrix.features }}
+          override: true
+          components: rustfmt
 
       - name: Format
         uses: actions-rs/cargo@v1
@@ -31,15 +19,14 @@ jobs:
           command: fmt
           args: -- --check
 
-  test:
-    name: Build & Test
+  build_test_lint:
+    name: Build, Test, and Lints
     runs-on: ubuntu-latest
     strategy:
       matrix:
         rust:
           - stable
           - nightly
-          - 1.57
         features:
           - default
           - ssl-openssl
@@ -52,6 +39,7 @@ jobs:
         with:
           toolchain: ${{ matrix.rust }}
           override: true
+          components: clippy
 
       - name: Build
         uses: actions-rs/cargo@v1
@@ -64,3 +52,30 @@ jobs:
         with:
           command: test
           args: --features ${{ matrix.features }}
+
+      - name: Clippy
+        uses: actions-rs/cargo@v1
+        with:
+          command: clippy
+          args: --features ${{ matrix.features }}
+
+  msrv_build:
+    name: Build & Test on MSRV
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Install toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: "1.60"
+          override: true
+
+      - name: Build
+        uses: actions-rs/cargo@v1
+        with:
+          command: build
+
+      - name: Test
+        uses: actions-rs/cargo@v1
+        with:
+          command: test

@@ -9,7 +9,7 @@ keywords = ["http", "server", "web"]
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/tiny-http/tiny-http"
 edition = "2018"
-rust-version = "1.57"
+rust-version = "1.80"
 
 [features]
 default = ["log"]
@@ -34,7 +34,12 @@ native-tls = { version = "0.2", optional = true }
 rustc-serialize = "0.3"
 sha1 = "0.6.0"
 fdlimit = "0.1"
+divan = { version = "0.1.16", default-features = false }
 
 [package.metadata.docs.rs]
 # Enable just one SSL implementation
 features = ["ssl-openssl"]
+
+[[bench]]
+name = "bench"
+harness = false

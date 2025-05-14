@@ -1,7 +1,6 @@
-use crate::{request::new_request, HTTPVersion, Header, HeaderField, Method, Request};
-use ascii::AsciiString;
+use crate::{request::new_request, Request};
+use http::{header, HeaderMap, HeaderName, HeaderValue, Method, Uri, Version};
 use std::net::SocketAddr;
-use std::str::FromStr;
 
 /// A simpler version of [`Request`] that is useful for testing. No data actually goes anywhere.
 ///
@@ -9,21 +8,23 @@ use std::str::FromStr;
 /// with no headers. To create a `TestRequest` with different parameters, use the builder pattern:
 ///
 /// ```
-/// # use tiny_http::{Method, TestRequest};
+/// # use http::{Method, Uri};
+/// # use tiny_http::TestRequest;
 /// let request = TestRequest::new()
-///     .with_method(Method::Post)
-///     .with_path("/api/widgets")
+///     .with_method(Method::POST)
+///     .with_path(Uri::from_static("/api/widgets"))
 ///     .with_body("42");
 /// ```
 ///
 /// Then, convert the `TestRequest` into a real `Request` and pass it to the server under test:
 ///
 /// ```
-/// # use tiny_http::{Method, Request, Response, Server, StatusCode, TestRequest};
+/// # use http::{Method, Uri};
+/// # use tiny_http::{Request, Response, Server, TestRequest};
 /// # use std::io::Cursor;
 /// # let request = TestRequest::new()
-/// #     .with_method(Method::Post)
-/// #     .with_path("/api/widgets")
+/// #     .with_method(Method::POST)
+/// #     .with_path(Uri::from_static("/api/widgets"))
 /// #     .with_body("42");
 /// # struct TestServer {
 /// #     listener: Server,
@@ -37,7 +38,7 @@ use std::str::FromStr;
 /// #     }
 /// # }
 /// let response = server.handle_request(request.into());
-/// assert_eq!(response.status_code(), StatusCode(200));
+/// assert_eq!(response.status_code(), http::StatusCode::OK);
 /// ```
 pub struct TestRequest {
     body: &'static str,
@@ -45,24 +46,17 @@ pub struct TestRequest {
     // true if HTTPS, false if HTTP
     secure: bool,
     method: Method,
-    path: String,
-    http_version: HTTPVersion,
-    headers: Vec<Header>,
+    path: Uri,
+    http_version: Version,
+    headers: HeaderMap,
 }
 
 impl From<TestRequest> for Request {
     fn from(mut mock: TestRequest) -> Request {
         // if the user didn't set the Content-Length header, then set it for them
         // otherwise, leave it alone (it may be under test)
-        if !mock
-            .headers
-            .iter_mut()
-            .any(|h| h.field.equiv("Content-Length"))
-        {
-            mock.headers.push(Header {
-                field: HeaderField::from_str("Content-Length").unwrap(),
-                value: AsciiString::from_ascii(mock.body.len().to_string()).unwrap(),
-            });
+        if let header::Entry::Vacant(vacant) = mock.headers.entry(header::CONTENT_TYPE) {
+            vacant.insert(HeaderValue::from_str(&mock.body.len().to_string()).unwrap());
         }
         new_request(
             mock.secure,
@@ -84,10 +78,10 @@ impl Default for TestRequest {
             body: "",
             remote_addr: "127.0.0.1:23456".parse().unwrap(),
             secure: false,
-            method: Method::Get,
-            path: "/".to_string(),
-            http_version: HTTPVersion::from((1, 1)),
-            headers: Vec::new(),
+            method: Method::GET,
+            path: Uri::default(),
+            http_version: Version::HTTP_11,
+            headers: HeaderMap::new(),
         }
     }
 }
@@ -112,16 +106,16 @@ impl TestRequest {
         self.method = method;
         self
     }
-    pub fn with_path(mut self, path: &str) -> Self {
-        self.path = path.to_string();
+    pub fn with_path(mut self, path: Uri) -> Self {
+        self.path = path;
         self
     }
-    pub fn with_http_version(mut self, version: HTTPVersion) -> Self {
+    pub fn with_http_version(mut self, version: Version) -> Self {
         self.http_version = version;
         self
     }
-    pub fn with_header(mut self, header: Header) -> Self {
-        self.headers.push(header);
+    pub fn with_header(mut self, name: HeaderName, value: HeaderValue) -> Self {
+        self.headers.append(name, value);
         self
     }
 }

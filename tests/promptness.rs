@@ -7,7 +7,7 @@ use std::sync::mpsc::channel;
 use std::sync::Arc;
 use std::thread::{sleep, spawn};
 use std::time::Duration;
-use tiny_http::{Response, Server};
+use tiny_http::{http, Response, Server};
 
 /// Stream that produces bytes very slowly
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -70,7 +70,10 @@ mod prompt_pipelining {
                 // The next pipelined request should now be available for parsing,
                 // while we send the (possibly slow) response in another thread
                 spawn(move || {
-                    req.respond(Response::empty(200).with_data(resp_body, Some(resp_body.len)))
+                    req.respond(
+                        Response::empty(http::StatusCode::OK)
+                            .with_data(resp_body, Some(resp_body.len)),
+                    )
                 });
             }
             svr_send.send(()).unwrap();
@@ -148,7 +151,8 @@ mod prompt_responses {
         spawn(move || loop {
             // server attempts to respond immediately
             let req = server.recv().unwrap();
-            req.respond(Response::empty(400)).unwrap();
+            req.respond(Response::empty(http::StatusCode::BAD_REQUEST))
+                .unwrap();
         });
 
         let client = Arc::new(client);

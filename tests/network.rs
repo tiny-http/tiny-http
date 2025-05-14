@@ -170,7 +170,7 @@ fn no_transfer_encoding_on_204() {
     thread::spawn(move || {
         let rq = server.recv().unwrap();
 
-        let resp = tiny_http::Response::empty(tiny_http::StatusCode(204));
+        let resp = tiny_http::Response::empty(http::StatusCode::NO_CONTENT);
         rq.respond(resp).unwrap();
     });
 

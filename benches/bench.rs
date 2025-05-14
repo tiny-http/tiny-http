@@ -4,9 +4,9 @@ extern crate fdlimit;
 extern crate test;
 extern crate tiny_http;
 
+use http::Method;
 use std::io::Write;
 use std::process::Command;
-use tiny_http::Method;
 
 #[test]
 #[ignore]
@@ -40,9 +40,9 @@ fn sequential_requests(bencher: &mut test::Bencher) {
 
         let request = server.recv().unwrap();
 
-        assert_eq!(request.method(), &Method::Get);
+        assert_eq!(request.method(), &Method::GET);
 
-        request.respond(tiny_http::Response::new_empty(tiny_http::StatusCode(204)));
+        request.respond(tiny_http::Response::new_empty(http::StatusCode::NO_CONTENT));
     });
 }
 
@@ -72,9 +72,9 @@ fn parallel_requests(bencher: &mut test::Bencher) {
                 Some(rq) => rq,
             };
 
-            assert_eq!(request.method(), &Method::Get);
+            assert_eq!(request.method(), &Method::GET);
 
-            request.respond(tiny_http::Response::new_empty(tiny_http::StatusCode(204)));
+            request.respond(tiny_http::Response::new_empty(http::StatusCode::NO_CONTENT));
         }
     });
 }

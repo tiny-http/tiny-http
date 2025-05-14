@@ -9,6 +9,8 @@ use std::sync::{
     Arc,
 };
 
+use tiny_http::http;
+
 #[allow(dead_code)]
 mod support;
 
@@ -44,7 +46,7 @@ fn big_response_reader() -> Reader {
 
 fn identity_served(r: &mut Reader) -> tiny_http::Response<&mut Reader> {
     let body_len = r.inner.get_ref().len();
-    tiny_http::Response::empty(200)
+    tiny_http::Response::empty(http::StatusCode::OK)
         .with_chunked_threshold(std::usize::MAX)
         .with_data(r, Some(body_len))
 }

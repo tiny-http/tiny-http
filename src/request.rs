@@ -3,13 +3,13 @@ use std::io::{self, Cursor, ErrorKind, Read, Write};
 
 use std::fmt;
 use std::net::SocketAddr;
-use std::str::FromStr;
 
 use std::sync::mpsc::Sender;
 
 use crate::util::{EqualReader, FusedReader};
-use crate::{HTTPVersion, Header, Method, Response, StatusCode};
+use crate::Response;
 use chunked_transfer::Decoder;
+use http::{header, HeaderMap, Method, StatusCode, Uri, Version};
 
 /// Represents an HTTP request made by a client.
 ///
@@ -61,11 +61,11 @@ pub struct Request {
 
     method: Method,
 
-    path: String,
+    path: Uri,
 
-    http_version: HTTPVersion,
+    http_version: Version,
 
-    headers: Vec<Header>,
+    headers: HeaderMap,
 
     body_length: Option<usize>,
 
@@ -129,9 +129,9 @@ impl From<IoError> for RequestCreationError {
 pub fn new_request<R, W>(
     secure: bool,
     method: Method,
-    path: String,
-    version: HTTPVersion,
-    headers: Vec<Header>,
+    path: Uri,
+    version: Version,
+    headers: HeaderMap,
     remote_addr: Option<SocketAddr>,
     mut source_data: R,
     writer: W,
@@ -141,10 +141,7 @@ where
     W: Write + Send + 'static,
 {
     // finding the transfer-encoding header
-    let transfer_encoding = headers
-        .iter()
-        .find(|h: &&Header| h.field.equiv("Transfer-Encoding"))
-        .map(|h| h.value.clone());
+    let transfer_encoding = headers.get(header::TRANSFER_ENCODING).cloned();
 
     // finding the content-length header
     let content_length = if transfer_encoding.is_some() {
@@ -153,34 +150,27 @@ where
         None
     } else {
         headers
-            .iter()
-            .find(|h: &&Header| h.field.equiv("Content-Length"))
-            .and_then(|h| FromStr::from_str(h.value.as_str()).ok())
+            .get(header::CONTENT_LENGTH)
+            .and_then(|value| value.to_str().ok()?.parse().ok())
     };
 
     // true if the client sent a `Expect: 100-continue` header
-    let expects_continue = {
-        match headers
-            .iter()
-            .find(|h: &&Header| h.field.equiv("Expect"))
-            .map(|h| h.value.as_str())
-        {
-            None => false,
-            Some(v) if v.eq_ignore_ascii_case("100-continue") => true,
-            _ => return Err(RequestCreationError::ExpectationFailed),
-        }
+    let expects_continue = match headers
+        .get(header::EXPECT)
+        .and_then(|value| value.to_str().ok())
+    {
+        None => false,
+        Some(v) if v.eq_ignore_ascii_case("100-continue") => true,
+        _ => return Err(RequestCreationError::ExpectationFailed),
     };
 
     // true if the client sent a `Connection: upgrade` header
-    let connection_upgrade = {
-        match headers
-            .iter()
-            .find(|h: &&Header| h.field.equiv("Connection"))
-            .map(|h| h.value.as_str())
-        {
-            Some(v) if v.to_ascii_lowercase().contains("upgrade") => true,
-            _ => false,
-        }
+    let connection_upgrade = match headers
+        .get(header::CONNECTION)
+        .and_then(|value| value.to_str().ok())
+    {
+        Some(v) if v.to_ascii_lowercase().contains("upgrade") => true,
+        _ => false,
     };
 
     // we wrap `source_data` around a reading whose nature depends on the transfer-encoding and
@@ -256,19 +246,19 @@ impl Request {
 
     /// Returns the resource requested by the client.
     #[inline]
-    pub fn url(&self) -> &str {
+    pub fn url(&self) -> &Uri {
         &self.path
     }
 
     /// Returns a list of all headers sent by the client.
     #[inline]
-    pub fn headers(&self) -> &[Header] {
+    pub fn headers(&self) -> &HeaderMap {
         &self.headers
     }
 
     /// Returns the HTTP version of the request.
     #[inline]
-    pub fn http_version(&self) -> &HTTPVersion {
+    pub fn http_version(&self) -> &Version {
         &self.http_version
     }
 
@@ -360,7 +350,7 @@ impl Request {
     #[inline]
     pub fn as_reader(&mut self) -> &mut dyn Read {
         if self.must_send_continue {
-            let msg = Response::new_empty(StatusCode(100));
+            let msg = Response::new_empty(StatusCode::CONTINUE);
             msg.raw_print(
                 self.response_writer.as_mut().unwrap().by_ref(),
                 self.http_version.clone(),
@@ -446,7 +436,7 @@ impl Request {
     {
         let mut writer = self.extract_writer_impl();
 
-        let do_not_send_body = self.method == Method::Head;
+        let do_not_send_body = self.method == Method::HEAD;
 
         Self::ignore_client_closing_errors(response.raw_print(
             writer.by_ref(),
@@ -488,7 +478,7 @@ impl fmt::Debug for Request {
 impl Drop for Request {
     fn drop(&mut self) {
         if self.response_writer.is_some() {
-            let response = Response::empty(500);
+            let response = Response::empty(StatusCode::INTERNAL_SERVER_ERROR);
             let _ = self.respond_impl(response); // ignoring any potential error
             if let Some(sender) = self.notify_when_responded.take() {
                 sender.send(()).unwrap();

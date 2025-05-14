@@ -1,13 +1,13 @@
 use ascii::AsciiString;
+use http::Uri;
+use http::{header, HeaderMap, HeaderName, HeaderValue, Method, Version};
 
 use std::io::Error as IoError;
 use std::io::Result as IoResult;
 use std::io::{BufReader, BufWriter, ErrorKind, Read};
 
 use std::net::SocketAddr;
-use std::str::FromStr;
 
-use crate::common::{HTTPVersion, Method};
 use crate::util::RefinedTcpStream;
 use crate::util::{SequentialReader, SequentialReaderBuilder, SequentialWriterBuilder};
 use crate::Request;
@@ -40,9 +40,9 @@ pub struct ClientConnection {
 #[derive(Debug)]
 enum ReadError {
     WrongRequestLine,
-    WrongHeader(HTTPVersion),
+    WrongHeader(Version),
     /// the client sent an unrecognized `Expect` header
-    ExpectationFailed(HTTPVersion),
+    ExpectationFailed(Version),
     ReadIoError(IoError),
 }
 
@@ -116,18 +116,21 @@ impl ClientConnection {
 
             // getting all headers
             let headers = {
-                let mut headers = Vec::new();
+                let mut headers = HeaderMap::new();
                 loop {
                     let line = self.read_next_line().map_err(ReadError::ReadIoError)?;
 
                     if line.is_empty() {
                         break;
                     };
-                    headers.push(match FromStr::from_str(line.as_str().trim()) {
-                        // TODO: remove this conversion
-                        Ok(h) => h,
-                        _ => return Err(ReadError::WrongHeader(version)),
-                    });
+
+                    // parse the header from the line
+                    let header = line.as_str().trim();
+                    let wrong_header = || ReadError::WrongHeader(version);
+                    let (name, value) = header.split_once(':').ok_or_else(wrong_header)?;
+                    let name: HeaderName = name.parse().map_err(|_| wrong_header())?;
+                    let value = HeaderValue::from_str(value.trim()).map_err(|_| wrong_header())?;
+                    headers.append(name, value);
                 }
 
                 headers
@@ -175,7 +178,9 @@ impl Iterator for ClientConnection {
     /// Blocks until the next Request is available.
     /// Returns None when no new Requests will come from the client.
     fn next(&mut self) -> Option<Request> {
-        use crate::{Response, StatusCode};
+        use crate::Response;
+
+        use http::StatusCode;
 
         // the client sent a "connection: close" header in this previous request
         //  or is using HTTP 1.0, meaning that no new request will come
@@ -187,9 +192,9 @@ impl Iterator for ClientConnection {
             let rq = match self.read() {
                 Err(ReadError::WrongRequestLine) => {
                     let writer = self.sink.next().unwrap();
-                    let response = Response::new_empty(StatusCode(400));
+                    let response = Response::new_empty(StatusCode::BAD_REQUEST);
                     response
-                        .raw_print(writer, HTTPVersion(1, 1), &[], false, None)
+                        .raw_print(writer, Version::HTTP_11, &HeaderMap::new(), false, None)
                         .ok();
                     return None; // we don't know where the next request would start,
                                  // se we have to close
@@ -197,8 +202,10 @@ impl Iterator for ClientConnection {
 
                 Err(ReadError::WrongHeader(ver)) => {
                     let writer = self.sink.next().unwrap();
-                    let response = Response::new_empty(StatusCode(400));
-                    response.raw_print(writer, ver, &[], false, None).ok();
+                    let response = Response::new_empty(StatusCode::BAD_REQUEST);
+                    response
+                        .raw_print(writer, ver, &HeaderMap::new(), false, None)
+                        .ok();
                     return None; // we don't know where the next request would start,
                                  // se we have to close
                 }
@@ -206,17 +213,19 @@ impl Iterator for ClientConnection {
                 Err(ReadError::ReadIoError(ref err)) if err.kind() == ErrorKind::TimedOut => {
                     // request timeout
                     let writer = self.sink.next().unwrap();
-                    let response = Response::new_empty(StatusCode(408));
+                    let response = Response::new_empty(StatusCode::REQUEST_TIMEOUT);
                     response
-                        .raw_print(writer, HTTPVersion(1, 1), &[], false, None)
+                        .raw_print(writer, Version::HTTP_11, &HeaderMap::new(), false, None)
                         .ok();
                     return None; // closing the connection
                 }
 
                 Err(ReadError::ExpectationFailed(ver)) => {
                     let writer = self.sink.next().unwrap();
-                    let response = Response::new_empty(StatusCode(417));
-                    response.raw_print(writer, ver, &[], true, None).ok();
+                    let response = Response::new_empty(StatusCode::EXPECTATION_FAILED);
+                    response
+                        .raw_print(writer, ver, &HeaderMap::new(), true, None)
+                        .ok();
                     return None; // TODO: should be recoverable, but needs handling in case of body
                 }
 
@@ -226,14 +235,14 @@ impl Iterator for ClientConnection {
             };
 
             // checking HTTP version
-            if *rq.http_version() > (1, 1) {
+            if *rq.http_version() > Version::HTTP_11 {
                 let writer = self.sink.next().unwrap();
                 let response = Response::from_string(
                     "This server only supports HTTP versions 1.0 and 1.1".to_owned(),
                 )
-                .with_status_code(StatusCode(505));
+                .with_status_code(StatusCode::HTTP_VERSION_NOT_SUPPORTED);
                 response
-                    .raw_print(writer, HTTPVersion(1, 1), &[], false, None)
+                    .raw_print(writer, Version::HTTP_11, &HeaderMap::new(), false, None)
                     .ok();
                 continue;
             }
@@ -241,9 +250,8 @@ impl Iterator for ClientConnection {
             // updating the status of the connection
             let connection_header = rq
                 .headers()
-                .iter()
-                .find(|h| h.field.equiv("Connection"))
-                .map(|h| h.value.as_str());
+                .get(header::CONNECTION)
+                .and_then(|value| value.to_str().ok());
 
             let lowercase = connection_header.map(|h| h.to_ascii_lowercase());
 
@@ -251,11 +259,11 @@ impl Iterator for ClientConnection {
                 Some(ref val) if val.contains("close") => self.no_more_requests = true,
                 Some(ref val) if val.contains("upgrade") => self.no_more_requests = true,
                 Some(ref val)
-                    if !val.contains("keep-alive") && *rq.http_version() == HTTPVersion(1, 0) =>
+                    if !val.contains("keep-alive") && *rq.http_version() == Version::HTTP_10 =>
                 {
                     self.no_more_requests = true
                 }
-                None if *rq.http_version() == HTTPVersion(1, 0) => self.no_more_requests = true,
+                None if *rq.http_version() == Version::HTTP_10 => self.no_more_requests = true,
                 _ => (),
             };
 
@@ -266,26 +274,26 @@ impl Iterator for ClientConnection {
 }
 
 /// Parses a "HTTP/1.1" string.
-fn parse_http_version(version: &str) -> Result<HTTPVersion, ReadError> {
-    let (major, minor) = match version {
-        "HTTP/0.9" => (0, 9),
-        "HTTP/1.0" => (1, 0),
-        "HTTP/1.1" => (1, 1),
-        "HTTP/2.0" => (2, 0),
-        "HTTP/3.0" => (3, 0),
+fn parse_http_version(version: &str) -> Result<Version, ReadError> {
+    let version = match version {
+        "HTTP/0.9" => Version::HTTP_09,
+        "HTTP/1.0" => Version::HTTP_10,
+        "HTTP/1.1" => Version::HTTP_11,
+        "HTTP/2.0" => Version::HTTP_2,
+        "HTTP/3.0" => Version::HTTP_3,
         _ => return Err(ReadError::WrongRequestLine),
     };
 
-    Ok(HTTPVersion(major, minor))
+    Ok(version)
 }
 
 /// Parses the request line of the request.
 /// eg. GET / HTTP/1.1
-fn parse_request_line(line: &str) -> Result<(Method, String, HTTPVersion), ReadError> {
+fn parse_request_line(line: &str) -> Result<(Method, Uri, Version), ReadError> {
     let mut parts = line.split(' ');
 
     let method = parts.next().and_then(|w| w.parse().ok());
-    let path = parts.next().map(ToOwned::to_owned);
+    let path = parts.next().and_then(|url| url.parse().ok());
     let version = parts.next().and_then(|w| parse_http_version(w).ok());
 
     method
@@ -299,9 +307,9 @@ mod test {
     fn test_parse_request_line() {
         let (method, path, ver) = super::parse_request_line("GET /hello HTTP/1.1").unwrap();
 
-        assert!(method == crate::Method::Get);
+        assert!(method == http::Method::GET);
         assert!(path == "/hello");
-        assert!(ver == crate::common::HTTPVersion(1, 1));
+        assert!(ver == http::Version::HTTP_11);
 
         assert!(super::parse_request_line("GET /hello").is_err());
         assert!(super::parse_request_line("qsd qsd qsd").is_err());

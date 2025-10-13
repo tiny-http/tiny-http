@@ -376,9 +376,15 @@ impl Server {
                     }
 
                     Err(e) => {
-                        log::error!("Error accepting new client: {}", e);
-                        inside_messages.push(e.into());
-                        break;
+                        if e.kind() == IoErrorKind::ConnectionAborted {
+                            // A non-fatal error.  Log it, and try to accept
+                            // a new connection.
+                            log::warn!("Error accepting new client: {}", e);
+                        } else {
+                            log::error!("Error accepting new client: {}", e);
+                            inside_messages.push(e.into());
+                            break;
+                        }
                     }
                 }
             }

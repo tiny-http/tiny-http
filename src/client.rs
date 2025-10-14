@@ -144,13 +144,18 @@ impl ClientConnection {
         std::mem::swap(&mut self.next_header_source, &mut data_source);
 
         // building the next reader
+        let remote_addr = match self.remote_addr.as_ref() {
+            Ok(addr) => *addr,
+            Err(e) => return Err(ReadError::ReadIoError(IoError::from(e.kind()))),
+        };
+
         let request = crate::request::new_request(
             self.secure,
             method,
             path,
             version.clone(),
             headers,
-            *self.remote_addr.as_ref().unwrap(),
+            remote_addr,
             data_source,
             writer,
         )

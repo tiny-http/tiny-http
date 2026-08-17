@@ -65,11 +65,18 @@ where
 {
     fn drop(&mut self) {
         let mut remaining_to_read = self.size;
+        // Drain with a fixed-size buffer. `self.size` is derived from the
+        // client's declared Content-Length minus what was read, so it is
+        // attacker-controlled and unbounded: allocating it wholesale lets an
+        // unauthenticated request declaring a huge Content-Length (while
+        // sending only a few bytes) cost the server that allocation at drop
+        // time, regardless of what the handler responded.
+        let mut buf = [0u8; 4096];
 
         while remaining_to_read > 0 {
-            let mut buf = vec![0; remaining_to_read];
+            let want = remaining_to_read.min(buf.len());
 
-            match self.reader.read(&mut buf) {
+            match self.reader.read(&mut buf[..want]) {
                 Err(e) => {
                     self.last_read_signal.send(Err(e)).ok();
                     break;
@@ -127,5 +134,19 @@ mod tests {
         let mut string = String::new();
         org_reader.read_to_string(&mut string).unwrap();
         assert_eq!(string, " world");
+    }
+
+    #[test]
+    fn test_drop_drain_does_not_allocate_declared_size() {
+        use std::io::Cursor;
+
+        // A body declaring vastly more than it delivers: dropping the reader
+        // must drain what is there and stop at EOF, without allocating the
+        // declared size. (Before the fixed-size drain buffer, this drop
+        // attempted a 1 TiB allocation.)
+        let org_reader = Cursor::new("hello".to_string().into_bytes());
+        let (reader, rx) = EqualReader::new(org_reader, 1 << 40);
+        drop(reader);
+        assert!(rx.recv().unwrap().is_ok());
     }
 }

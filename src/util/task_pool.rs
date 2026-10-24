@@ -69,7 +69,17 @@ impl TaskPool {
     pub fn spawn(&self, code: Box<dyn FnMut() + Send>) {
         let mut queue = self.sharing.todo.lock().unwrap();
 
-        if self.sharing.waiting_tasks.load(Ordering::Acquire) == 0 {
+        self.dispatch(&mut queue, code);
+    }
+
+    fn dispatch(
+        &self,
+        queue: &mut VecDeque<Box<dyn FnMut() + Send>>,
+        code: Box<dyn FnMut() + Send>,
+    ) {
+        // Queued jobs already reserve idle workers, even before those workers
+        // wake and decrement waiting_tasks. Do not reserve them twice.
+        if self.sharing.waiting_tasks.load(Ordering::Acquire) <= queue.len() {
             self.add_thread(Some(code));
         } else {
             queue.push_back(code);
@@ -133,5 +143,59 @@ impl Drop for TaskPool {
             .active_tasks
             .store(999_999_999, Ordering::Release);
         self.sharing.condvar.notify_all();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::mpsc;
+    use std::time::Instant;
+
+    #[test]
+    fn a_burst_of_blocking_jobs_does_not_reserve_an_idle_worker_twice() {
+        let pool = TaskPool::new();
+        let deadline = Instant::now() + Duration::from_secs(2);
+        while pool.sharing.waiting_tasks.load(Ordering::Acquire) != MIN_THREADS {
+            assert!(Instant::now() < deadline, "workers did not become idle");
+            thread::yield_now();
+        }
+        let release = Arc::new((Mutex::new(false), Condvar::new()));
+        let (started, received) = mpsc::channel();
+        // Keep the queue locked while dispatching a burst. This is a valid
+        // schedule of consecutive spawn calls before idle workers dequeue jobs.
+        let mut queue = pool.sharing.todo.lock().unwrap();
+        for _ in 0..MIN_THREADS + 2 {
+            let started = started.clone();
+            let release = release.clone();
+            pool.dispatch(
+                &mut queue,
+                Box::new(move || {
+                    started.send(()).unwrap();
+                    let (lock, condition) = &*release;
+                    let mut released = lock.lock().unwrap();
+                    while !*released {
+                        released = condition.wait(released).unwrap();
+                    }
+                }),
+            );
+        }
+        drop(queue);
+        let deadline = Instant::now() + Duration::from_secs(2);
+        let mut count = 0;
+        while count < MIN_THREADS + 2 {
+            if received
+                .recv_timeout(deadline.saturating_duration_since(Instant::now()))
+                .is_err()
+            {
+                break;
+            }
+            count += 1;
+        }
+        // Always unblock workers, including when the assertion below fails.
+        let (lock, condition) = &*release;
+        *lock.lock().unwrap() = true;
+        condition.notify_all();
+        assert_eq!(count, MIN_THREADS + 2, "queued connections were starved");
     }
 }

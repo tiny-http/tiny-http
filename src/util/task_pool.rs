@@ -69,7 +69,8 @@ impl TaskPool {
     pub fn spawn(&self, code: Box<dyn FnMut() + Send>) {
         let mut queue = self.sharing.todo.lock().unwrap();
 
-        if self.sharing.waiting_tasks.load(Ordering::Acquire) == 0 {
+        // A woken thread counts as waiting until it re-takes the lock; each queued task claims one.
+        if queue.len() >= self.sharing.waiting_tasks.load(Ordering::Acquire) {
             self.add_thread(Some(code));
         } else {
             queue.push_back(code);

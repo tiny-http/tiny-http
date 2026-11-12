@@ -130,6 +130,14 @@ mod ssl;
 mod test;
 mod util;
 
+/// How long a new connection may take to complete its TLS handshake.
+#[cfg(any(
+    feature = "ssl-openssl",
+    feature = "ssl-rustls",
+    feature = "ssl-native-tls"
+))]
+const TLS_HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(30);
+
 /// The main class of this library.
 ///
 /// Destroying this object will immediately close the listening socket and the reading
@@ -314,62 +322,79 @@ impl Server {
 
         let inside_close_trigger = close_trigger.clone();
         let inside_messages = messages.clone();
+        // shared with the per-connection tasks, which perform the TLS handshake
+        let ssl = ssl.map(Arc::new);
         thread::spawn(move || {
             // a tasks pool is used to dispatch the connections into threads
             let tasks_pool = util::TaskPool::new();
 
             log::debug!("Running accept thread");
             while !inside_close_trigger.load(Relaxed) {
-                let new_client = match server.accept() {
+                match server.accept() {
                     Ok((sock, _)) => {
-                        use util::RefinedTcpStream;
-                        let (read_closable, write_closable) = match ssl {
-                            None => RefinedTcpStream::new(sock),
-                            #[cfg(any(
-                                feature = "ssl-openssl",
-                                feature = "ssl-rustls",
-                                feature = "ssl-native-tls"
-                            ))]
-                            Some(ref ssl) => {
-                                // trying to apply SSL over the connection
-                                // if an error occurs, we just close the socket and resume listening
-                                let sock = match ssl.accept(sock) {
-                                    Ok(s) => s,
-                                    Err(_) => continue,
-                                };
-
-                                RefinedTcpStream::new(sock)
-                            }
-                            #[cfg(not(any(
-                                feature = "ssl-openssl",
-                                feature = "ssl-rustls",
-                                feature = "ssl-native-tls"
-                            )))]
-                            Some(ref _ssl) => unreachable!(),
-                        };
-
-                        Ok(ClientConnection::new(write_closable, read_closable))
-                    }
-                    Err(e) => Err(e),
-                };
-
-                match new_client {
-                    Ok(client) => {
                         let messages = inside_messages.clone();
-                        let mut client = Some(client);
+                        let ssl = ssl.clone();
+                        let mut sock = Some(sock);
                         tasks_pool.spawn(Box::new(move || {
-                            if let Some(client) = client.take() {
-                                // Synchronization is needed for HTTPS requests to avoid a deadlock
-                                if client.secure() {
-                                    let (sender, receiver) = mpsc::channel();
-                                    for rq in client {
-                                        messages.push(rq.with_notify_sender(sender.clone()).into());
-                                        receiver.recv().unwrap();
+                            let sock = match sock.take() {
+                                Some(sock) => sock,
+                                None => return,
+                            };
+
+                            use util::RefinedTcpStream;
+                            let (read_closable, write_closable) = match ssl.as_deref() {
+                                None => RefinedTcpStream::new(sock),
+                                #[cfg(any(
+                                    feature = "ssl-openssl",
+                                    feature = "ssl-rustls",
+                                    feature = "ssl-native-tls"
+                                ))]
+                                Some(ssl) => {
+                                    // The handshake blocks until the peer speaks, so it must
+                                    // not run in the accept thread: a peer that connects and
+                                    // stays silent would stop the server from accepting anyone
+                                    // else. The timeout keeps such a peer from holding this
+                                    // thread forever.
+                                    let timeouts = match sock.try_clone() {
+                                        Ok(timeouts) => timeouts,
+                                        Err(_) => return,
+                                    };
+                                    if timeouts.set_timeouts(Some(TLS_HANDSHAKE_TIMEOUT)).is_err() {
+                                        return;
                                     }
-                                } else {
-                                    for rq in client {
-                                        messages.push(rq.into());
+
+                                    // if an error occurs, we just close the socket
+                                    let sock = match ssl.accept(sock) {
+                                        Ok(s) => s,
+                                        Err(_) => return,
+                                    };
+
+                                    if timeouts.set_timeouts(None).is_err() {
+                                        return;
                                     }
+
+                                    RefinedTcpStream::new(sock)
+                                }
+                                #[cfg(not(any(
+                                    feature = "ssl-openssl",
+                                    feature = "ssl-rustls",
+                                    feature = "ssl-native-tls"
+                                )))]
+                                Some(_ssl) => unreachable!(),
+                            };
+
+                            let client = ClientConnection::new(write_closable, read_closable);
+
+                            // Synchronization is needed for HTTPS requests to avoid a deadlock
+                            if client.secure() {
+                                let (sender, receiver) = mpsc::channel();
+                                for rq in client {
+                                    messages.push(rq.with_notify_sender(sender.clone()).into());
+                                    receiver.recv().unwrap();
+                                }
+                            } else {
+                                for rq in client {
+                                    messages.push(rq.into());
                                 }
                             }
                         }));
